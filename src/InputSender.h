@@ -31,6 +31,18 @@ public:
 				return;
 			}
 			cur.ki.wVk = key;
+			// Скан-код и флаг extended - как у настоящей клавиши. Без KEYEVENTF_EXTENDEDKEY Windows принимает
+			// отпускание VK_RCONTROL за отпускание левого Ctrl: правый остаётся нажатым, и напечатанный следом
+			// текст уходит как Ctrl+буквы. То же с правым Alt, Win, стрелками, Insert/Delete, Home/End и т. п.
+			if (key < 0x100) {
+				UINT sc = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);
+				if (HIBYTE(sc) != 0xE1) { // Pause (E1 1D 45) одним скан-кодом не описать
+					cur.ki.wScan = LOBYTE(sc);
+					if (HIBYTE(sc) == 0xE0) {
+						SetFlag(cur.ki.dwFlags, KEYEVENTF_EXTENDEDKEY);
+					}
+				}
+			}
 		}
 
 		if (state == KEY_STATE_UP)

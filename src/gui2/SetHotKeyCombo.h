@@ -20,7 +20,7 @@ class SetHotKeyCombo {
 			KBDLLHOOKSTRUCT* kStruct = (KBDLLHOOKSTRUCT*)lParam;
 			bool isInjected = TestFlag(kStruct->flags, LLKHF_INJECTED);
 			if (!isInjected) {
-				last_type = { kStruct->vkCode, GetKeyState(wParam) };
+				last_type = { CHotKey::UnifyBreak((TKeyCode)kStruct->vkCode), GetKeyState(wParam) };
 			}
 			return 1;
 		}

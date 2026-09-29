@@ -18,7 +18,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 		KBDLLHOOKSTRUCT* k = (KBDLLHOOKSTRUCT*)lParam;
 
-		TKeyCode vkCode = (TKeyCode)k->vkCode;
+		TKeyCode vkCode = CHotKey::UnifyBreak((TKeyCode)k->vkCode); // Ctrl+Break приходит как VK_CANCEL
 		auto curKeyState = GetKeyState(wParam);
 		bool isInjected = TestFlag(k->flags, LLKHF_INJECTED);
 		bool is_low_inject = TestFlag(k->flags, LLKHF_LOWER_IL_INJECTED);

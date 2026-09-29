@@ -147,10 +147,14 @@ public:
 				LOG_WARN("Not found keycode for {}", sCur);
 				return key;
 			}
-			key.Simple_Append(kCur);
+			key.Simple_Append(UnifyBreak(kCur)); // старое "Ctrl + Cancel" читается как "Ctrl + Break"
 		}
 		return key;
 	}
+	// Клавиша Pause/Break: без Ctrl Windows присылает VK_PAUSE, с Ctrl – VK_CANCEL (Ctrl+Break).
+	// Для сочетаний это одна клавиша "Break", иначе записанное "Ctrl + Break" (Ctrl + VK_PAUSE)
+	// физически нажать невозможно, а нажатое Ctrl+Break показывается как "Ctrl + Cancel".
+	static TKeyCode UnifyBreak(TKeyCode key) { return key == VK_CANCEL ? VK_PAUSE : key; }
 	bool Has_left_right() const { return std::any_of(begin(), end(), [](auto v) {return v != Normalize(v); }); }
 	bool IsDouble() const { return m_double_press; }
 	auto& SetDouble(bool val = true) { m_double_press = val; return *this; }

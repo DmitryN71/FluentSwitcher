@@ -145,6 +145,10 @@ TStatus WorkerImplement::GetClipStringCallback() {
         // m_savedClipData.clear();
     }
 
+    // С буфером закончили. Сигнал "буфер занят" держим ещё 300 мс: FluentClipper читает буфер через
+    // 80 мс после последнего изменения, и восстановленное содержимое тоже не должно попасть в историю.
+    Worker()->PostMsg([this, busy = m_clipWorker.busy.Current()](auto) { m_clipWorker.busy.Reset(busy); }, 300);
+
     RETURN_SUCCESS;
 }
 
@@ -395,6 +399,10 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         // REVERT AND CHANGE LAYOUT
 
         if (Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected)) {
+            // "Буфер занят" - до конца восстановления (GetClipStringCallback). Если буфер так и не
+            // изменится (ничего не выделено), сигнал снимется сам через 3 с.
+            int busy = m_clipWorker.busy.Set();
+            Worker()->PostMsg([this, busy](auto) { m_clipWorker.busy.Reset(busy); }, 3000);
             // m_savedClipData = m_clipWorker.getCurString();
             RequestWaitClip(CLRMY_GET_FROM_CLIP);  // регистрируем запрос.
             LOG_ANY(L"save buff");

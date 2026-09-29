@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <sddl.h>
+
 enum EClipRequest
 {
 	CLRMY_NONE = 0,
@@ -8,6 +10,40 @@ enum EClipRequest
 	CLRMY_hk_COPY,
 	CLRMY_hk_INSERT,
     CLRMY_hk_RESTORE,
+};
+
+// "Буфер занят": пока SimpleSwitcher сам работает с буфером (Ctrl+C выделенного текста, свой текст,
+// восстановление старого содержимого), взведено именованное событие. Менеджеры буфера (FluentClipper)
+// такие изменения в историю не записывают. Договорённость - INTEROP.md, раздел 3, п. 2.
+class ClipboardBusySignal {
+	HANDLE m_event = nullptr;
+	int m_generation = 0;
+public:
+	ClipboardBusySignal() {
+		// Открыть на ожидание может любой процесс сеанса, в том числе обычный, когда SimpleSwitcher
+		// запущен от администратора. Менять состояние - только SYSTEM и администраторы (и мы: у создателя полный доступ).
+		PSECURITY_DESCRIPTOR sd = nullptr;
+		ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x00100000;;;AU)",
+			SDDL_REVISION_1, &sd, nullptr);
+		SECURITY_ATTRIBUTES sa = { sizeof(sa), sd, FALSE };
+		m_event = CreateEventW(sd ? &sa : nullptr, TRUE, FALSE, L"Local\\SimpleSwitcher.ClipboardBusy");
+		IFW_LOG(m_event != nullptr);
+		if (sd) LocalFree(sd);
+	}
+	~ClipboardBusySignal() { if (m_event) CloseHandle(m_event); }
+	ClipboardBusySignal(const ClipboardBusySignal&) = delete;
+	ClipboardBusySignal& operator=(const ClipboardBusySignal&) = delete;
+
+	// Взводит сигнал; возвращает номер этой работы с буфером.
+	int Set() {
+		if (m_event) SetEvent(m_event);
+		return ++m_generation;
+	}
+	int Current() const { return m_generation; }
+	// Снимает сигнал, если после Set() с этим номером не началась новая работа с буфером.
+	void Reset(int generation) {
+		if (generation == m_generation && m_event) ResetEvent(m_event);
+	}
 };
 
 
@@ -201,11 +237,28 @@ private:
         CAutoClipBoard clip;
         IFS_RET(Open2(clip));
         IFS_RET(PutToClipBoardOur(data));
+        MarkTemporary();
 
         RETURN_SUCCESS;
     }
 
+	// Метки "не записывать в историю" на временном тексте SimpleSwitcher (верхний регистр выделенного и т. п.).
+	// Их соблюдают менеджеры буфера (FluentClipper, Ditto) и журнал буфера Windows (Win+V). INTEROP.md, п. 1.
+	// Восстановленное старое содержимое так не метится: его прикрывает ClipboardBusySignal.
+	static void MarkTemporary() {
+		static const UINT formats[] = {
+			RegisterClipboardFormatW(L"ExcludeClipboardContentFromMonitorProcessing"),
+			RegisterClipboardFormatW(L"CanIncludeInClipboardHistory"), // DWORD 0 - нельзя
+			RegisterClipboardFormatW(L"CanUploadToCloudClipboard"),    // DWORD 0 - нельзя
+		};
+		for (UINT f : formats) {
+			HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(DWORD));
+			if (h && !SetClipboardData(f, h)) GlobalFree(h);
+		}
+	}
+
 public:
+	ClipboardBusySignal busy;
 
     std::wstring getCurString() {
         std::wstring data;

@@ -10,8 +10,10 @@ class SetHotKeyCombo {
 	int iCurrentHk = 0;
 
 	inline static bool left_right = false;
-	//inline static std::atomic< std::pair<DWORD, KeyState>> last_type = {};
-	inline static std::pair<DWORD, KeyState > last_type = {};
+	// Все нажатия и отпускания с прошлого кадра, по порядку. Кадр рисуется раз в ~60 мс, а хук вызывается
+	// на этом же потоке между кадрами, поэтому одной ячейки мало: Ctrl и Shift, нажатые почти вместе,
+	// или Break, у которого нажатие и отпускание приходят сразу, теряли события.
+	inline static std::vector<std::pair<TKeyCode, KeyState>> typed;
 	inline static CHotKey state;
 	inline static CAutoHHOOK hook;
 
@@ -19,8 +21,9 @@ class SetHotKeyCombo {
 		if (nCode == HC_ACTION) {
 			KBDLLHOOKSTRUCT* kStruct = (KBDLLHOOKSTRUCT*)lParam;
 			bool isInjected = TestFlag(kStruct->flags, LLKHF_INJECTED);
-			if (!isInjected) {
-				last_type = { CHotKey::UnifyBreak((TKeyCode)kStruct->vkCode), GetKeyState(wParam) };
+			// 0x21D - фиктивный LCtrl, который раскладки с AltGr добавляют к правому Alt (основной хук его тоже пропускает).
+			if (!isInjected && kStruct->scanCode != 0x21D) {
+				typed.push_back({ CHotKey::UnifyBreak((TKeyCode)kStruct->vkCode), GetKeyState(wParam) });
 			}
 			return 1;
 		}
@@ -60,6 +63,7 @@ class SetHotKeyCombo {
 		if (hook.IsInvalid()) {
 			hook = SetWindowsHookEx(WH_KEYBOARD_LL, &LowLevelKeyboardProc, 0, 0);
 		}
+		typed.clear();
 		state.Clear();
 	}
 public:
@@ -86,20 +90,16 @@ public:
 				ImGui::SetKeyboardFocusHere();
 			}
 
-			{
-				auto [vk, oper] = last_type;
-				if (vk != 0) {
-					last_type = {};
-					if (!left_right) {
-						vk = CHotKey::Normalize(vk);
-					}
-					if (oper == KEY_STATE_DOWN) {
-						state.Add(vk, false);
-						SetKey(state);
-					}
-					else {
-						state.Clear();
-					}
+			for (auto [vk, oper] : std::exchange(typed, {})) {
+				if (!left_right) {
+					vk = CHotKey::Normalize(vk);
+				}
+				if (oper == KEY_STATE_DOWN) {
+					state.Add(vk, false);
+					SetKey(state);
+				}
+				else {
+					state.Clear();
 				}
 			}
 

@@ -61,9 +61,30 @@ class CClipWorker
 // ----------------- Backup и восстановление
 
 private:
-	// Карта: ID формата -> бинарные данные
-	std::map<UINT, std::vector<std::uint8_t>> m_backup;
-	const size_t MAX_TOTAL_SIZE = 600 * 1024;
+	// Форматы и их данные в том порядке, в каком их положила программа-источник: многие программы
+	// при вставке берут первый подходящий, так что порядок тоже надо вернуть.
+	std::vector<std::pair<UINT, std::vector<std::uint8_t>>> m_backup;
+	// Оформление (HTML, RTF) и картинки - в пределах этого объёма; текст и файлы сохраняются всегда.
+	const size_t MAX_RICH_SIZE = 32 * 1024 * 1024;
+
+	enum class Keep { No, Always, IfFits };
+	// Что сохранять. Только форматы с данными в памяти (HGLOBAL) и только понятные: текст, оформление,
+	// картинки, файлы. Внутренние форматы программ не читаем - чтение, например, ShadowWorkbook из Excel
+	// ломает в нём вставку вырезанных строк. Поэтому ячейки Excel вернутся таблицей значений (HTML/RTF/текст),
+	// без формул. CF_TEXT, CF_OEMTEXT, CF_BITMAP, CF_DIBV5 Windows восстановит сама из сохранённых.
+	static Keep WhatToKeep(UINT format) {
+		static const UINT dropEffect = RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
+		static const UINT idList = RegisterClipboardFormatW(CFSTR_SHELLIDLIST);
+		static const UINT fileNameW = RegisterClipboardFormatW(CFSTR_FILENAMEW);
+		static const UINT html = RegisterClipboardFormatW(L"HTML Format");
+		static const UINT rtf = RegisterClipboardFormatW(L"Rich Text Format");
+		static const UINT png = RegisterClipboardFormatW(L"PNG");
+		if (Utils::is_in(format, CF_UNICODETEXT, CF_LOCALE, CF_HDROP, dropEffect, idList, fileNameW))
+			return Keep::Always;
+		if (Utils::is_in(format, html, rtf, png, CF_DIB))
+			return Keep::IfFits;
+		return Keep::No;
+	}
 
 public:
 	bool HasBackup() {
@@ -76,48 +97,35 @@ public:
 		ClearBackup();
 
 		CAutoClipBoard clip;
-		// Предполагаю, что Open() возвращает true при успехе. 
-		// Если Open() возвращает 0 при успехе (как WinAPI), проверьте условие!
 		if (!Open(clip)) return false;
 
-		size_t currentTotalSize = 0;
+		size_t richSize = 0;
 		UINT format = 0;
-
-		static UINT f1 = RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
-		static UINT f2 = RegisterClipboardFormatW(CFSTR_SHELLIDLIST);
-
-		// Перебираем все доступные форматы в буфере
 		while ((format = EnumClipboardFormats(format)) != 0) {
-			if (!Utils::is_in(format,
-				CF_UNICODETEXT,
-				CF_HDROP,
-				CF_DIB,
-				f1,
-				f2
-			)) {
-				continue; // скипаем мусор.
-			}
+			Keep keep = WhatToKeep(format);
+			if (keep == Keep::No) continue;
+
 			HANDLE hData = GetClipboardData(format);
 			if (!hData) continue;
 
 			size_t dataSize = GlobalSize(hData);
-
-			// Проверяем, не выходим ли за лимит
-			if (dataSize == 0 || (currentTotalSize + dataSize) > MAX_TOTAL_SIZE) {
-				continue;
+			if (dataSize == 0) continue;
+			if (keep == Keep::IfFits) {
+				if (richSize + dataSize > MAX_RICH_SIZE) {
+					LOG_ANY(L"backup: skip format {} of {} bytes, too big", format, dataSize);
+					continue;
+				}
+				richSize += dataSize;
 			}
 
 			if (void* pData = GlobalLock(hData)) {
-				m_backup[format].assign(
-					static_cast<uint8_t*>(pData),
-					static_cast<uint8_t*>(pData) + dataSize
-				);
-
-				currentTotalSize += dataSize;
+				auto* p = static_cast<uint8_t*>(pData);
+				m_backup.emplace_back(format, std::vector<uint8_t>(p, p + dataSize));
 				GlobalUnlock(hData);
 			}
 		}
 
+		LOG_ANY(L"backup: {} formats", m_backup.size());
 		return !m_backup.empty();
 	}
 	bool Restore() {

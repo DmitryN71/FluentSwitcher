@@ -13,6 +13,7 @@
 
 #include "main_wnd.h"
 #include "TrayIcon.h"
+#include "SettingsIpc.h"
 #include "LoadFonts.h"
 #include "utils/WinTimer.h"
 
@@ -82,6 +83,10 @@ void StartGui() {
 	// Создаем главное окно + таймеры
 	WinTimer timer;
 	g_guiHandle = timer.GetHandler();
+
+	// Команды отдельного окна настроек (SettingsIpc.h).
+	SettingsIpc::AllowFromNormalPrograms(g_guiHandle);
+	timer.AnswerHandler([](UINT msg, WPARAM wParam, LPARAM) { return SettingsIpc::Handle(msg, wParam); });
 
 	// Создаем tray
 	TrayIcon trayIcon;

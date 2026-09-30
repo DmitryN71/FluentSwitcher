@@ -1,11 +1,15 @@
 ﻿#pragma once
 
-// one per thread 
+#include <optional>
+
+// one per thread
 class WinTimer {
 
 	int lastTimerId = 1;
 	std::vector<std::function<void()>> timerCallbacks;
 	std::function<bool(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)> customH;
+	// Сообщения с ответом (SendMessage из другой программы): значение - ответ, пусто - не наше.
+	std::function<std::optional<LRESULT>(UINT msg, WPARAM wParam, LPARAM lParam)> answerH;
 	HWND hwnd = 0;
 	inline thread_local static WinTimer* Inst = 0;
 
@@ -19,6 +23,12 @@ class WinTimer {
 			}
 			return 0;
 		}
+		}
+
+		if (Inst->answerH) {
+			if (auto answer = Inst->answerH(uMsg, wParam, lParam)) {
+				return *answer;
+			}
 		}
 
 		if (Inst->customH && Inst->customH(hwnd, uMsg, wParam, lParam)) {
@@ -36,6 +46,9 @@ public:
 	}
 	void CustomHandler(auto&& func) {
 		customH = FORWARD(func);
+	}
+	void AnswerHandler(auto&& func) {
+		answerH = FORWARD(func);
 	}
 	void CycleTimer(auto&& func, int ms) {
 		timerCallbacks.push_back(func);

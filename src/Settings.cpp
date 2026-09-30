@@ -167,9 +167,20 @@ namespace cfg_details {
 
 	TStatus Save_conf(const ProgramConfig& gui) {
 
+		// Сначала во временный файл, потом заменой: файл читает и окно настроек (отдельная программа),
+		// и оборванная запись не должна оставить половину настроек.
 		auto path = ProgramConfig::GetPath_Conf();
-		std::ofstream outp(path, std::ios::binary);
-		IFS_RET(Save_conf_To_Stream(outp, gui));
+		auto tmp = path;
+		tmp += L".tmp";
+		{
+			std::ofstream outp(tmp, std::ios::binary);
+			IFS_RET(Save_conf_To_Stream(outp, gui));
+			outp.close();
+			if (outp.fail()) {
+				IFS_RET(SW_ERR_UNKNOWN, L"can't write {}", tmp.wstring());
+			}
+		}
+		IFW_RET(MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH));
 
 		RETURN_SUCCESS;
 	}

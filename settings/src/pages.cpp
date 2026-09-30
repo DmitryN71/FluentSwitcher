@@ -6,6 +6,7 @@
 
 #include <wx/dcbuffer.h>
 #include <wx/dir.h>
+#include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/utils.h>
 
@@ -48,6 +49,7 @@ public:
     }
 
     wxString Value() const { return m_text->GetValue(); }
+    void SetHint(const wxString& hint) { m_text->SetHint(hint); }
 
 private:
     wxTextCtrl* m_text;
@@ -110,6 +112,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     BuildTyping();
     BuildHotkeys();
     BuildLayouts();
+    BuildCommands();
     BuildAdvanced();
     BuildAbout();
 
@@ -462,6 +465,164 @@ void SettingsFrame::BuildLayouts()
     FinishPage();
 }
 
+void SettingsFrame::BuildCommands()
+{
+    Section(kIconCommands, T("Команды"));
+    m_commandsPage = m_page;
+    m_commandsColumn = m_column;
+    FillCommands();
+}
+
+void SettingsFrame::FillCommands()
+{
+    HotkeyEditor::CancelRecording();
+    m_commandsColumn->Clear(true);
+    wxScrolledWindow* page = m_commandsPage;
+    wxBoxSizer* column = m_commandsColumn;
+    auto& list = m_edit.Json()["run_programs"];
+    if (!list.is_array())
+        list = nlohmann::json::array();
+
+    AddSettingsCard(page, column, T("Команды по сочетанию клавиш"),
+                    T("Запустить программу или вставить текст. В тексте @@(…) нажимает клавиши: "
+                      "@@(Ctrl + A) – выделить всё, @@(Enter) – новая строка"),
+                    [this](wxWindow* card) {
+                        FluentButton* add = new FluentButton(card, wxID_ANY, T("Добавить команду"), true);
+                        add->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                            m_edit.Json()["run_programs"].push_back({ { "args", "" }, { "cmd", "" }, { "delay", 0 },
+                                                                       { "elevated", false }, { "enabled", true },
+                                                                       { "hotkey", "" }, { "type", 0 } });
+                            Changed();
+                            CallAfter([this] { FillCommands(); });
+                        });
+                        return add;
+                    });
+
+    for (size_t i = 0; i < list.size(); i++)
+    {
+        const auto& command = list[i];
+        const bool snippet = command.value("type", 0) == 1;
+        const wxString cmd = FromUtf8(command.value("cmd", std::string()));
+        wxString title = snippet ? T("Вставить текст") : T("Запустить программу");
+        if (!cmd.empty())
+            title += ": " + (snippet ? cmd.Left(40) : wxFileName(cmd).GetFullName());
+
+        AddSettingsCard(page, column, title,
+                        snippet ? T("Текст печатается туда, где курсор")
+                                : T("Программа, документ или папка; путь можно вставить или выбрать"),
+                        [&](wxWindow* card) {
+            wxPanel* panel = new wxPanel(card);
+            panel->SetBackgroundColour(card->GetBackgroundColour());
+            wxBoxSizer* rows = new wxBoxSizer(wxVERTICAL);
+            auto label = [panel](const char* text) { return FluentText(panel, T(text), 9, g.text2); };
+
+            // What it does, on or off, remove.
+            wxBoxSizer* top = new wxBoxSizer(wxHORIZONTAL);
+            FluentChoice* kind = new FluentChoice(panel, { T("Запустить программу"), T("Вставить текст") }, snippet ? 1 : 0);
+            kind->onChange = [this, kind, i] {
+                m_edit.Json()["run_programs"][i]["type"] = kind->GetSelection();
+                Changed();
+                CallAfter([this] { FillCommands(); });
+            };
+            ToggleSwitch* on = new ToggleSwitch(panel, command.value("enabled", true));
+            on->onChange = [this, on, i] {
+                m_edit.Json()["run_programs"][i]["enabled"] = on->IsOn();
+                Changed();
+            };
+            FluentButton* remove = new FluentButton(panel, wxID_ANY, kIconDelete, T("Удалить команду"));
+            remove->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+                auto& all = m_edit.Json()["run_programs"];
+                all.erase(all.begin() + (std::ptrdiff_t)i);
+                Changed();
+                CallAfter([this] { FillCommands(); });
+            });
+            top->Add(kind, 0, wxALIGN_CENTER_VERTICAL);
+            top->Add(on, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
+            on->SetToolTip(T("Включена"));
+            top->AddStretchSpacer();
+            if (!snippet)
+            {
+                FluentButton* run = new FluentButton(panel, wxID_ANY, T("Выполнить сейчас"));
+                run->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+                    if (HasChanges() && !Apply()) // the engine runs what is saved
+                        return;
+                    if (!m_engine || !Engine::RunCommand(m_engine, (int)i))
+                        SetStatus(T("FluentSwitcher не запущен: команду выполнить некому"), true);
+                });
+                top->Add(run, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
+            }
+            top->Add(remove, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
+            rows->Add(top, 0, wxEXPAND);
+
+            // The program and its arguments, or the text.
+            TextField* what = new TextField(panel, cmd, snippet ? 488 : 370);
+            what->SetHint(snippet ? T("Текст, например: С уважением, Дмитрий") : T("Путь к программе"));
+            what->onChange = [this, what, i] {
+                m_edit.Json()["run_programs"][i]["cmd"] = ToUtf8(what->Value());
+                Changed();
+            };
+            rows->Add(label(snippet ? "Текст" : "Программа"), 0, wxTOP, FromDIP(10));
+            wxBoxSizer* whatRow = new wxBoxSizer(wxHORIZONTAL);
+            whatRow->Add(what, 0, wxALIGN_CENTER_VERTICAL);
+            if (!snippet)
+            {
+                FluentButton* browse = new FluentButton(panel, wxID_ANY, T("Выбрать…"));
+                browse->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+                    wxFileDialog dialog(this, T("Программа для команды"), wxString(), wxString(),
+                                        T("Программы (*.exe;*.bat;*.cmd;*.lnk)|*.exe;*.bat;*.cmd;*.lnk|Все файлы (*.*)|*.*"),
+                                        wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+                    if (dialog.ShowModal() != wxID_OK)
+                        return;
+                    m_edit.Json()["run_programs"][i]["cmd"] = ToUtf8(dialog.GetPath());
+                    Changed();
+                    CallAfter([this] { FillCommands(); });
+                });
+                whatRow->Add(browse, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
+            }
+            rows->Add(whatRow, 0, wxTOP, FromDIP(4));
+            if (!snippet)
+            {
+                TextField* args = new TextField(panel, FromUtf8(command.value("args", std::string())), 370);
+                args->SetHint(T("Необязательно"));
+                args->onChange = [this, args, i] {
+                    m_edit.Json()["run_programs"][i]["args"] = ToUtf8(args->Value());
+                    Changed();
+                };
+                NumberField* delay = new NumberField(panel, command.value("delay", 0));
+                delay->onChange = [this, delay, i] {
+                    const int value = delay->Value();
+                    if (value >= 0 && value <= 10000)
+                    {
+                        m_edit.Json()["run_programs"][i]["delay"] = value;
+                        Changed();
+                    }
+                };
+                wxFlexGridSizer* more = new wxFlexGridSizer(2, FromDIP(4), FromDIP(16));
+                more->Add(label("Аргументы"));
+                more->Add(label("Пауза, мс"));
+                more->Add(args);
+                more->Add(delay);
+                rows->Add(more, 0, wxTOP, FromDIP(10));
+            }
+
+            // Its hotkeys, and running it now.
+            rows->Add(label("Сочетание"), 0, wxTOP, FromDIP(10));
+            wxBoxSizer* keysRow = new wxBoxSizer(wxHORIZONTAL);
+            HotkeyEditor* keys = new HotkeyEditor(panel, FromUtf8(command.value("hotkey", std::string())), 2, false);
+            keys->onChange = [this, keys, i] {
+                m_edit.Json()["run_programs"][i]["hotkey"] = ToUtf8(keys->Value());
+                Changed();
+            };
+            keysRow->Add(keys, 0, wxALIGN_TOP);
+            rows->Add(keysRow, 0, wxTOP, FromDIP(4));
+            panel->SetSizer(rows);
+            return panel;
+        }, true);
+    }
+    page->Layout();
+    page->FitInside();
+}
+
 void SettingsFrame::BuildAdvanced()
 {
     Section(kIconAdvanced, T("Дополнительно"));
@@ -508,6 +669,20 @@ void SettingsFrame::BuildAdvanced()
         {
             m_edit.SetInt("quick_press_ms", value);
             Changed();
+        }
+    };
+
+    // Switched at once, as in the old window; not a setting that is saved.
+    ToggleSwitch* log = nullptr;
+    AddSettingsCard(m_page, m_column, T("Журнал отладки"),
+                    T("Сразу и до выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\SimpleSwitcher.exe.log "
+                      "в папке программы. Пароли при этом не вводите; после проверки выключите и удалите журнал"),
+                    [&](wxWindow* card) { return log = new ToggleSwitch(card, (m_state & Engine::StateLogging) != 0); });
+    log->onChange = [this, log] {
+        if (!m_engine || !Engine::SetLogging(m_engine, log->IsOn()))
+        {
+            log->SetOn(false);
+            SetStatus(T("FluentSwitcher не запущен: журнал вести некому"), true);
         }
     };
     FinishPage();

@@ -10,6 +10,8 @@
 //   SimpleSwitcher.SetEnabled (0/1)      -> 1 или 0, если для включения нужны права администратора
 //   SimpleSwitcher.SetAutostart (0/1)    -> 1 или 0, если не вышло (задаче планировщика нужны права администратора)
 //   SimpleSwitcher.Quit                  -> 1; движок закрывается, как по "Выход" в меню трея
+//   SimpleSwitcher.RunCommand (номер)    -> 1; выполнить команду run_programs[номер], как по её сочетанию
+//   SimpleSwitcher.SetLogging (0/1)      -> 1; журнал отладки (log\SimpleSwitcher.exe.log) до выхода движка
 //
 // Движок, запущенный от администратора, пропускает эти сообщения из обычной программы (ChangeWindowMessageFilterEx).
 
@@ -20,6 +22,7 @@ namespace SettingsIpc {
 		State_Enabled = 0x1,
 		State_Elevated = 0x2,   // движок запущен от администратора
 		State_Autostart = 0x4,
+		State_Logging = 0x8,    // журнал отладки включён
 	};
 
 	inline const UINT msgReloadConfig = RegisterWindowMessageW(L"SimpleSwitcher.ReloadConfig");
@@ -27,9 +30,11 @@ namespace SettingsIpc {
 	inline const UINT msgSetEnabled = RegisterWindowMessageW(L"SimpleSwitcher.SetEnabled");
 	inline const UINT msgSetAutostart = RegisterWindowMessageW(L"SimpleSwitcher.SetAutostart");
 	inline const UINT msgQuit = RegisterWindowMessageW(L"SimpleSwitcher.Quit");
+	inline const UINT msgRunCommand = RegisterWindowMessageW(L"SimpleSwitcher.RunCommand");
+	inline const UINT msgSetLogging = RegisterWindowMessageW(L"SimpleSwitcher.SetLogging");
 
 	inline void AllowFromNormalPrograms(HWND hwnd) {
-		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart, msgQuit }) {
+		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart, msgQuit, msgRunCommand, msgSetLogging }) {
 			IFW_LOG(ChangeWindowMessageFilterEx(hwnd, msg, MSGFLT_ALLOW, nullptr));
 		}
 	}
@@ -39,6 +44,7 @@ namespace SettingsIpc {
 		if (g_enabled.IsEnabled()) res |= State_Enabled;
 		if (Utils::IsSelfElevated()) res |= State_Elevated;
 		if (autostart_get()) res |= State_Autostart;
+		if (GetLogLevel() > LOG_LEVEL_DISABLE) res |= State_Logging;
 		return res;
 	}
 
@@ -71,6 +77,16 @@ namespace SettingsIpc {
 		if (msg == msgSetAutostart) {
 			LOG_ANY("ipc: set autostart {}", wParam != 0);
 			return autostart_set(wParam != 0) ? 1 : 0;
+		}
+		if (msg == msgRunCommand) {
+			LOG_ANY("ipc: run command {}", (int)wParam);
+			auto hk = (HotKeyType)(hk_RunProgram_flag | (int)wParam);
+			Worker()->PostMsg([hk](auto p) { p->RunProcess(hk); });
+			return 1;
+		}
+		if (msg == msgSetLogging) {
+			SetLogLevel_print_info(wParam ? conf_get_unsafe()->logLevel : LOG_LEVEL_DISABLE);
+			return 1;
 		}
 		if (msg == msgQuit) {
 			LOG_ANY("ipc: quit");

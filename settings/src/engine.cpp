@@ -77,6 +77,16 @@ bool Quit(HWND engine)
     return Command(engine, L"SimpleSwitcher.Quit");
 }
 
+bool RunCommand(HWND engine, int index)
+{
+    return Command(engine, L"SimpleSwitcher.RunCommand", (WPARAM)index);
+}
+
+bool SetLogging(HWND engine, bool on)
+{
+    return Command(engine, L"SimpleSwitcher.SetLogging", on);
+}
+
 bool Start(const wxString& folder)
 {
     const wxString exe = wxFileName(folder, "SimpleSwitcher.exe").GetFullPath();

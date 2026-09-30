@@ -19,6 +19,7 @@ ICONS = [
     ("kIconAbout", "info"),
     ("kIconFolder", "folder_open"),
     ("kIconQuit", "arrow_exit"),
+    ("kIconDelete", "delete"),
 ]
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

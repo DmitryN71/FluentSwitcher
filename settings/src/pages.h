@@ -37,6 +37,8 @@ private:
     void BuildTyping();
     void BuildHotkeys();
     void BuildLayouts();
+    void BuildCommands();
+    void FillCommands(); // the cards of the commands again (one added, removed, its kind changed)
     void BuildAdvanced();
     void BuildAbout();
 
@@ -70,6 +72,9 @@ private:
     wxBoxSizer* m_column = nullptr;
     std::vector<wxScrolledWindow*> m_pages;
     wxArrayString m_titles;
+
+    wxScrolledWindow* m_commandsPage = nullptr;
+    wxBoxSizer* m_commandsColumn = nullptr;
 
     FluentButton* m_apply = nullptr;
     wxTimer m_savedTimer;

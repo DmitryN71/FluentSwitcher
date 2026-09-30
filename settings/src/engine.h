@@ -14,6 +14,7 @@ enum : long
     StateEnabled = 0x1,
     StateElevated = 0x2,   // it runs as administrator
     StateAutostart = 0x4,
+    StateLogging = 0x8,    // the debug log is on
 };
 
 // The engine's window: of the process `pid` when it is not 0 (tests), else of SimpleSwitcher.exe in
@@ -28,6 +29,10 @@ bool SetEnabled(HWND engine, bool on);
 // False: failed (the scheduler task for administrator mode needs administrator rights).
 bool SetAutostart(HWND engine, bool on);
 bool Quit(HWND engine);
+// Runs command `index` of run_programs as saved (as its hotkey would).
+bool RunCommand(HWND engine, int index);
+// The debug log (log\SimpleSwitcher.exe.log next to the engine), until the engine quits.
+bool SetLogging(HWND engine, bool on);
 
 // Starts SimpleSwitcher.exe from `folder`. False if it is not there or does not start.
 bool Start(const wxString& folder);

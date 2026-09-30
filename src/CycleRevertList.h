@@ -80,7 +80,7 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 
 	// по сути, все уже готово, осталось лишь решить вопрос possible letter / letter.
 
-	std::vector<int> words; // индексы старта слов.
+	std::vector<int> starts; // индексы в zipped, с которых начинаются слова.
 
 	GETCONF;
 	const auto can_separate_posible =
@@ -123,9 +123,29 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 			return true; // custom
 		};
 		if (check()) {
-			words.push_back(it.i);
+			starts.push_back(i);
 		}
 
+	}
+
+	// Знаки в конце слова, без пробела ("cnjg?" -> "стоп,"), относятся к этому слову. Иначе "последнее
+	// слово" - один знак, и исправлялся только он. Знак между буквами ("ghbdtn.rfr") по-прежнему
+	// разделяет слова.
+	auto only_signs_till_space = [&](int z) {
+		for (; z < std::ssize(zipped) && zipped[z].type != KEYTYPE_SPACE; ++z) {
+			if (zipped[z].type != KEYTYPE_CUSTOM) return false;
+		}
+		return true;
+	};
+	std::vector<int> words; // индексы старта слов.
+	for (int z : starts) {
+		const auto& it = zipped[z];
+		bool glue = it.type == KEYTYPE_CUSTOM && !it.is_last_revert && z > 0
+			&& Utils::is_in(zipped[z - 1].type, KEYTYPE_LETTER, KEYTYPE_CUSTOM)
+			&& only_signs_till_space(z);
+		if (!glue) {
+			words.push_back(it.i);
+		}
 	}
 
 

@@ -112,6 +112,19 @@ void StartGui() {
 		[&](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			if (msg == WM_ShowWindow) {
 				int mode = wParam;
+				// Новое окно настроек - отдельная программа рядом с движком; нет её - старое окно.
+				if (mode == 0) {
+					auto exe = PathUtils::GetPath_folder_noLower2() / L"FluentSwitcherSettings.exe";
+					if (std::filesystem::is_regular_file(exe)) {
+						AllowSetForegroundWindow(ASFW_ANY); // окну настроек можно выйти на передний план
+						auto res = (INT_PTR)ShellExecuteW(nullptr, L"open", exe.c_str(), nullptr,
+							exe.parent_path().c_str(), SW_SHOWNORMAL);
+						if (res > 32) {
+							return 0;
+						}
+						LOG_WARN(L"can't start {}: {}", exe.wstring(), (int)res);
+					}
+				}
 				if (mode) {
 					notif.ShowHide();
 				}

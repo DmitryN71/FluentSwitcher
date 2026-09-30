@@ -9,6 +9,7 @@
 //   SimpleSwitcher.GetState              -> биты SettingsState
 //   SimpleSwitcher.SetEnabled (0/1)      -> 1 или 0, если для включения нужны права администратора
 //   SimpleSwitcher.SetAutostart (0/1)    -> 1 или 0, если не вышло (задаче планировщика нужны права администратора)
+//   SimpleSwitcher.Quit                  -> 1; движок закрывается, как по "Выход" в меню трея
 //
 // Движок, запущенный от администратора, пропускает эти сообщения из обычной программы (ChangeWindowMessageFilterEx).
 
@@ -25,9 +26,10 @@ namespace SettingsIpc {
 	inline const UINT msgGetState = RegisterWindowMessageW(L"SimpleSwitcher.GetState");
 	inline const UINT msgSetEnabled = RegisterWindowMessageW(L"SimpleSwitcher.SetEnabled");
 	inline const UINT msgSetAutostart = RegisterWindowMessageW(L"SimpleSwitcher.SetAutostart");
+	inline const UINT msgQuit = RegisterWindowMessageW(L"SimpleSwitcher.Quit");
 
 	inline void AllowFromNormalPrograms(HWND hwnd) {
-		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart }) {
+		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart, msgQuit }) {
 			IFW_LOG(ChangeWindowMessageFilterEx(hwnd, msg, MSGFLT_ALLOW, nullptr));
 		}
 	}
@@ -69,6 +71,11 @@ namespace SettingsIpc {
 		if (msg == msgSetAutostart) {
 			LOG_ANY("ipc: set autostart {}", wParam != 0);
 			return autostart_set(wParam != 0) ? 1 : 0;
+		}
+		if (msg == msgQuit) {
+			LOG_ANY("ipc: quit");
+			PostQuitMessage(0);
+			return 1;
 		}
 		return std::nullopt;
 	}

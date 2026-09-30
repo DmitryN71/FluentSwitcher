@@ -1,5 +1,6 @@
 ﻿#include "WorkerImplement.h"
 #include "ParseSnippet.h"
+#include "LayoutConvert.h"
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     TKeyCode vkCode = keyData.vkCode;
@@ -110,44 +111,61 @@ TStatus WorkerImplement::GetClipStringCallback() {
 
     auto data = m_clipWorker.getCurString();
 
-    // bool needResotore = !m_savedClipData.empty();
-
+    bool pasted = false;
     if (data.empty()) {
         LOG_ANY(L"data empty");
-    } else if (data.length() > 100) {
-        LOG_ANY(L"TOO MANY TO REVERT. SKIP");
     } else {
         if (m_lastRevertRequest == hk_RevertSelelected) {
-            ClipboardToSendData(data);
+            // Выделенное переводится в другую раскладку в памяти и вставляется одним Ctrl+V. Раньше оно
+            // перепечатывалось клавишами: Блокнот Windows 11 терял первую из них ("эта" -> "та"), а раскладка
+            // определялась по каждому символу отдельно ("комбинация" -> "ком,инация"). См. LayoutConvert.h.
+            GETCONF;
+            std::vector<HKL> layouts{ std::from_range, cfg->layouts_info.EnabledLayouts() };
+            HKL from = LayoutConvert::Source(data, layouts, CurLay());
+            HKL to = cfg->layouts_info.NextEnabledLayout(from);
+            if (to == 0 || to == from) {
+                LOG_WARN(L"no layout to convert {} to", (void*)from);
+            } else {
+                auto converted = LayoutConvert::Convert(data, from, to);
+                LOG_ANY(L"convert selected {} -> {}, {} chars", (void*)from, (void*)to, converted.size());
+                m_cycleList.Clear();
+                RequestWaitClip(CLRMY_hk_INSERT);
+                m_clipWorker.setString(converted);
+                IFS_LOG(ProcessRevert({ .lay = to, .flags = SW_CLIENT_SetLang | SW_CLIENT_NO_WAIT_LANG | SW_CLIENT_CTRLV }));
+                pasted = true;
+            }
+        } else if (data.length() > 100) {
+            LOG_ANY(L"TOO MANY TO REVERT. SKIP");
         } else if (m_lastRevertRequest == hk_toUpperSelected || m_lastRevertRequest == hk_InvertCaseSelected) {
             if (m_lastRevertRequest == hk_toUpperSelected)
                 toUpper(data);
             else
                 InvertCase(data);
 
+            RequestWaitClip(CLRMY_hk_INSERT);
             m_clipWorker.setString(data);
 
             IFS_LOG(ProcessRevert({.flags = SW_CLIENT_CTRLV}));
-
-            //        if (needResotore) {
-            //            needResotore = data != m_savedClipData;
-            // if(needResotore)
-            //	Sleep(20); // подождем немного, чтобы не перезатереть наши данные восстановлением буфера.
-            //        }
+            pasted = true;
         }
     }
 
-    if (m_clipWorker.HasBackup()) {
-        Sleep(20);  // подождем немного, чтобы не перезатереть наши данные восстановлением буфера.
-        RequestWaitClip(CLRMY_hk_RESTORE);  // делаем это только чтобы не вызывалась очистка формата
-        m_clipWorker.Restore();
-        // m_clipWorker.setString(m_savedClipData);
-        // m_savedClipData.clear();
+    // Старое содержимое буфера - на место. После Ctrl+V - не сразу: программа читает буфер, когда
+    // обработает нажатие, и слишком раннее восстановление вставило бы старое содержимое.
+    auto restore = [this] {
+        if (m_clipWorker.HasBackup()) {
+            RequestWaitClip(CLRMY_hk_RESTORE);  // делаем это только чтобы не вызывалась очистка формата
+            m_clipWorker.Restore();
+        }
+        // С буфером закончили. Сигнал "буфер занят" держим ещё 300 мс: FluentClipper читает буфер через
+        // 80 мс после последнего изменения, и восстановленное содержимое тоже не должно попасть в историю.
+        Worker()->PostMsg([this, busy = m_clipWorker.busy.Current()](auto) { m_clipWorker.busy.Reset(busy); }, 300);
+    };
+    if (pasted) {
+        Worker()->PostMsg([restore](auto) { restore(); }, 250);
+    } else {
+        restore();
     }
-
-    // С буфером закончили. Сигнал "буфер занят" держим ещё 300 мс: FluentClipper читает буфер через
-    // 80 мс после последнего изменения, и восстановленное содержимое тоже не должно попасть в историю.
-    Worker()->PostMsg([this, busy = m_clipWorker.busy.Current()](auto) { m_clipWorker.busy.Reset(busy); }, 300);
 
     RETURN_SUCCESS;
 }

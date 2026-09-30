@@ -22,7 +22,7 @@ windres --use-temp-file -i settings.rc -o build\settings_rc.o || exit /b 1
 
 g++ -specs=no-default-manifest.specs -O2 -std=c++17 -mthreads -D__WXMSW__ -DNDEBUG -D_UNICODE -DUNICODE -Wall -Wno-unused-parameter ^
   -I"%WXLIB%\mswu" -I"%WXDIR%\include" -Ifluentui -I..\extern ^
-  src\main.cpp src\config.cpp src\engine.cpp src\pages.cpp src\hotkeys.cpp src\recorder.cpp fluentui\fluent_ui.cpp fluentui\fluent_controls.cpp ^
+  src\main.cpp src\config.cpp src\engine.cpp src\pages.cpp src\hotkeys.cpp src\recorder.cpp src\i18n.cpp fluentui\fluent_ui.cpp fluentui\fluent_controls.cpp ^
   build\settings_rc.o -o %OUT% -mwindows -static -s -L"%WXLIB%" ^
   -lwxmsw33u_core -lwxbase33u -lwxpng -lwxzlib -lwxregexu -lwxexpat ^
   -lkernel32 -luser32 -lgdi32 -lgdiplus -lcomdlg32 -lwinspool -lwinmm -lshell32 -lshlwapi -lcomctl32 ^

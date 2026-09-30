@@ -5,6 +5,7 @@
 //   --config=<SimpleSwitcher.json>             another copy's settings (the engine looked for is in that folder)
 //   --engine-pid=<pid>                         that engine process exactly (tests)
 //   --section=<n>                              open on that section (0 = the first)
+//   --wait-pid=<pid>                           first wait for that process to end (the window restarting itself)
 //
 // One window at a time: a second start brings the first one forward.
 #include "pages.h"
@@ -58,7 +59,7 @@ class App : public wxApp
 public:
     bool OnInit() override
     {
-        wxString configPath, enginePid, section;
+        wxString configPath, enginePid, section, waitPid;
         for (int i = 1; i < argc; i++)
         {
             wxString value;
@@ -68,6 +69,18 @@ public:
                 enginePid = value;
             else if (argv[i].StartsWith("--section=", &value))
                 section = value;
+            else if (argv[i].StartsWith("--wait-pid=", &value))
+                waitPid = value;
+        }
+        unsigned long previous = 0;
+        if (waitPid.ToULong(&previous) && previous)
+        {
+            // The window restarting itself (a new language): the old one is closing and still holds the mutex.
+            if (HANDLE old = OpenProcess(SYNCHRONIZE, FALSE, previous))
+            {
+                WaitForSingleObject(old, 5000);
+                CloseHandle(old);
+            }
         }
         if (configPath.empty())
         {
@@ -96,6 +109,7 @@ public:
         Config config;
         wxString error;
         config.Load(configPath, &error);
+        SetEnglish(EnglishFor(config.GetString("gui_lang", wxString())));
         SettingsFrame* frame = new SettingsFrame(config, wxFileName(configPath).GetPath(), pid, error, (int)first);
         // A new window is on the screen before it has painted anything, and for a moment it is a white
         // rectangle. Hidden from the screen (cloaked) until all of it has painted, it appears finished.

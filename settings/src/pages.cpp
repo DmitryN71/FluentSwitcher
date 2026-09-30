@@ -164,7 +164,9 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
         e.Enable(changed);
     }, wxID_APPLY);
     m_apply->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        if (Apply())
+        if (Apply() && m_restarted)
+            Close();
+        else if (!m_restarted && !HasChanges())
         {
             m_savedShown = true;
             m_apply->SetText(T("Сохранено"));
@@ -315,11 +317,11 @@ void SettingsFrame::BuildGeneral()
     Choice(T("Флаг у часов"), T("Показывает текущую раскладку"), names, values.Index(flags),
            [this, values](int i) { m_edit.SetString("flagsSet", values[i]); });
 
+    // Each language by its own name, in either language of the window.
     const wxArrayString langValues = { "English", "Russian" };
-    const wxArrayString langNames = { wxString("English"), T("Русский") };
-    Choice(T("Язык меню у часов"), T("Меню по правому щелчку на флаге"), langNames,
-           m_edit.GetString("gui_lang", "Russian") == "Russian" ? 1 : 0,
-           [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
+    const wxArrayString langNames = { wxString("English"), wxString::FromUTF8("Русский") };
+    Choice(T("Язык"), T("Этого окна и меню у флага. Окно откроется на новом языке после сохранения"), langNames,
+           IsEnglish() ? 0 : 1, [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
     FinishPage();
 }
 
@@ -725,6 +727,7 @@ void SettingsFrame::ShowSection(int section)
         m_pages[i]->Show((int)i == section);
     m_title->SetLabel(m_titles[section]);
     m_nav->Select(section);
+    m_section = section;
     Layout();
 }
 
@@ -774,6 +777,7 @@ bool SettingsFrame::Apply()
 {
     if (!m_canSave)
         return false;
+    const wxString oldLanguage = m_saved.GetString("gui_lang", wxString());
     if (m_edit != m_saved)
     {
         wxString error;
@@ -783,6 +787,21 @@ bool SettingsFrame::Apply()
             return false;
         }
         m_saved = m_edit;
+        if (m_edit.GetString("gui_lang", wxString()) != oldLanguage)
+        {
+            // The texts are read when the window is built: a new window in the new language, on this section.
+            wxString command = wxString(GetCommandLineW());
+            command += wxString::Format(" --section=%d --wait-pid=%lu", m_section, GetCurrentProcessId());
+            STARTUPINFOW si = { sizeof(si) };
+            PROCESS_INFORMATION pi = {};
+            std::wstring line = command.ToStdWstring();
+            if (CreateProcessW(nullptr, line.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
+            {
+                CloseHandle(pi.hThread);
+                CloseHandle(pi.hProcess);
+                m_restarted = true;
+            }
+        }
     }
     m_engine = Engine::Find(m_folder, m_enginePid);
     if (!m_engine)

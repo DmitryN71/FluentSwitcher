@@ -107,7 +107,8 @@ public:
     CHotKey win_hotkey_cycle_lang { VK_LMENU, VK_SHIFT };
 	std::string theme = "Light";
 	string ui_skin = "";
-	string gui_lang = "Russian";
+	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
+	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
 	bool useBritishFlag = false;
 	string treat_as_letters = "_-";
 	// Перепечатывать исправленное клавишами (как в SimpleSwitcher), а не готовыми символами.

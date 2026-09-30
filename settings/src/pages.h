@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "fluent_controls.h"
+#include "i18n.h"
 
 #include <wx/frame.h>
 #include <wx/timer.h>
@@ -12,10 +13,6 @@
 #include <functional>
 #include <vector>
 
-inline wxString T(const char* utf8)
-{
-    return wxString::FromUTF8(utf8);
-}
 
 class SettingsFrame : public wxFrame
 {
@@ -79,4 +76,6 @@ private:
     FluentButton* m_apply = nullptr;
     wxTimer m_savedTimer;
     bool m_savedShown = false;
+    int m_section = 0;         // shown now
+    bool m_restarted = false;  // Apply started the window again (a new language): this one closes
 };

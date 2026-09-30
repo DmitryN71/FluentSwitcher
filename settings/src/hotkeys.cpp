@@ -1,30 +1,32 @@
 #include "hotkeys.h"
 
+#include "i18n.h"
+
 #include <wx/tokenzr.h>
 
 const std::vector<HotkeyAction>& HotkeyActions()
 {
     static const std::vector<HotkeyAction> actions = {
-        { "hk_RevertLastWord", "Исправить последнее слово",
-          "Набранное не в той раскладке: стирает последнее слово, печатает его в другой раскладке и переключает её" },
-        { "hk_RevertLine", "Исправить текст с начала строки",
-          "Выделяет от курсора до начала строки (Shift+Home) и исправляет, как выделенный текст" },
-        { "hk_RevertSeveralWords", "Исправить несколько слов",
-          "Каждое следующее нажатие захватывает ещё одно слово назад. Способ SimpleSwitcher, в новом Блокноте "
-          "путает текст – лучше «с начала строки»" },
-        { "hk_RevertAllRecentText", "Исправить весь недавний текст",
-          "Всё, что набрано подряд в этом окне: до Enter, стрелок или смены окна" },
-        { "hk_RevertSelelected", "Исправить выделенный текст",
-          "Выделенное в любой программе печатается в другой раскладке" },
-        { "hk_toUpperSelected", "Выделенное ПРОПИСНЫМИ / строчными",
-          "Если выделенное уже прописными – строчными" },
-        { "hk_InvertCaseSelected", "Выделенное иНВЕРСИЕЙ рЕГИСТРА", "Для текста, набранного с нажатым CapsLock" },
-        { "hk_CycleSwitchLayout", "Следующая раскладка", "Переключает раскладку без исправления текста" },
-        { "hk_EmulateCapsLock", "Нажать CapsLock", "Если CapsLock занят под сочетание, включить его можно так" },
-        { "hk_ToggleEnabled", "Включить / выключить FluentSwitcher", "Работает и когда программа выключена" },
-        { "hk_ShowMainWindow", "Открыть настройки", "Это окно" },
-        { "hk_InsertWithoutFormat", "Вставить без оформления",
-          "Если стоит FluentClipper, у него это уже есть: Ctrl+Shift+Insert" },
+        { "hk_RevertLastWord", N_("Исправить последнее слово"),
+          N_("Набранное не в той раскладке: стирает последнее слово, печатает его в другой раскладке и переключает её") },
+        { "hk_RevertLine", N_("Исправить текст с начала строки"),
+          N_("Выделяет от курсора до начала строки (Shift+Home) и исправляет, как выделенный текст") },
+        { "hk_RevertSeveralWords", N_("Исправить несколько слов"),
+          N_("Каждое следующее нажатие захватывает ещё одно слово назад. Способ SimpleSwitcher, в новом Блокноте "
+          "путает текст – лучше «с начала строки»") },
+        { "hk_RevertAllRecentText", N_("Исправить весь недавний текст"),
+          N_("Всё, что набрано подряд в этом окне: до Enter, стрелок или смены окна") },
+        { "hk_RevertSelelected", N_("Исправить выделенный текст"),
+          N_("Выделенное в любой программе печатается в другой раскладке") },
+        { "hk_toUpperSelected", N_("Выделенное ПРОПИСНЫМИ / строчными"),
+          N_("Если выделенное уже прописными – строчными") },
+        { "hk_InvertCaseSelected", N_("Выделенное иНВЕРСИЕЙ рЕГИСТРА"), N_("Для текста, набранного с нажатым CapsLock") },
+        { "hk_CycleSwitchLayout", N_("Следующая раскладка"), N_("Переключает раскладку без исправления текста") },
+        { "hk_EmulateCapsLock", N_("Нажать CapsLock"), N_("Если CapsLock занят под сочетание, включить его можно так") },
+        { "hk_ToggleEnabled", N_("Включить / выключить FluentSwitcher"), N_("Работает и когда программа выключена") },
+        { "hk_ShowMainWindow", N_("Открыть настройки"), N_("Это окно") },
+        { "hk_InsertWithoutFormat", N_("Вставить без оформления"),
+          N_("Если стоит FluentClipper, у него это уже есть: Ctrl+Shift+Insert") },
     };
     return actions;
 }
@@ -40,12 +42,12 @@ wxString HotkeyDisplay(const wxString& stored)
             continue;
         wxString suffix;
         if (one.Replace("#double", "") > 0)
-            suffix = wxString::FromUTF8(" дважды");
+            suffix = T(" дважды");
         if (one.Replace("#up", "") > 0)
-            suffix = wxString::FromUTF8(", при отпускании");
+            suffix = T(", при отпускании");
         one = one.Strip(wxString::both) + suffix;
         if (!shown.empty())
-            shown += wxString::FromUTF8("   или   ");
+            shown += T("   или   ");
         shown += one;
     }
     return shown;
@@ -78,7 +80,7 @@ const int kMaxRecordMs = 10000; // no keys for this long: the recording gives up
 
 wxString Placeholder(int slot)
 {
-    return wxString::FromUTF8(slot == 0 ? "Не назначено" : "Ещё одно сочетание");
+    return slot == 0 ? T("Не назначено") : T("Ещё одно сочетание");
 }
 }
 
@@ -90,9 +92,9 @@ HotkeyEditor::HotkeyEditor(wxWindow* parent, const wxString& stored, int slots, 
     m_values.resize(slots);
 
     wxArrayString notes;
-    for (const char* note : { "Нажмите сочетание или дважды одну клавишу. Esc – отмена",
-                              "Так же назначено: «Исправить текст с начала строки»" })
-        notes.Add(wxString::FromUTF8(note));
+    // The longest notes it shows, for the width of the line.
+    notes.Add(T("Нажмите сочетание или дважды одну клавишу. Esc – отмена"));
+    notes.Add(T("Так же назначено: «") + T("Исправить текст с начала строки") + T("»"));
     int noteWidth = 0;
     m_note = NoteLine(this, notes, &noteWidth);
 
@@ -163,12 +165,12 @@ void HotkeyEditor::ShowSlot(int slot)
     const wxString& value = m_values[slot];
     if (m_recordingSlot == slot)
     {
-        view->SetText(wxString::FromUTF8("Нажмите сочетание…"), true);
+        view->SetText(T("Нажмите сочетание…"), true);
         view->SetClearable(false);
         return;
     }
     view->SetText(value.empty() ? Placeholder(slot) : HotkeyDisplay(value), value.empty());
-    view->SetClearable(!value.empty(), wxString::FromUTF8("Убрать сочетание"));
+    view->SetClearable(!value.empty(), T("Убрать сочетание"));
 }
 
 void HotkeyEditor::Record(int slot)
@@ -183,7 +185,7 @@ void HotkeyEditor::Record(int slot)
     m_views[slot]->SetFocus();
     m_views[slot]->SetRecording(true);
     ShowSlot(slot);
-    SetNoteLine(m_note, wxString::FromUTF8("Нажмите сочетание или дважды одну клавишу. Esc – отмена"), true);
+    SetNoteLine(m_note, T("Нажмите сочетание или дважды одну клавишу. Esc – отмена"), true);
     m_timer.Start(30);
 }
 

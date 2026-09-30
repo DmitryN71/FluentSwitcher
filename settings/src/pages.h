@@ -41,6 +41,8 @@ private:
     void BuildAbout();
 
     void ShowSection(int section);
+    // A note if another action has the hotkey `one` too.
+    wxString SameHotkey(const wxString& one, const char* except) const;
     void RefreshEngine();
     bool HasChanges() const;
     bool Apply();

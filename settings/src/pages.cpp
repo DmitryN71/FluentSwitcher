@@ -104,6 +104,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     m_title = FluentText(this, wxString(), 20, g.text, true);
     m_pagesSizer = new wxBoxSizer(wxVERTICAL);
 
+    HotkeyEditor::s_doubleMs = (unsigned long)m_edit.GetInt("quick_press_ms", 280);
     RefreshEngine();
     BuildGeneral();
     BuildTyping();
@@ -181,6 +182,8 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& e) {
         if (e.GetActive())
             RefreshEngine();
+        else
+            HotkeyEditor::CancelRecording(); // the keyboard hook must not outlive the window's turn
         e.Skip();
     });
 
@@ -352,6 +355,18 @@ void SettingsFrame::BuildTyping()
              "FluentSwitcher нажмёт то сочетание, которым раскладка переключается в Windows"),
            { T("Обычный"), T("Нажимать сочетание Windows") }, alternative ? 1 : 0,
            [this](int i) { m_edit.SetBool("AlternativeLayoutChange", i == 1); });
+
+    HotkeyEditor* windows = nullptr;
+    AddSettingsCard(m_page, m_column, T("Сочетание, которым раскладка переключается в Windows"),
+                    T("FluentSwitcher нажимает его сам при втором способе. Обычно Alt + Shift или Win + Пробел"),
+                    [&](wxWindow* card) {
+                        return windows = new HotkeyEditor(card, m_edit.GetString("win_hotkey_cycle_lang", "LAlt + Shift"),
+                                                          1, true, true);
+                    }, true);
+    windows->onChange = [this, windows] {
+        m_edit.SetString("win_hotkey_cycle_lang", windows->Value());
+        Changed();
+    };
     FinishPage();
 }
 
@@ -359,27 +374,44 @@ void SettingsFrame::BuildHotkeys()
 {
     Section(kIconHotkeys, T("Сочетания клавиш"));
 
-    AddSettingsCard(m_page, m_column, T("Изменять сочетания – в следующей сборке"),
-                    T("Пока здесь видно, что назначено. Поменять можно в старом окне: меню у часов → «Показать»"),
-                    [](wxWindow*) { return nullptr; });
-    auto shown = [](wxWindow* card, const wxString& stored) {
-        HotkeyView* view = new HotkeyView(card);
-        const wxString text = HotkeyDisplay(stored);
-        view->SetText(text.empty() ? T("Нет") : text, text.empty());
-        view->SetMinSize(wxSize(card->FromDIP(260), view->GetMinSize().y));
-        return view;
-    };
+    // Recording keeps left and right Ctrl, Shift, Alt, Win apart only when asked: "Ctrl" fits either.
+    ToggleSwitch* sides = nullptr;
+    AddSettingsCard(m_page, m_column, T("Различать левые и правые Ctrl, Shift, Alt, Win"),
+                    T("Для новых сочетаний: например, только правый Ctrl. Иначе годится любой"),
+                    [&](wxWindow* card) { return sides = new ToggleSwitch(card, false); });
+    std::vector<HotkeyEditor*> editors;
     for (const HotkeyAction& action : HotkeyActions())
     {
-        const wxString stored = m_edit.GetHotkeys(action.key);
-        AddSettingsCard(m_page, m_column, T(action.title), T(action.description),
-                        [&](wxWindow* card) { return shown(card, stored); });
+        HotkeyEditor* editor = nullptr;
+        const char* key = action.key;
+        AddSettingsCard(m_page, m_column, T(action.title), T(action.description), [&](wxWindow* card) {
+            return editor = new HotkeyEditor(card, m_edit.GetHotkeys(key), 2, false);
+        }, true);
+        editor->onChange = [this, editor, key] {
+            m_edit.SetHotkeys(key, editor->Value());
+            Changed();
+        };
+        editor->sameAs = [this, key](const wxString& one) { return SameHotkey(one, key); };
+        editors.push_back(editor);
     }
-    const wxString windows = m_edit.GetString("win_hotkey_cycle_lang", "LAlt + Shift");
-    AddSettingsCard(m_page, m_column, T("Сочетание Windows для смены раскладки"),
-                    T("FluentSwitcher нажимает его сам, когда выбрано «Нажимать сочетание Windows» (раздел «Набор текста»)"),
-                    [&](wxWindow* card) { return shown(card, windows); });
+    sides->onChange = [sides, editors] {
+        for (HotkeyEditor* editor : editors)
+            editor->SetSides(sides->IsOn());
+    };
     FinishPage();
+}
+
+wxString SettingsFrame::SameHotkey(const wxString& one, const char* except) const
+{
+    for (const HotkeyAction& action : HotkeyActions())
+    {
+        if (strcmp(action.key, except) == 0)
+            continue;
+        for (const wxString& other : SplitHotkeys(m_edit.GetHotkeys(action.key)))
+            if (other.IsSameAs(one, false))
+                return T("Так же назначено: «") + T(action.title) + T("»");
+    }
+    return wxString();
 }
 
 void SettingsFrame::BuildLayouts()
@@ -399,17 +431,31 @@ void SettingsFrame::BuildLayouts()
     {
         const auto& layout = layouts[i];
         const wxString hkl = layout.contains("layout") ? FromUtf8(layout["layout"].get<std::string>()) : wxString();
-        const wxString own = layout.contains("hotkey") ? HotkeyDisplay(FromUtf8(layout["hotkey"].get<std::string>()))
-                                                       : wxString();
-        const wxString description = own.empty()
-            ? T("Участвует в переключении и исправлении")
-            : T("Своё сочетание: ") + own;
+        const wxString own = layout.contains("hotkey") ? FromUtf8(layout["hotkey"].get<std::string>()) : wxString();
         ToggleSwitch* toggle = nullptr;
-        AddSettingsCard(m_page, m_column, LayoutName(hkl), description, [&](wxWindow* card) {
-            return toggle = new ToggleSwitch(card, layout.value("enabled", true));
-        });
+        HotkeyEditor* editor = nullptr;
+        // The switch "takes part" on the right of the title; the layout's own hotkeys below.
+        AddSettingsCard(m_page, m_column, LayoutName(hkl),
+                        T("Участвует в переключении и исправлении. Своё сочетание включает сразу эту раскладку, "
+                          "например левый Ctrl – английскую, правый – русскую"),
+                        [&](wxWindow* card) {
+                            wxPanel* panel = new wxPanel(card);
+                            panel->SetBackgroundColour(card->GetBackgroundColour());
+                            editor = new HotkeyEditor(panel, own, 2, true);
+                            toggle = new ToggleSwitch(panel, layout.value("enabled", true));
+                            wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+                            row->Add(editor, 0, wxALIGN_TOP);
+                            row->AddStretchSpacer();
+                            row->Add(toggle, 0, wxALIGN_TOP | wxTOP, card->FromDIP(4));
+                            panel->SetSizer(row);
+                            return panel;
+                        }, true);
         toggle->onChange = [this, toggle, i] {
             m_edit.Json()["layouts_info"][i]["enabled"] = toggle->IsOn();
+            Changed();
+        };
+        editor->onChange = [this, editor, i] {
+            m_edit.Json()["layouts_info"][i]["hotkey"] = ToUtf8(editor->Value());
             Changed();
         };
     }

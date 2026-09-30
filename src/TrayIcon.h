@@ -55,7 +55,7 @@ public:
 			}
 
 			// menu
-			res.push_back({ .name = LOC("Show"), .callback = []() { show_main_wind(); } });
+			res.push_back({ .name = LOC("Settings"), .callback = []() { show_main_wind(); } });
 			res.push_back({ .name = LOC("Enable"), .callback = []() { try_toggle_enable(); }, .is_checkbox = true, .edit_val = g_enabled.IsEnabled() });
 			res.push_back({ .name = LOC("Exit"), .callback = []() { PostQuitMessage(0); } });
 			return res;

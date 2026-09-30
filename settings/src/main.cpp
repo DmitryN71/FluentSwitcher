@@ -15,6 +15,8 @@
 #include <wx/settings.h>
 #include <wx/stdpaths.h>
 
+#include <dwmapi.h>
+
 namespace
 {
 // The settings window of the same exe that is open already, if any.
@@ -95,9 +97,19 @@ public:
         wxString error;
         config.Load(configPath, &error);
         SettingsFrame* frame = new SettingsFrame(config, wxFileName(configPath).GetPath(), pid, error, (int)first);
+        // A new window is on the screen before it has painted anything, and for a moment it is a white
+        // rectangle. Hidden from the screen (cloaked) until all of it has painted, it appears finished.
+        HWND hwnd = (HWND)frame->GetHWND();
+        BOOL cloak = TRUE;
+        DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &cloak, sizeof(cloak));
         frame->Show();
         frame->Raise();
-        SetForegroundWindow((HWND)frame->GetHWND()); // the engine allowed it (AllowSetForegroundWindow) when it started us
+        SetForegroundWindow(hwnd); // the engine allowed it (AllowSetForegroundWindow) when it started us
+        CallAfter([hwnd] {
+            RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            BOOL uncloak = FALSE;
+            DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &uncloak, sizeof(uncloak));
+        });
         return true;
     }
 

@@ -24,6 +24,32 @@ private:
 	NOTIFYICONDATA nid {};
 	HWND hwnd = 0;
 
+	// Меню у флага - как меню Windows 11 (и FluentClipper): тёмное при тёмной панели задач. Своё меню
+	// обычной программы Windows всегда рисует светлым; тёмное включают недокументированные функции
+	// uxtheme (порядковые номера 135 SetPreferredAppMode и 136 FlushMenuThemes, Windows 10 1903+),
+	// как делают Проводник, wxWidgets, Notepad++. Проверяется при каждом открытии: тема могла смениться.
+	static void MenuThemeLikeTaskbar() {
+		static DWORD build = [] {
+			using RtlGetVersion_t = LONG(WINAPI*)(OSVERSIONINFOW*);
+			auto fn = (RtlGetVersion_t)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+			OSVERSIONINFOW v{ sizeof(v) };
+			return fn && fn(&v) == 0 ? v.dwBuildNumber : 0;
+		}();
+		if (build < 18362) return;
+		static HMODULE uxtheme = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+		if (!uxtheme) return;
+		using SetPreferredAppMode_t = int(WINAPI*)(int);
+		using FlushMenuThemes_t = void(WINAPI*)();
+		static auto setMode = (SetPreferredAppMode_t)GetProcAddress(uxtheme, MAKEINTRESOURCEA(135));
+		static auto flush = (FlushMenuThemes_t)GetProcAddress(uxtheme, MAKEINTRESOURCEA(136));
+		if (!setMode || !flush) return;
+		DWORD light = 1, size = sizeof(light);
+		RegGetValueW(HKEY_CURRENT_USER, LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)",
+			L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
+		setMode(light ? 3 : 2); // ForceLight : ForceDark
+		flush();
+	}
+
 	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		switch (uMsg) {
 		case WM_TRAYICON: {
@@ -53,6 +79,7 @@ private:
 						AppendMenu(hMenu, MF_STRING, i, StrUtils::Convert(it.name).c_str());
 					}
 
+					MenuThemeLikeTaskbar();
 					SetForegroundWindow(hwnd);
 					TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, cursorPos.x, cursorPos.y, 0, hwnd, NULL);
 					DestroyMenu(hMenu);

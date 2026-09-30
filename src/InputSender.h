@@ -38,7 +38,11 @@ public:
 				UINT sc = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);
 				if (HIBYTE(sc) != 0xE1) { // Pause (E1 1D 45) одним скан-кодом не описать
 					cur.ki.wScan = LOBYTE(sc);
-					if (HIBYTE(sc) == 0xE0) {
+					// Для Home, End, стрелок, Insert, Delete, PageUp/PageDown Windows отдаёт скан-код цифрового
+					// блока (0x47 и т. п.) без E0. Без флага это клавиша цифрового блока, и при включённом NumLock
+					// Windows отпускает для неё Shift: Shift+Home становился Home, выделения не было.
+					if (HIBYTE(sc) == 0xE0 || Utils::is_in(key, VK_HOME, VK_END, VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN,
+						VK_INSERT, VK_DELETE, VK_PRIOR, VK_NEXT)) {
 						SetFlag(cur.ki.dwFlags, KEYEVENTF_EXTENDEDKEY);
 					}
 				}

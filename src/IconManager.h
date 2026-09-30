@@ -70,8 +70,16 @@ class IconMgr {
 
 
 			if (is_gray) {
+				// Программа выключена: флаг серый и полупрозрачный, как неактивные значки Windows.
+				// Раньше он только темнел на 20 % - на тёмной панели задач разницы почти не видно.
+				// Данные всегда RGBA (LoadImageFromFile грузит с STBI_rgb_alpha), channels - число каналов в файле.
 				for (auto& it : bndl) {
-					Images::SetBrightness(it, 0.8f);
+					auto* p = it->data;
+					for (int i = 0; i < it->width * it->height; i++, p += 4) {
+						auto gray = (unsigned char)(0.299f * p[0] + 0.587f * p[1] + 0.114f * p[2]);
+						p[0] = p[1] = p[2] = gray;
+						p[3] = (unsigned char)(p[3] * 0.55f);
+					}
 				}
 			}
 		}

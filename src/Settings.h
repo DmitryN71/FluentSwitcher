@@ -97,7 +97,7 @@ public:
     static constexpr UStr showFlags_OriginalFlags = "Original Flags";
     static constexpr UStr showFlags_AppIcon = "Application Icon";
     static constexpr UStr showFlags_Nothing = "Nothing";
-    string flagsSet = "Square";
+    string flagsSet = "Fluent";
     //bool SkipAllInjectKeys = false;
     bool SkipLowLevelInjectKeys = false;
     bool AlternativeLayoutChange = false;

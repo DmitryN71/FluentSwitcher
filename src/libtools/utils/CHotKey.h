@@ -81,11 +81,17 @@ public:
 
 		bool strick_modifier = TestFlag(flags, COMPARE_STRICK_MODIFIER);
 
+		// Сочетание из одних модификаторов ("Win + Shift", "Ctrl + Alt"): порядок нажатия не важен.
+		// Иначе "Win + Shift" срабатывало, только если Shift нажат последним.
+		if (OnlyMods() && other.OnlyMods())
+			return CompareIgnoreOrder(keys, other.keys, size, strick_modifier);
+
 		if (!CompareKeys(ValueKey(), other.ValueKey(), strick_modifier))
 			return false;
 		return CompareIgnoreOrder(keys, other.keys, size - 1, strick_modifier);
 	}
 	bool IsEmpty() const { return Size() == 0; }
+	bool OnlyMods() const { return size > 0 && std::all_of(begin(), end(), [](TKeyCode k) { return IsKnownMods(k); }); }
 	TKeyCode ValueKey() const { return size == 0 ? 0 : keys[size-1]; }
 
 	auto* begin(this auto&& self) { return self.keys; }

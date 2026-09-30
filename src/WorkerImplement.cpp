@@ -457,11 +457,15 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     
     bool fDels = false;
 
+    // Раскладка, в которой будет набран текст: новая, если её меняем, иначе текущая.
+    HKL target = CurLay();
     if (TestFlag(ctxRevert.flags, SW_CLIENT_SetLang) && ctxRevert.lay) {
     	auto prevLay = CurLay();		
         SetNewLay(ctxRevert.lay);
-		WaitOtherLay(prevLay, 15, 40);
-
+		HKL got = WaitOtherLay(prevLay, 15, 40);
+        target = ctxRevert.lay != (HKL)HKL_NEXT ? ctxRevert.lay
+            : conf_get_unsafe()->layouts_info.NextEnabledLayout(prevLay);
+        if (target == 0) target = got;
     }
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE)) {
@@ -469,7 +473,11 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     }
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT)) {
-        InputSender::SendKeys(ctxRevert.keylist, m_is_last_caps);
+        if (conf_get_unsafe()->retype_keys || target == 0) {
+            InputSender::SendKeys(ctxRevert.keylist, m_is_last_caps);
+        } else {
+            InputSender::SendKeysAsText(ctxRevert.keylist, target, m_is_last_caps);
+        }
     }
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_CTRLC)) {

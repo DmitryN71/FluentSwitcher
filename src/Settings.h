@@ -109,6 +109,10 @@ public:
 	string gui_lang = "Russian";
 	bool useBritishFlag = false;
 	string treat_as_letters = "_-";
+	// Перепечатывать исправленное клавишами (как в SimpleSwitcher), а не готовыми символами.
+	// Символы не зависят от Shift и от того, успела ли смениться раскладка: новый Блокнот
+	// Windows 11 терял Shift в быстрой пачке клавиш ("?" -> "." вместо ",").
+	bool retype_keys = false;
 	//int inject_delay_after_lang_ms = 0;
 
     std::vector< CHotKeySet> hotkeysList;

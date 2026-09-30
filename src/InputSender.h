@@ -118,6 +118,42 @@ public:
 		AddScanCode(key, KEY_STATE_DOWN);
 		AddScanCode(key, KEY_STATE_UP);
 	}
+	// Те же клавиши, но готовыми символами (KEYEVENTF_UNICODE): что даёт каждая клавиша с её Shift в
+	// раскладке lay, считаем сами. Программе не нужно ни состояние Shift, ни уже сменённая раскладка.
+	// Клавиша без символа уходит клавишей.
+	// Что печатает клавиша с её Shift в раскладке lay; пусто - клавиша без символа (Tab, Enter и т. п.).
+	static std::wstring KeyText(const TKeyBaseInfo& key, HKL lay, bool is_now_caps) {
+		UINT vk = key.scan_code.scan ? key.scan_code.to_vk_or_def(lay, key.vk_code) : key.vk_code;
+		UINT sc = key.scan_code.scan ? key.scan_code.scan : MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, lay);
+		BYTE state[256] = {};
+		if (key.is_shift) state[VK_SHIFT] = 0x80;
+		if (is_now_caps) state[VK_CAPITAL] = 0x01;
+		wchar_t buf[8] = {};
+		// Флаг 4: не трогать состояние клавиатуры (мёртвые клавиши), Windows 10 1607 и новее.
+		int n = vk ? ToUnicodeEx(vk, sc, state, buf, 8, 4, lay) : 0;
+		if (n <= 0 || buf[0] < L' ') return {};
+		return std::wstring(buf, n);
+	}
+
+	static void SendKeysAsText(const TKeyRevert& sendData, HKL lay, bool is_now_caps) {
+
+		InputSender inputSender;
+
+		LOG_ANY("Send {} keys as text, lay {}, is_now_caps: {}", sendData.size(), (void*)lay, is_now_caps);
+
+		for (const auto& key : sendData) {
+			auto text = KeyText(key, lay, is_now_caps);
+			if (text.empty()) {
+				inputSender.AddPressBase(key);
+			}
+			for (wchar_t c : text) {
+				inputSender.AddUnicodePress(c);
+			}
+		}
+
+		inputSender.Send();
+	}
+
 	static void SendKeys(const TKeyRevert& sendData, bool is_now_caps) {
 
 		InputSender inputSender;

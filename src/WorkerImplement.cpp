@@ -468,15 +468,16 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
         if (target == 0) target = got;
     }
 
+    const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE)) {
-        InputSender::SendVkKey(VK_BACK, ctxRevert.keylist.size());
+        InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size(), delay);
     }
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT)) {
         if (conf_get_unsafe()->retype_keys || target == 0) {
             InputSender::SendKeys(ctxRevert.keylist, m_is_last_caps);
         } else {
-            InputSender::SendKeysAsText(ctxRevert.keylist, target, m_is_last_caps);
+            InputSender::SendKeysAsText(ctxRevert.keylist, target, m_is_last_caps, delay);
         }
     }
 

@@ -135,11 +135,12 @@ public:
 		return std::wstring(buf, n);
 	}
 
-	static void SendKeysAsText(const TKeyRevert& sendData, HKL lay, bool is_now_caps) {
+	// delay_ms > 0: по одной клавише, с паузой после каждой (см. retype_delay_ms).
+	static void SendKeysAsText(const TKeyRevert& sendData, HKL lay, bool is_now_caps, int delay_ms = 0) {
 
 		InputSender inputSender;
 
-		LOG_ANY("Send {} keys as text, lay {}, is_now_caps: {}", sendData.size(), (void*)lay, is_now_caps);
+		LOG_ANY("Send {} keys as text, lay {}, is_now_caps: {}, delay {}", sendData.size(), (void*)lay, is_now_caps, delay_ms);
 
 		for (const auto& key : sendData) {
 			auto text = KeyText(key, lay, is_now_caps);
@@ -149,9 +150,26 @@ public:
 			for (wchar_t c : text) {
 				inputSender.AddUnicodePress(c);
 			}
+			if (delay_ms > 0) {
+				inputSender.Send();
+				inputSender.Clear();
+				Sleep(delay_ms);
+			}
 		}
 
 		inputSender.Send();
+	}
+
+	// count нажатий клавиши; delay_ms > 0 - по одному, с паузой после каждого.
+	static void SendVkKeyPaced(TKeyCode vk, int count, int delay_ms) {
+		if (delay_ms <= 0) {
+			SendVkKey(vk, count);
+			return;
+		}
+		for (int i = 0; i < count; i++) {
+			SendVkKey(vk);
+			Sleep(delay_ms);
+		}
 	}
 
 	static void SendKeys(const TKeyRevert& sendData, bool is_now_caps) {

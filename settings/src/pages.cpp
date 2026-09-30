@@ -436,6 +436,19 @@ void SettingsFrame::BuildAdvanced()
            T("Старый способ. Обычно исправленное слово вставляется готовыми символами: так новый Блокнот Windows 11 "
              "не теряет Shift. Включите, если какая-то программа не принимает такую вставку"),
            "retype_keys", false);
+    NumberField* delay = nullptr;
+    AddSettingsCard(m_page, m_column, T("Пауза между символами при исправлении, мс"),
+                    T("Исправленное слово печатается по одному символу с этой паузой: новый Блокнот Windows 11 "
+                      "теряет и повторяет символы, отправленные разом. Обычно 8"),
+                    [&](wxWindow* card) { return delay = new NumberField(card, m_edit.GetInt("retype_delay_ms", 8)); });
+    delay->onChange = [this, delay] {
+        const int value = delay->Value();
+        if (value > 0 && value <= 100)
+        {
+            m_edit.SetInt("retype_delay_ms", value);
+            Changed();
+        }
+    };
     Toggle(T("Британский флаг для английского"), T("Вместо американского"), "useBritishFlag", false);
     Toggle(T("Раскладки в меню у часов"), T("Щелчок по раскладке в меню переключает на неё"), "ShowLangsInTrayMenu", true);
 

@@ -114,7 +114,8 @@ namespace nlohmann {
 			ShowReminderInTrayMenu,
 			useBritishFlag,
 			treat_as_letters,
-			retype_keys
+			retype_keys,
+			retype_delay_ms
 			//,inject_delay_after_lang_ms
 		)
 }

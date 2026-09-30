@@ -38,6 +38,7 @@ public:
 		add(hk_ShowMainWindow,true);
 		add(hk_ShowRemainderWnd);
 		add(hk_InsertWithoutFormat);
+		add(hk_RevertLine);
     }
 
     std::set <std::wstring> disableInPrograms;

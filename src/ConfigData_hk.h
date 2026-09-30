@@ -15,6 +15,7 @@
 	hk_ShowRemainderWnd,
 	hk_InsertWithoutFormat,
 	hk_Fix_RAlt,
+	hk_RevertLine, // текст от начала строки до курсора: Shift+Home, дальше как выделенный
 
 	hk_hotkeys_end,
 
@@ -80,6 +81,10 @@ inline std::generator<CHotKey> GetHk_Defaults(HotKeyType hk) {
 		co_yield CHotKey(VKE_ALT, VK_F24);
 		co_yield CHotKey(VKE_ALT, VKE_CapsLock);
 		co_return;
+	case hk_RevertLine:
+		co_yield CHotKey(VK_CONTROL, VK_PAUSE);
+		co_yield CHotKey(VK_SHIFT, VK_PAUSE);
+		co_return;
 	}
 }
 
@@ -97,6 +102,7 @@ inline const char* GetGuiTextForHk(HotKeyType hk) {
 	case hk_ShowMainWindow: return LOC("Show/hide main window");
 	case hk_ShowRemainderWnd: return LOC("Show/hide Reminder");
 	case hk_InsertWithoutFormat: return LOC("Paste text without formatting");
+	case hk_RevertLine: return LOC("Change layout from the start of the line");
 	}
 	return "Error";
 }

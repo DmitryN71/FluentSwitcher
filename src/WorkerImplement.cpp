@@ -115,7 +115,11 @@ TStatus WorkerImplement::GetClipStringCallback() {
     if (data.empty()) {
         LOG_ANY(L"data empty");
     } else {
-        if (m_lastRevertRequest == hk_RevertSelelected) {
+        if (m_lastRevertRequest == hk_RevertLine && data.find_first_of(L"\r\n") != std::wstring::npos) {
+            // Shift+Home перевода строки не выделяет. Он в буфере - значит, выделять было нечего (курсор
+            // в начале строки), а программа по Ctrl+C без выделения скопировала всю строку (VS Code и др.).
+            LOG_ANY(L"line: copied text has a line break, nothing was selected. skip");
+        } else if (Utils::is_in(m_lastRevertRequest, hk_RevertSelelected, hk_RevertLine)) {
             // Выделенное переводится в другую раскладку в памяти и вставляется одним Ctrl+V. Раньше оно
             // перепечатывалось клавишами: Блокнот Windows 11 терял первую из них ("эта" -> "та"), а раскладка
             // определялась по каждому символу отдельно ("комбинация" -> "ком,инация"). См. LayoutConvert.h.
@@ -416,7 +420,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
 
         // REVERT AND CHANGE LAYOUT
 
-        if (Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected)) {
+        if (Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine)) {
             // "Буфер занят" - до конца восстановления (GetClipStringCallback). Если буфер так и не
             // изменится (ничего не выделено), сигнал снимется сам через 3 с.
             int busy = m_clipWorker.busy.Set();
@@ -434,6 +438,10 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
                         }
                     },
                     10000);
+            }
+            if (hk == hk_RevertLine) {
+                // Выделить от курсора до начала строки; дальше - как выделенный текст.
+                InputSender::SendWithPause(CHotKey(VK_LSHIFT, VK_HOME));
             }
             IFS_RET(ProcessRevert({.flags = SW_CLIENT_CTRLC}));
             RETURN_SUCCESS;

@@ -168,6 +168,9 @@ namespace cfg_details {
 
 	TStatus LoadConfig(ProgramConfig& cfg);
 	TStatus Save_conf(const ProgramConfig& gui);
+	// В файле нет поля, которое движок пишет (появилось в новой версии с тем же номером): тогда файл
+	// дописывается, чтобы новое поле было видно и его можно было править вручную или в окне настроек.
+	bool FileMissesFields(const ProgramConfig& cfg);
 	TStatus Save_conf_To_Stream(std::ostream& outp, const ProgramConfig& gui);
 
 	inline void ApplyGuiConfig() {
@@ -193,6 +196,9 @@ namespace cfg_details {
 		else {
 			if (conf_gui()->config_version != GET_SW_VERSION()) {
 				conf_gui()->config_version = GET_SW_VERSION();
+				SaveGuiConfig();
+			}
+			else if (FileMissesFields(*conf_gui())) {
 				SaveGuiConfig();
 			}
 		}

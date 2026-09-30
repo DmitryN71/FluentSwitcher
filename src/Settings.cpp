@@ -187,6 +187,35 @@ namespace cfg_details {
 		RETURN_SUCCESS;
 	}
 
+	bool FileMissesFields(const ProgramConfig& cfg) {
+		try {
+			auto p = ProgramConfig::GetPath_Conf();
+			if (!std::filesystem::is_regular_file(p)) return false;
+			std::ifstream ifs(p, std::ios::binary);
+			json file = json::parse(ifs, nullptr, true, true);
+			std::stringstream ss;
+			if (Save_conf_To_Stream(ss, cfg) != TStatus::SW_ERR_SUCCESS) return false;
+			json full = json::parse(ss.str());
+			for (const auto& [key, value] : full.items()) {
+				if (!file.contains(key)) {
+					LOG_ANY("config misses {}", key);
+					return true;
+				}
+			}
+			const auto& hk = file["hotkeys"];
+			for (const auto& [key, value] : full["hotkeys"].items()) {
+				if (!hk.is_object() || !hk.contains(key)) {
+					LOG_ANY("config misses hotkeys.{}", key);
+					return true;
+				}
+			}
+		}
+		catch (std::exception& e) {
+			LOG_ANY("FileMissesFields: {}", e.what());
+		}
+		return false;
+	}
+
 	TStatus Save_conf_To_Stream(std::ostream& outp, const ProgramConfig& gui) {
 		try {
 			json data = gui;

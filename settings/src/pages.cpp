@@ -260,7 +260,7 @@ void SettingsFrame::BuildGeneral()
                         FluentButton* start = new FluentButton(card, wxID_ANY, T("Запустить"), true);
                         start->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
                             if (!Engine::Start(m_folder))
-                                return SetStatus(T("Не нашёл SimpleSwitcher.exe в папке программы"), true);
+                                return SetStatus(T("Не нашёл FluentSwitcher.exe в папке программы"), true);
                             // It needs a moment to create its window.
                             for (int wait = 0; wait < 30 && !Engine::Find(m_folder, m_enginePid); wait++)
                                 wxMilliSleep(100);
@@ -299,16 +299,19 @@ void SettingsFrame::BuildGeneral()
             values.Add(name);
     }
     values.Sort([](const wxString& a, const wxString& b) {
-        return a == "Fluent" ? -1 : b == "Fluent" ? 1 : a.CmpNoCase(b);
+        return a == "Glossy" ? -1 : b == "Glossy" ? 1 : a.CmpNoCase(b);
     });
     for (const wxString& v : values)
-        names.Add(v == "Fluent" ? T("Fluent – прямоугольные") : v == "Round" ? T("Круглые")
+        names.Add(v == "Glossy" ? T("Глянцевые") : v == "Round" ? T("Круглые")
                   : v == "Square" ? T("Квадратные") : v);
     values.Add("Application Icon");
     names.Add(T("Значок программы вместо флага"));
     values.Add("Nothing");
     names.Add(T("Не показывать значок у часов"));
-    const wxString flags = m_edit.GetString("flagsSet", "Fluent");
+    // A set that is gone (the old "Fluent") shows as the glossy one: the engine does the same.
+    wxString flags = m_edit.GetString("flagsSet", "Glossy");
+    if (values.Index(flags) == wxNOT_FOUND && values.Index("Glossy") != wxNOT_FOUND)
+        flags = "Glossy";
     if (values.Index(flags) == wxNOT_FOUND)
     {
         values.Add(flags);
@@ -632,9 +635,6 @@ void SettingsFrame::BuildAdvanced()
     Toggle(T("Отключить залипание клавиш"),
            T("Пять нажатий Shift и другие сочетания специальных возможностей Windows не будут открывать их окна"),
            "disableAccessebility", false);
-    Toggle(T("Убирать оформление при каждом копировании"),
-           T("В буфере остаётся только простой текст. Не включайте вместе с FluentClipper: он хранит оформление"),
-           "fClipboardClearFormat", false);
     Toggle(T("Не перехватывать клавиши, которые уходят на удалённый компьютер"),
            T("Для подключения к удалённому рабочему столу с этого компьютера"), "SkipLowLevelInjectKeys", false);
     Toggle(T("Ctrl + левый Alt – не правый Alt"),
@@ -659,7 +659,6 @@ void SettingsFrame::BuildAdvanced()
         }
     };
     Toggle(T("Британский флаг для английского"), T("Вместо американского"), "useBritishFlag", false);
-    Toggle(T("Раскладки в меню у часов"), T("Щелчок по раскладке в меню переключает на неё"), "ShowLangsInTrayMenu", true);
 
     NumberField* quick = nullptr;
     AddSettingsCard(m_page, m_column, T("Интервал двойного нажатия, мс"),
@@ -677,7 +676,7 @@ void SettingsFrame::BuildAdvanced()
     // Switched at once, as in the old window; not a setting that is saved.
     ToggleSwitch* log = nullptr;
     AddSettingsCard(m_page, m_column, T("Журнал отладки"),
-                    T("Сразу и до выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\SimpleSwitcher.exe.log "
+                    T("Сразу и до выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
                       "в папке программы. Пароли при этом не вводите; после проверки выключите и удалите журнал"),
                     [&](wxWindow* card) { return log = new ToggleSwitch(card, (m_state & Engine::StateLogging) != 0); });
     log->onChange = [this, log] {

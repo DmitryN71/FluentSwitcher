@@ -37,7 +37,8 @@ public:
 		add(hk_ToggleEnabled,true);
 		add(hk_ShowMainWindow,true);
 		add(hk_ShowRemainderWnd);
-		add(hk_InsertWithoutFormat);
+		// hk_InsertWithoutFormat ("вставить без оформления") не нужен переключателю раскладки: это есть у
+		// менеджера буфера (FluentClipper: Ctrl+Shift+Insert).
 		add(hk_RevertLine);
     }
 
@@ -98,7 +99,7 @@ public:
     static constexpr UStr showFlags_OriginalFlags = "Original Flags";
     static constexpr UStr showFlags_AppIcon = "Application Icon";
     static constexpr UStr showFlags_Nothing = "Nothing";
-    string flagsSet = "Fluent";
+    string flagsSet = "Glossy";
     //bool SkipAllInjectKeys = false;
     bool SkipLowLevelInjectKeys = false;
     bool AlternativeLayoutChange = false;

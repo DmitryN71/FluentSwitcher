@@ -75,6 +75,41 @@ inline TStatus DelSchedule() {
 	RETURN_SUCCESS;
 }
 
+// FluentSwitcher.exe раньше назывался SimpleSwitcher.exe. Автозапуск под прежним именем, который ведёт
+// к SimpleSwitcher.exe в нашей папке, переносится на новое имя и этот exe: иначе после удаления старого
+// файла программа перестала бы запускаться с Windows. Чужую установку SimpleSwitcher (другая папка) не трогаем.
+inline void MigrateOldAutostart() {
+	auto func = []() -> TStatus {
+		const auto old_exe = (PathUtils::GetPath_folder_noLower2() / c_sExeNameOld).wstring();
+
+		bool oldRunOurs = false;
+		bool hasOldRun = false;
+		IFS_RET(Startup::CheckAutoStartUser(oldRunOurs, hasOldRun, c_sRegRunValueOld, old_exe.c_str(), c_sArgAutostart));
+		if (oldRunOurs) {
+			LOG_ANY(L"autostart: Run value {} -> {}", c_sRegRunValueOld, c_sRegRunValue);
+			IFS_RET(Startup::RemoveWindowsRun(c_sRegRunValueOld));
+			IFS_RET(SetRegRun());
+		}
+
+		Startup::CheckTaskSheduleParm parm;
+		parm.taskName = c_wszTaskNameOld;
+		parm.sPath = old_exe.c_str();
+		parm.sArgs = c_sArgAutostart;
+		IFS_RET(Startup::CheckTaskShedule(parm));
+		if (parm.isTaskExists && parm.isPathEqual) {
+			if (!Utils::IsSelfElevated()) {
+				LOG_WARN(L"autostart: moving the task {} needs administrator rights", c_wszTaskNameOld);
+			} else {
+				LOG_ANY(L"autostart: task {} -> {}", c_wszTaskNameOld, c_wszTaskName);
+				IFS_RET(Startup::RemoveTaskShedule(c_wszTaskNameOld));
+				IFS_RET(SetSchedule());
+			}
+		}
+		RETURN_SUCCESS;
+	};
+	IFS_LOG(func());
+}
+
 inline bool autostart_get() {
 	bool isUserAllOk = false;
 	bool isUserHasTask = false;

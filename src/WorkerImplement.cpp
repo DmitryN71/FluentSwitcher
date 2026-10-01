@@ -209,10 +209,8 @@ void WorkerImplement::CliboardChanged() {
     }
 
     // --- This is user request ----
-
-    if (conf_get_unsafe()->fClipboardClearFormat) {
-        Worker()->PostMsg([](WorkerImplement* w) { w->ClipboardClearFormat2(); }, 500);
-    }
+    // "Убирать оформление при каждом копировании" (fClipboardClearFormat) FluentSwitcher не делает: это дело
+    // менеджера буфера, а FluentClipper как раз хранит оформление.
 
     LOG_ANY(L"ClipboardChangedInt complete");
 }

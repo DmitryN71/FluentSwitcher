@@ -18,8 +18,12 @@ static const TChar c_sArgAutostart[] = L"/autostart";
 static const int c_nCommonWaitProcess = 5000;
 static const int c_nCommonWaitMtx = 30000;
 
-static const LPCWSTR c_wszTaskName = L"SimpleSwitcherTask";
-const static TChar c_sRegRunValue[] = L"SimpleSwitcher";
+static const LPCWSTR c_wszTaskName = L"FluentSwitcherTask";
+const static TChar c_sRegRunValue[] = L"FluentSwitcher";
+// Автозапуск под прежним именем (SimpleSwitcher.exe): переносится на новое при запуске, SwAutostart.h.
+static const LPCWSTR c_wszTaskNameOld = L"SimpleSwitcherTask";
+const static TChar c_sRegRunValueOld[] = L"SimpleSwitcher";
+const static TChar c_sExeNameOld[] = L"SimpleSwitcher.exe";
 
 const inline ULONG_PTR c_MyInjectedId = (ULONG_PTR)(GetCurrentProcessId() ^ 0xACE1F345AABBCCDD);
 

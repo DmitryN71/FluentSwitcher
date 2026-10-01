@@ -41,6 +41,7 @@ endif()
 
 # Project
 add_executable (${PROJECT_NAME} WIN32)
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "FluentSwitcher")
 target_sources(${PROJECT_NAME}  PRIVATE src/manifest.manifest src/res/res.rc)
 target_include_directories(${PROJECT_NAME} PRIVATE "src/libtools")
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/precompl.h)

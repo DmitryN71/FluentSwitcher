@@ -25,8 +25,6 @@ const std::vector<HotkeyAction>& HotkeyActions()
         { "hk_EmulateCapsLock", N_("Нажать CapsLock"), N_("Если CapsLock занят под сочетание, включить его можно так") },
         { "hk_ToggleEnabled", N_("Включить / выключить FluentSwitcher"), N_("Работает и когда программа выключена") },
         { "hk_ShowMainWindow", N_("Открыть настройки"), N_("Это окно") },
-        { "hk_InsertWithoutFormat", N_("Вставить без оформления"),
-          N_("Если стоит FluentClipper, у него это уже есть: Ctrl+Shift+Insert") },
     };
     return actions;
 }

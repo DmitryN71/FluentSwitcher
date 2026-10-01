@@ -38,13 +38,16 @@ namespace Engine
 {
 HWND Find(const wxString& folder, unsigned long pid)
 {
-    const wxString want = wxFileName(folder, "SimpleSwitcher.exe").GetFullPath();
+    // FluentSwitcher.exe, or SimpleSwitcher.exe as it was called before 7.0.6 test18.
+    const wxString want = wxFileName(folder, "FluentSwitcher.exe").GetFullPath();
+    const wxString old = wxFileName(folder, "SimpleSwitcher.exe").GetFullPath();
     HWND window = nullptr;
     while ((window = FindWindowExW(HWND_MESSAGE, window, L"SimpleSwitcher_Timer_001", nullptr)) != nullptr)
     {
         DWORD owner = 0;
         GetWindowThreadProcessId(window, &owner);
-        if (pid ? owner == pid : ProcessPath(owner).IsSameAs(want, false))
+        const wxString path = pid ? wxString() : ProcessPath(owner);
+        if (pid ? owner == pid : path.IsSameAs(want, false) || path.IsSameAs(old, false))
             return window;
     }
     return nullptr;
@@ -89,7 +92,7 @@ bool SetLogging(HWND engine, bool on)
 
 bool Start(const wxString& folder)
 {
-    const wxString exe = wxFileName(folder, "SimpleSwitcher.exe").GetFullPath();
+    const wxString exe = wxFileName(folder, "FluentSwitcher.exe").GetFullPath();
     if (!wxFileName::FileExists(exe))
         return false;
     return (INT_PTR)ShellExecuteW(nullptr, L"open", exe.wc_str(), nullptr, folder.wc_str(), SW_SHOWNORMAL) > 32;

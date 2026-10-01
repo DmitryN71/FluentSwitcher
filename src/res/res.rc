@@ -1,1 +1,27 @@
-﻿101 ICON "app.ico"
+101 ICON "app.ico"
+
+// The name Task Manager and the file's properties show.
+1 VERSIONINFO
+FILEVERSION 7, 0, 6, 0
+PRODUCTVERSION 7, 0, 6, 0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "FluentSwitcher"
+            VALUE "FileVersion", "7.0.6"
+            VALUE "InternalName", "FluentSwitcher"
+            VALUE "LegalCopyright", "GPL-3.0. Based on SimpleSwitcher by Aegel5"
+            VALUE "OriginalFilename", "FluentSwitcher.exe"
+            VALUE "ProductName", "FluentSwitcher"
+            VALUE "ProductVersion", "7.0.6"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

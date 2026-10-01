@@ -45,14 +45,8 @@ public:
 				}
 			}
 
-			// layouts
-			if (conf_get_unsafe()->ShowLangsInTrayMenu) {
-				for (const auto& it : conf_get_unsafe()->layouts_info.info) {
-					auto lay = it.layout;
-					res.push_back({ .name = StrUtils::Convert(Utils::GetNameForHKL(lay)), .callback = [lay]() {Worker()->PostMsg([lay](auto w) {w->SetNewLay(lay); }); } });
-				}
-				res.push_back({ .is_separator = true });
-			}
+			// Раскладок в меню нет (ShowLangsInTrayMenu не используется): пока меню открыто, активно оно само,
+			// и выбранная раскладка доставалась не тому окну - пункты ничего не делали.
 
 			// menu
 			res.push_back({ .name = LOC("Settings"), .callback = []() { show_main_wind(); } });

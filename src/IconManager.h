@@ -16,6 +16,10 @@ class IconMgr {
 		GETCONF;
 
 		auto folder_name = StrUtils::Convert(cfg->flagsSet);
+		// Набора нет (удалён, как прежний "Fluent") - глянцевый.
+		if (cfg->flagsSet != ProgramConfig::showFlags_AppIcon && !fs::is_directory(flagFold / folder_name)) {
+			folder_name = L"Glossy";
+		}
 		wstring key = std::format(L"{}$&{}{}", local_id, folder_name, is_gray ? L"$%^&!" : L"");
 
 		auto it = icons.find(key);

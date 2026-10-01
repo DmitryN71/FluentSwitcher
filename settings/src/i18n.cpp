@@ -45,9 +45,6 @@ const std::unordered_map<std::string, const char*>& English()
         { "Работает и когда программа выключена", "Works even while the app is off" },
         { "Открыть настройки", "Open settings" },
         { "Это окно", "This window" },
-        { "Вставить без оформления", "Paste without formatting" },
-        { "Если стоит FluentClipper, у него это уже есть: Ctrl+Shift+Insert",
-          "FluentClipper already has this: Ctrl+Shift+Insert" },
 
         // Hotkey fields
         { " дважды", " twice" },
@@ -85,7 +82,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "FluentSwitcher не запущен", "FluentSwitcher is not running" },
         { "Настройки сохранятся и подействуют при запуске", "Settings are saved and take effect when it starts" },
         { "Запустить", "Start" },
-        { "Не нашёл SimpleSwitcher.exe в папке программы", "SimpleSwitcher.exe is not in the app folder" },
+        { "Не нашёл FluentSwitcher.exe в папке программы", "FluentSwitcher.exe is not in the app folder" },
         { "FluentSwitcher включён", "FluentSwitcher is on" },
         { "Выключенный не исправляет текст и не отвечает на сочетания, кроме «Включить / выключить»",
           "When off, it fixes no text and answers no hotkeys except “Turn on / off”" },
@@ -97,7 +94,7 @@ const std::unordered_map<std::string, const char*>& English()
           "через планировщик заданий Windows",
           "FluentSwitcher itself then has to run as administrator too. Autostart then goes through the Windows "
           "Task Scheduler" },
-        { "Fluent – прямоугольные", "Fluent – rectangular" },
+        { "Глянцевые", "Glossy" },
         { "Круглые", "Round" },
         { "Квадратные", "Square" },
         { "Значок программы вместо флага", "App icon instead of a flag" },
@@ -182,9 +179,6 @@ const std::unordered_map<std::string, const char*>& English()
         { "Отключить залипание клавиш", "Turn off Sticky Keys" },
         { "Пять нажатий Shift и другие сочетания специальных возможностей Windows не будут открывать их окна",
           "Pressing Shift five times and other accessibility shortcuts of Windows won't open their windows" },
-        { "Убирать оформление при каждом копировании", "Remove formatting on every copy" },
-        { "В буфере остаётся только простой текст. Не включайте вместе с FluentClipper: он хранит оформление",
-          "Only plain text stays on the clipboard. Don't turn it on with FluentClipper: it keeps formatting" },
         { "Не перехватывать клавиши, которые уходят на удалённый компьютер", "Don't catch keys that go to a remote computer" },
         { "Для подключения к удалённому рабочему столу с этого компьютера", "For Remote Desktop connections from this computer" },
         { "Ctrl + левый Alt – не правый Alt", "Ctrl + left Alt is not the right Alt" },
@@ -204,15 +198,13 @@ const std::unordered_map<std::string, const char*>& English()
           "characters sent all at once. Usually 8" },
         { "Британский флаг для английского", "British flag for English" },
         { "Вместо американского", "Instead of the American one" },
-        { "Раскладки в меню у часов", "Layouts in the flag's menu" },
-        { "Щелчок по раскладке в меню переключает на неё", "A click on a layout in the menu switches to it" },
         { "Интервал двойного нажатия, мс", "Double press interval, ms" },
         { "Два нажатия быстрее этого считаются двойным – для сочетаний «дважды». Обычно 250–350",
           "Two presses faster than this count as a double press – for “twice” hotkeys. Usually 250–350" },
         { "Журнал отладки", "Debug log" },
-        { "Сразу и до выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\SimpleSwitcher.exe.log "
+        { "Сразу и до выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
           "в папке программы. Пароли при этом не вводите; после проверки выключите и удалите журнал",
-          "At once and until FluentSwitcher quits, every key press is written to log\\SimpleSwitcher.exe.log in the "
+          "At once and until FluentSwitcher quits, every key press is written to log\\FluentSwitcher.exe.log in the "
           "app folder. Don't type passwords meanwhile; after the check, turn it off and delete the log" },
         { "FluentSwitcher не запущен: журнал вести некому", "FluentSwitcher is not running: nothing can keep the log" },
 

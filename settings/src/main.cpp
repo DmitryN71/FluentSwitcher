@@ -1,4 +1,4 @@
-// FluentSwitcher's settings window: a program of its own next to the engine (SimpleSwitcher.exe).
+// FluentSwitcher's settings window: a program of its own next to the engine (FluentSwitcher.exe).
 // It edits SimpleSwitcher.json and tells the running engine to read it again (engine.h).
 //
 //   FluentSwitcherSettings.exe                 the settings of the engine in this folder

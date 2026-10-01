@@ -17,7 +17,7 @@
 class SettingsFrame : public wxFrame
 {
 public:
-    // folder: where SimpleSwitcher.exe and its SimpleSwitcher.json are. enginePid: a test engine, 0 = the
+    // folder: where FluentSwitcher.exe and its SimpleSwitcher.json are. enginePid: a test engine, 0 = the
     // one in `folder`. loadError: the config could not be read (shown; Save is off then).
     SettingsFrame(const Config& config, const wxString& folder, unsigned long enginePid, const wxString& loadError,
                   int section = 0);

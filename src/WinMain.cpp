@@ -1,5 +1,6 @@
 ﻿
 #include "TrayIcon.h"
+#include "SwAutostart.h"
 
 
 
@@ -33,6 +34,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	COM::CAutoCOMInitialize autoCom;
 	IFS_LOG(autoCom.Init());
+
+	MigrateOldAutostart();
 
 	CMainWorker::Inst().Init();
 

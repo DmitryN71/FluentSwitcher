@@ -22,6 +22,15 @@ public: class HookerKeyboard {
 		CHotKey possible_hk_up;
 		HotKeyType possible_hktype_up;
 
+		// "Дважды" из одних модификаторов ("Shift #double", "Ctrl #double") срабатывает, когда второе нажатие
+		// отпущено и до этого не было других клавиш и щелчков мыши. Срабатывание на само второе нажатие
+		// путало быстрый набор: случайно коснулся Shift и сразу Shift+7 ("?") - последнее слово уходило
+		// в другую раскладку посреди текста.
+		CHotKey pending_double;
+		HotKeyType pending_double_hk{};
+		TKeyCode pending_double_vk{};
+		TimePoint pending_double_time;
+
 		public: TimePoint last_mouse_click_time;
 
 		LRESULT CALLBACK LowLevelKeyboardProc(

@@ -110,6 +110,23 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 		curKeys.DebugPrint();
 
+		// Ждём отпускания второго нажатия "дважды" (pending_double в Hooker.h).
+		if (pending_double_vk != 0) {
+			if (isDown) {
+				// другая клавиша или автоповтор этой (удерживают) - уже не "дважды"
+				LOG_ANY("double {} canceled by {}", pending_double.ToString(), CHotKey::ToString(vkCode));
+				pending_double_vk = 0;
+			} else if (vkCode == pending_double_vk) {
+				pending_double_vk = 0;
+				if (last_mouse_click_time > pending_double_time) {
+					LOG_ANY("double {} canceled by mouse click", pending_double.ToString());
+				} else {
+					msg_hotkey.hotkey = pending_double;
+					msg_hotkey.hk = pending_double_hk;
+				}
+			}
+		}
+
 		int check_disabled_status = -1;
 
 		auto check_is_our_key = [&check_disabled_status, cfg](const CHotKey& k1, const CHotKey& k2) {
@@ -175,6 +192,15 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 							if (curKeys.IsMultiple()) {
 								if ((curKeys.MultipleCnt() & 1) == 0 && key.IsDouble()) {
 									// нашли double
+									if (key.OnlyMods()) {
+										// сработает на отпускание, если до него не будет других клавиш
+										pending_double = key;
+										pending_double_hk = hk;
+										pending_double_vk = vkCode;
+										pending_double_time.SetToNow();
+										LOG_ANY("double {} waits for the release", key.ToString());
+										break;
+									}
 									msg_hotkey.hotkey = key;
 									msg_hotkey.hk = hk;
 									break;

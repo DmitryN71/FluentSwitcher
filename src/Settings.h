@@ -122,9 +122,13 @@ public:
 	uint32_t retype_delay_ms = 8;
 	//int inject_delay_after_lang_ms = 0;
 	// Флажок раскладки у текстового курсора (CaretFlag.h): 0 - нет, 1 - всегда, 2 - ненадолго после смены
-	// раскладки или окна. Размер - в точках при 100 % (картинка набора флагов ближайшего размера).
+	// раскладки или окна (caret_flag_brief_ms). Размер - в точках при 100 % (картинка набора флагов ближайшего
+	// размера). Место: 0 - под кареткой, 1 - над ней. Непрозрачность - в процентах.
 	int caret_flag = 1;
 	int caret_flag_size = 20;
+	int caret_flag_place = 0;
+	int caret_flag_opacity = 70;
+	int caret_flag_brief_ms = 2000;
 
     std::vector< CHotKeySet> hotkeysList;
     std::vector< RunProgramInfo> run_programs;

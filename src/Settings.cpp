@@ -117,7 +117,10 @@ namespace nlohmann {
 			retype_keys,
 			retype_delay_ms,
 			caret_flag,
-			caret_flag_size
+			caret_flag_size,
+			caret_flag_place,
+			caret_flag_opacity,
+			caret_flag_brief_ms
 			//,inject_delay_after_lang_ms
 		)
 }

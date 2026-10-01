@@ -34,6 +34,7 @@ private:
     void BuildTyping();
     void BuildHotkeys();
     void BuildLayouts();
+    void BuildFlags();
     void BuildCommands();
     void FillCommands(); // the cards of the commands again (one added, removed, its kind changed)
     void BuildAdvanced();

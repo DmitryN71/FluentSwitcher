@@ -112,6 +112,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     BuildTyping();
     BuildHotkeys();
     BuildLayouts();
+    BuildFlags();
     BuildCommands();
     BuildAdvanced();
     BuildAbout();
@@ -289,56 +290,6 @@ void SettingsFrame::BuildGeneral()
              "он запускается через планировщик заданий без вопросов"),
            "isMonitorAdmin", false);
 
-    // The flag in the tray: the sets are the folders in "flags" next to the program.
-    wxArrayString values, names;
-    wxDir dir(m_folder + "\\flags");
-    if (dir.IsOpened())
-    {
-        wxString name;
-        for (bool more = dir.GetFirst(&name, wxEmptyString, wxDIR_DIRS); more; more = dir.GetNext(&name))
-            values.Add(name);
-    }
-    values.Sort([](const wxString& a, const wxString& b) {
-        return a == "Glossy" ? -1 : b == "Glossy" ? 1 : a.CmpNoCase(b);
-    });
-    for (const wxString& v : values)
-        names.Add(v == "Glossy" ? T("Глянцевые") : v == "Round" ? T("Круглые")
-                  : v == "Square" ? T("Квадратные") : v);
-    values.Add("Application Icon");
-    names.Add(T("Значок программы вместо флага"));
-    values.Add("Nothing");
-    names.Add(T("Не показывать значок у часов"));
-    // A set that is gone (the old "Fluent") shows as the glossy one: the engine does the same.
-    wxString flags = m_edit.GetString("flagsSet", "Glossy");
-    if (values.Index(flags) == wxNOT_FOUND && values.Index("Glossy") != wxNOT_FOUND)
-        flags = "Glossy";
-    if (values.Index(flags) == wxNOT_FOUND)
-    {
-        values.Add(flags);
-        names.Add(flags);
-    }
-    Choice(T("Флаг у часов"), T("Показывает текущую раскладку"), names, values.Index(flags),
-           [this, values](int i) { m_edit.SetString("flagsSet", values[i]); });
-
-    // The flag at the text cursor (the engine's CaretFlag.h): 1 always, 2 for a moment, 0 none.
-    const std::vector<int> caretModes = { 1, 2, 0 };
-    const wxArrayString caretNames = { T("Всегда"), T("Ненадолго"), T("Не показывать") };
-    const int caretMode = m_edit.GetInt("caret_flag", 1);
-    const auto caretAt = std::find(caretModes.begin(), caretModes.end(), caretMode);
-    Choice(T("Флажок у текстового курсора"),
-           T("Раскладка там, где вы печатаете. «Ненадолго» – полторы секунды после смены раскладки или окна"),
-           caretNames, caretAt == caretModes.end() ? 0 : int(caretAt - caretModes.begin()),
-           [this, caretModes](int i) { m_edit.SetInt("caret_flag", caretModes[i]); });
-    const std::vector<int> caretSizes = { 16, 20, 24, 32 };
-    const wxArrayString sizeNames = { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") };
-    const int caretSize = m_edit.GetInt("caret_flag_size", 20);
-    int sizeAt = 1;
-    for (size_t i = 0; i < caretSizes.size(); i++)
-        if (std::abs(caretSizes[i] - caretSize) < std::abs(caretSizes[sizeAt] - caretSize))
-            sizeAt = int(i);
-    Choice(T("Размер флажка у курсора"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"), sizeNames,
-           sizeAt, [this, caretSizes](int i) { m_edit.SetInt("caret_flag_size", caretSizes[i]); });
-
     // Each language by its own name, in either language of the window.
     const wxArrayString langValues = { "English", "Russian" };
     const wxArrayString langNames = { wxString("English"), wxString::FromUTF8("Русский") };
@@ -486,6 +437,68 @@ void SettingsFrame::BuildLayouts()
             Changed();
         };
     }
+    FinishPage();
+}
+
+void SettingsFrame::BuildFlags()
+{
+    Section(kIconFlags, T("Флажки"));
+
+    // The flag in the tray: the sets are the folders in "flags" next to the program.
+    wxArrayString values, names;
+    wxDir dir(m_folder + "\\flags");
+    if (dir.IsOpened())
+    {
+        wxString name;
+        for (bool more = dir.GetFirst(&name, wxEmptyString, wxDIR_DIRS); more; more = dir.GetNext(&name))
+            values.Add(name);
+    }
+    values.Sort([](const wxString& a, const wxString& b) {
+        return a == "Glossy" ? -1 : b == "Glossy" ? 1 : a.CmpNoCase(b);
+    });
+    for (const wxString& v : values)
+        names.Add(v == "Glossy" ? T("Глянцевые") : v == "Round" ? T("Круглые")
+                  : v == "Square" ? T("Квадратные") : v);
+    values.Add("Application Icon");
+    names.Add(T("Значок программы вместо флага"));
+    values.Add("Nothing");
+    names.Add(T("Не показывать значок у часов"));
+    // A set that is gone (the old "Fluent") shows as the glossy one: the engine does the same.
+    wxString flags = m_edit.GetString("flagsSet", "Glossy");
+    if (values.Index(flags) == wxNOT_FOUND && values.Index("Glossy") != wxNOT_FOUND)
+        flags = "Glossy";
+    if (values.Index(flags) == wxNOT_FOUND)
+    {
+        values.Add(flags);
+        names.Add(flags);
+    }
+    Choice(T("Флаг у часов"), T("Показывает текущую раскладку"), names, values.Index(flags),
+           [this, values](int i) { m_edit.SetString("flagsSet", values[i]); });
+    Toggle(T("Британский флаг для английского"), T("Вместо американского"), "useBritishFlag", false);
+
+    // The flag at the text cursor (the engine's CaretFlag.h). Each choice is a number in the file; a number
+    // that is not in the list shows as the nearest one.
+    auto numbers = [this](const wxString& title, const wxString& description, const char* key, int byDefault,
+                          const std::vector<int>& numbers, const wxArrayString& itemNames) {
+        const int now = m_edit.GetInt(key, byDefault);
+        int at = 0;
+        for (size_t i = 0; i < numbers.size(); i++)
+            if (std::abs(numbers[i] - now) < std::abs(numbers[at] - now))
+                at = int(i);
+        Choice(title, description, itemNames, at,
+               [this, key, numbers](int i) { m_edit.SetInt(key, numbers[i]); });
+    };
+    numbers(T("Флажок у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
+            { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") });
+    numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"), "caret_flag_brief_ms",
+            2000, { 1000, 2000, 3000, 5000, 10000 }, { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"),
+            T("10 секунд") });
+    numbers(T("Где флажок"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
+            { 0, 1 }, { T("Под курсором"), T("Над курсором") });
+    numbers(T("Размер флажка у курсора"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"),
+            "caret_flag_size", 20, { 16, 20, 24, 32 }, { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") });
+    numbers(T("Прозрачность флажка у курсора"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 70,
+            { 100, 85, 70, 55, 40 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная") });
     FinishPage();
 }
 
@@ -677,7 +690,6 @@ void SettingsFrame::BuildAdvanced()
             Changed();
         }
     };
-    Toggle(T("Британский флаг для английского"), T("Вместо американского"), "useBritishFlag", false);
 
     NumberField* quick = nullptr;
     AddSettingsCard(m_page, m_column, T("Интервал двойного нажатия, мс"),

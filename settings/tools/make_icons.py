@@ -14,6 +14,7 @@ ICONS = [
     ("kIconTyping", "text_grammar_settings"),
     ("kIconHotkeys", "keyboard"),
     ("kIconLayouts", "local_language"),
+    ("kIconFlags", "flag"),
     ("kIconCommands", "flash"),
     ("kIconAdvanced", "wrench"),
     ("kIconAbout", "info"),

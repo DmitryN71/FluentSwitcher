@@ -135,7 +135,8 @@ private:
 		return true;
 	}
 
-	static bool Rects(IUIAutomationTextRange* range, RECT& out) {
+	// Прямоугольник диапазона текста: первый (или последний - last) из тех, что вернула программа.
+	static bool Rects(IUIAutomationTextRange* range, RECT& out, bool last = false) {
 		SAFEARRAY* sa = nullptr;
 		if (FAILED(range->GetBoundingRectangles(&sa)) || !sa) return false;
 		bool ok = false;
@@ -143,9 +144,11 @@ private:
 		LONG lo = 0, hi = -1;
 		SafeArrayGetLBound(sa, 1, &lo);
 		SafeArrayGetUBound(sa, 1, &hi);
-		if (hi - lo + 1 >= 4 && SUCCEEDED(SafeArrayAccessData(sa, (void**)&d))) {
-			if (d[3] > 1) {
-				out = { (LONG)d[0], (LONG)d[1], (LONG)(d[0] + d[2]), (LONG)(d[1] + d[3]) };
+		LONG count = (hi - lo + 1) / 4;
+		if (count > 0 && SUCCEEDED(SafeArrayAccessData(sa, (void**)&d))) {
+			double* r = d + (last ? (count - 1) * 4 : 0);
+			if (r[3] > 1) {
+				out = { (LONG)r[0], (LONG)r[1], (LONG)(r[0] + r[2]), (LONG)(r[1] + r[3]) };
 				ok = true;
 			}
 			SafeArrayUnaccessData(sa);
@@ -166,42 +169,64 @@ private:
 	static bool UiaCaret(IUIAutomationElement* el, RECT& rc) {
 		CComPtr<IUIAutomationTextRange> range;
 		CComPtr<IUIAutomationTextPattern2> tp2;
+		CComPtr<IUIAutomationTextPattern> tp;
 		if (SUCCEEDED(el->GetCurrentPatternAs(UIA_TextPattern2Id, IID_PPV_ARGS(&tp2))) && tp2) {
 			BOOL active = FALSE;
 			tp2->GetCaretRange(&active, &range);
+			tp = tp2;
 		}
-		if (!range) {
+		if (!tp) {
+			el->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&tp));
+		}
+		if (!range && tp) {
 			// Без TextPattern2: конец выделения (пустое выделение - и есть каретка).
-			CComPtr<IUIAutomationTextPattern> tp;
-			if (FAILED(el->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&tp))) || !tp) return false;
 			CComPtr<IUIAutomationTextRangeArray> sel;
 			int n = 0;
-			if (FAILED(tp->GetSelection(&sel)) || !sel || FAILED(sel->get_Length(&n)) || n < 1) return false;
-			if (FAILED(sel->GetElement(0, &range)) || !range) return false;
-			range->MoveEndpointByRange(TextPatternRangeEndpoint_Start, range, TextPatternRangeEndpoint_End);
+			if (SUCCEEDED(tp->GetSelection(&sel)) && sel && SUCCEEDED(sel->get_Length(&n)) && n > 0 &&
+				SUCCEEDED(sel->GetElement(0, &range)) && range) {
+				range->MoveEndpointByRange(TextPatternRangeEndpoint_Start, range, TextPatternRangeEndpoint_End);
+			}
 		}
 
 		RECT r{};
-		if (Rects(range, r)) {
-			rc = { r.left, r.top, r.left + 1, r.bottom };
-			return true;
+		if (range) {
+			if (Rects(range, r)) {
+				rc = { r.left, r.top, r.left + 1, r.bottom };
+				return true;
+			}
+			// Пустой диапазон часто без прямоугольника: символ после каретки - она у его левого края...
+			CComPtr<IUIAutomationTextRange> ch;
+			if (SUCCEEDED(range->Clone(&ch)) && ch && SUCCEEDED(ch->ExpandToEnclosingUnit(TextUnit_Character)) && Rects(ch, r)) {
+				rc = { r.left, r.top, r.left + 1, r.bottom };
+				return true;
+			}
+			// ...а в конце текста - символ перед ней, каретка у его правого края.
+			ch.Release();
+			int moved = 0;
+			if (SUCCEEDED(range->Clone(&ch)) && ch &&
+				SUCCEEDED(ch->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -1, &moved)) &&
+				moved == -1 && Rects(ch, r)) {
+				rc = { r.right, r.top, r.right + 1, r.bottom };
+				return true;
+			}
 		}
-		// Пустой диапазон часто без прямоугольника: символ после каретки - она у его левого края...
-		CComPtr<IUIAutomationTextRange> ch;
-		if (SUCCEEDED(range->Clone(&ch)) && ch && SUCCEEDED(ch->ExpandToEnclosingUnit(TextUnit_Character)) && Rects(ch, r)) {
-			rc = { r.left, r.top, r.left + 1, r.bottom };
-			return true;
+
+		// Символов у каретки нет: поле пустое или программа не говорит, где они (поля адреса и темы в eM Client).
+		// Только для полей ввода: текст есть - каретка в его конце (при наборе она там); нет - у левого края.
+		CONTROLTYPEID type = 0;
+		if (FAILED(el->get_CurrentControlType(&type)) || (type != UIA_EditControlTypeId && type != UIA_DocumentControlTypeId)) {
+			return false;
 		}
-		// ...а в конце текста - символ перед ней, каретка у его правого края.
-		ch.Release();
-		int moved = 0;
-		if (SUCCEEDED(range->Clone(&ch)) && ch &&
-			SUCCEEDED(ch->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -1, &moved)) && moved == -1 &&
-			Rects(ch, r)) {
+		CComPtr<IUIAutomationTextRange> doc;
+		if (tp && SUCCEEDED(tp->get_DocumentRange(&doc)) && doc && Rects(doc, r, true)) {
 			rc = { r.right, r.top, r.right + 1, r.bottom };
 			return true;
 		}
-		return false;
+		RECT box{};
+		if (FAILED(el->get_CurrentBoundingRectangle(&box)) || box.bottom - box.top < 8 || box.right <= box.left) return false;
+		LONG pad = std::max<LONG>(2, (box.bottom - box.top) / 6);
+		rc = { box.left + pad, box.top + pad, box.left + pad + 1, box.bottom - pad };
+		return true;
 	}
 };
 
@@ -293,11 +318,13 @@ private:
 		Poke(delay);
 	}
 
-	// Режим "ненадолго": показать на полторы секунды.
+	// Режим "ненадолго": показать на caret_flag_brief_ms.
 	void Brief() {
-		if (conf_get_unsafe()->caret_flag != 2) return;
-		m_showUntil = GetTickCount64() + 1500;
-		SetTimer(m_wnd, TimerBrief, 1600, nullptr);
+		auto cfg = conf_get_unsafe();
+		if (cfg->caret_flag != 2) return;
+		UINT ms = (UINT)std::clamp(cfg->caret_flag_brief_ms, 300, 60000);
+		m_showUntil = GetTickCount64() + ms;
+		SetTimer(m_wnd, TimerBrief, ms + 100, nullptr);
 	}
 
 	void Hide() {
@@ -507,7 +534,8 @@ private:
 		bool gray = !g_enabled.IsEnabled();
 		auto id = Utils::GetNameForHKL_simple(m_lay);
 		auto cfg = conf_get_unsafe();
-		auto key = std::format(L"{}|{}|{}|{}|{}", id, px, gray, StrUtils::Convert(cfg->flagsSet), cfg->useBritishFlag);
+		const int opacity = std::clamp(cfg->caret_flag_opacity, 10, 100);
+		auto key = std::format(L"{}|{}|{}|{}|{}|{}", id, px, gray, StrUtils::Convert(cfg->flagsSet), cfg->useBritishFlag, opacity);
 		if (key == m_imgKey) return true;
 		auto img = IconMgr::Inst().GetImage(id.c_str(), px, gray);
 		if (!img || !img->IsOk()) return false;
@@ -547,7 +575,7 @@ private:
 		auto old = SelectObject(mem, bmp);
 		SIZE size{ w, h };
 		POINT zero{};
-		BLENDFUNCTION bf{ AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+		BLENDFUNCTION bf{ AC_SRC_OVER, 0, (BYTE)(opacity * 255 / 100), AC_SRC_ALPHA };
 		bool ok = UpdateLayeredWindow(m_wnd, screen, nullptr, &size, mem, &zero, 0, &bf, ULW_ALPHA);
 		IFW_LOG(ok);
 		SelectObject(mem, old);
@@ -577,14 +605,18 @@ private:
 		int px = MulDiv(std::clamp(conf_get_unsafe()->caret_flag_size, 12, 64), dpiX, 96);
 		if (!PrepareImage(px)) return Hide();
 
-		// Над строкой, чуть правее каретки и чуть заходя на строку - как у LangBarXX; у верхнего края
-		// рабочей области - под строкой.
-		int s = MulDiv(1, dpiX, 96);
-		int x = caret.left + 2 * s - m_bbox.left;
-		int y = caret.top + 3 * s - m_bbox.bottom;
+		// Под кареткой (или над ней - caret_flag_place), левым краем у неё. Не помещается у края рабочей
+		// области - с другой стороны строки.
+		int s = std::max(1, MulDiv(1, dpiX, 96));
+		int x = caret.left - m_bbox.left;
+		int below = caret.bottom + 2 * s - m_bbox.top;
+		int above = caret.top - 2 * s - m_bbox.bottom;
+		bool wantAbove = conf_get_unsafe()->caret_flag_place == 1;
+		int y = wantAbove ? above : below;
 		MONITORINFO mi = { sizeof(mi) };
-		if (GetMonitorInfoW(mon, &mi) && y + m_bbox.top < mi.rcWork.top) {
-			y = caret.bottom + 2 * s - m_bbox.top;
+		if (MonitorFromPoint({ caret.left, caret.top }, MONITOR_DEFAULTTONULL) && GetMonitorInfoW(mon, &mi)) {
+			if (wantAbove && above + m_bbox.top < mi.rcWork.top) y = below;
+			if (!wantAbove && below + m_bbox.bottom > mi.rcWork.bottom) y = above;
 		}
 		SetWindowPos(m_wnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
 		m_visible = true;

@@ -354,8 +354,8 @@ void SettingsFrame::BuildHotkeys()
 
     // Recording keeps left and right Ctrl, Shift, Alt, Win apart only when asked: "Ctrl" fits either.
     ToggleSwitch* sides = nullptr;
-    AddSettingsCard(m_page, m_column, T("Различать левые и правые Ctrl, Shift, Alt, Win"),
-                    T("Для новых сочетаний: например, только правый Ctrl. Иначе годится любой"),
+    AddSettingsCard(m_page, m_column, T("При записи различать левые и правые Ctrl, Shift, Alt, Win"),
+                    T("Только для записи: включите, чтобы записать, например, только правый Ctrl. Выключено – годится любой"),
                     [&](wxWindow* card) { return sides = new ToggleSwitch(card, false); });
     std::vector<HotkeyEditor*> editors;
     for (const HotkeyAction& action : HotkeyActions())
@@ -669,9 +669,10 @@ void SettingsFrame::BuildAdvanced()
            "disableAccessebility", false);
     Toggle(T("Не перехватывать клавиши, которые уходят на удалённый компьютер"),
            T("Для подключения к удалённому рабочему столу с этого компьютера"), "SkipLowLevelInjectKeys", false);
-    Toggle(T("Ctrl + левый Alt – не правый Alt"),
-           T("В раскладках с AltGr (немецкая, польская и др.) Windows путает эти сочетания. FluentSwitcher ненадолго "
-             "переключает раскладку"),
+    Toggle(T("Сочетания с Ctrl + Alt в раскладках с AltGr"),
+           T("Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "
+             "польской раскладке, в русской – ₽ на Ctrl + Alt + 8. FluentSwitcher на миг переключает раскладку, и "
+             "программа получает сочетание"),
            "fixRAlt", false);
     Toggle(T("Перепечатывать исправленное клавишами"),
            T("Старый способ. Обычно исправленное слово вставляется готовыми символами: так новый Блокнот Windows 11 "

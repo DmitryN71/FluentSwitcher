@@ -176,9 +176,9 @@ const std::unordered_map<std::string, const char*>& English()
 
         // Hotkeys, layouts
         { "Сочетания клавиш", "Hotkeys" },
-        { "Различать левые и правые Ctrl, Shift, Alt, Win", "Tell left and right Ctrl, Shift, Alt, Win apart" },
-        { "Для новых сочетаний: например, только правый Ctrl. Иначе годится любой",
-          "For new hotkeys: the right Ctrl only, for example. Otherwise either one fits" },
+        { "При записи различать левые и правые Ctrl, Shift, Alt, Win", "Tell left and right Ctrl, Shift, Alt, Win apart when recording" },
+        { "Только для записи: включите, чтобы записать, например, только правый Ctrl. Выключено – годится любой",
+          "Only for recording: turn it on to record the right Ctrl only, for example. Off – either one fits" },
         { "Раскладки", "Layouts" },
         { "Раскладок пока нет", "No layouts yet" },
         { "FluentSwitcher заполнит список раскладками Windows при запуске",
@@ -225,11 +225,13 @@ const std::unordered_map<std::string, const char*>& English()
           "Pressing Shift five times and other accessibility shortcuts of Windows won't open their windows" },
         { "Не перехватывать клавиши, которые уходят на удалённый компьютер", "Don't catch keys that go to a remote computer" },
         { "Для подключения к удалённому рабочему столу с этого компьютера", "For Remote Desktop connections from this computer" },
-        { "Ctrl + левый Alt – не правый Alt", "Ctrl + left Alt is not the right Alt" },
-        { "В раскладках с AltGr (немецкая, польская и др.) Windows путает эти сочетания. FluentSwitcher ненадолго "
-          "переключает раскладку",
-          "In layouts with AltGr (German, Polish and others) Windows mixes these up. FluentSwitcher briefly switches "
-          "the layout" },
+        { "Сочетания с Ctrl + Alt в раскладках с AltGr", "Ctrl + Alt hotkeys in layouts with AltGr" },
+        { "Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "
+          "польской раскладке, в русской – ₽ на Ctrl + Alt + 8. FluentSwitcher на миг переключает раскладку, и "
+          "программа получает сочетание",
+          "Windows takes Ctrl + Alt for the right Alt (AltGr) and types a character instead of the hotkey: in German, "
+          "Polish layouts, in Russian – ₽ on Ctrl + Alt + 8. FluentSwitcher switches the layout for a moment, and the "
+          "app gets the hotkey" },
         { "Перепечатывать исправленное клавишами", "Retype fixes with keys" },
         { "Старый способ. Обычно исправленное слово вставляется готовыми символами: так новый Блокнот Windows 11 "
           "не теряет Shift. Включите, если какая-то программа не принимает такую вставку",

@@ -170,6 +170,41 @@ namespace Startup
 		RETURN_SUCCESS;
 	}
 
+	// Запустить задачу сейчас. Задача с наивысшими правами запускается так без запроса UAC.
+	inline TStatus RunTaskShedule(TStr sTaskName)
+	{
+		CComPtr<ITaskService> pService;
+		IFH_RET(CoCreateInstance(CLSID_TaskScheduler, NULL, CLSCTX_INPROC_SERVER, IID_ITaskService, (void**)&pService));
+		IFH_RET(pService->Connect(_variant_t(), _variant_t(), _variant_t(), _variant_t()));
+		CComPtr<ITaskFolder> pRootFolder;
+		IFH_RET(pService->GetFolder(_bstr_t(L"\\"), &pRootFolder));
+		CComPtr<IRegisteredTask> pTask;
+		IFH_RET(pRootFolder->GetTask(_bstr_t(sTaskName), &pTask));
+		CComPtr<IRunningTask> pRunning;
+		IFH_RET(pTask->Run(_variant_t(), &pRunning));
+		RETURN_SUCCESS;
+	}
+
+	// DOMAIN\user этого процесса: вход именно этого пользователя запускает задачу.
+	inline std::wstring CurrentUserName()
+	{
+		HANDLE token = nullptr;
+		if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+			return {};
+		BYTE buf[256];
+		DWORD size = 0;
+		std::wstring res;
+		if (GetTokenInformation(token, TokenUser, buf, sizeof(buf), &size)) {
+			wchar_t name[256], domain[256];
+			DWORD nameLen = std::ssize(name), domainLen = std::ssize(domain);
+			SID_NAME_USE use;
+			if (LookupAccountSidW(nullptr, ((TOKEN_USER*)buf)->User.Sid, name, &nameLen, domain, &domainLen, &use))
+				res = std::format(L"{}\\{}", domain, name);
+		}
+		CloseHandle(token);
+		return res;
+	}
+
 	struct CreateTaskSheduleParm
 	{
 		TStr taskName = NULL;
@@ -224,7 +259,7 @@ namespace Startup
 		{
 			CComPtr<IRegistrationInfo> pRegInfo;
 			IFH_RET(pTask->get_RegistrationInfo(&pRegInfo));
-			_bstr_t bstrVal(_T("123"));
+			_bstr_t bstrVal(_T("FluentSwitcher"));
 			IFH_RET(pRegInfo->put_Author(bstrVal));
 		}
 
@@ -277,6 +312,11 @@ namespace Startup
 			pTrigger.Release();
 
 			IFH_RET(pLogonTrigger->put_Id(_bstr_t(L"Trigger1")));
+			// Без пользователя задачу запускал бы вход любого пользователя компьютера.
+			auto user = CurrentUserName();
+			if (!user.empty()) {
+				IFH_RET(pLogonTrigger->put_UserId(_bstr_t(user.c_str())));
+			}
 		}
 	
 

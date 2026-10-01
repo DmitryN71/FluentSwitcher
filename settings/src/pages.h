@@ -17,7 +17,7 @@
 class SettingsFrame : public wxFrame
 {
 public:
-    // folder: where FluentSwitcher.exe and its SimpleSwitcher.json are. enginePid: a test engine, 0 = the
+    // folder: where FluentSwitcher.exe and its FluentSwitcher.json are. enginePid: a test engine, 0 = the
     // one in `folder`. loadError: the config could not be read (shown; Save is off then).
     SettingsFrame(const Config& config, const wxString& folder, unsigned long enginePid, const wxString& loadError,
                   int section = 0);
@@ -45,6 +45,9 @@ private:
     void RefreshEngine();
     bool HasChanges() const;
     bool Apply();
+    // "Work in programs run as administrator" is on, the engine has no rights: offers to restart it as
+    // administrator (Windows asks once) and does. False: not restarted.
+    bool RestartElevated();
     void Changed();
     void SetStatus(const wxString& text, bool warning);
 

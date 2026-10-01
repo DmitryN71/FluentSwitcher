@@ -90,11 +90,17 @@ bool SetLogging(HWND engine, bool on)
     return Command(engine, L"SimpleSwitcher.SetLogging", on);
 }
 
-bool Start(const wxString& folder)
+bool Start(const wxString& folder, const wxString& args, bool elevated)
 {
     const wxString exe = wxFileName(folder, "FluentSwitcher.exe").GetFullPath();
     if (!wxFileName::FileExists(exe))
         return false;
-    return (INT_PTR)ShellExecuteW(nullptr, L"open", exe.wc_str(), nullptr, folder.wc_str(), SW_SHOWNORMAL) > 32;
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    sei.lpVerb = elevated ? L"runas" : L"open";
+    sei.lpFile = exe.wc_str();
+    sei.lpParameters = args.empty() ? nullptr : args.wc_str();
+    sei.lpDirectory = folder.wc_str();
+    sei.nShow = SW_SHOWNORMAL;
+    return ShellExecuteExW(&sei) != FALSE;
 }
 }

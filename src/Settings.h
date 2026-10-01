@@ -16,7 +16,7 @@ class ProgramConfig {
 		CHotKeyList keys;
 	};
 public:
-	static auto GetPath_Conf() { return PathUtils::GetPath_folder_noLower2() / L"SimpleSwitcher.json"; }
+	static auto GetPath_Conf() { return PathUtils::GetPath_folder_noLower2() / L"FluentSwitcher.json"; }
 
     ProgramConfig() {
 

@@ -202,7 +202,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     SetSizer(sizer);
 
     if (!loadError.empty())
-        SetStatus(T("Не удалось прочитать SimpleSwitcher.json: ") + loadError, true);
+        SetStatus(T("Не удалось прочитать FluentSwitcher.json: ") + loadError, true);
     ShowSection(section);
     SetSize(FromDIP(wxSize(860, 660)));
     SetMinSize(FromDIP(wxSize(720, 440)));
@@ -285,8 +285,8 @@ void SettingsFrame::BuildGeneral()
         Changed();
     };
     Toggle(T("Работать в программах, запущенных от имени администратора"),
-           T("Для этого и сам FluentSwitcher нужно запускать от имени администратора. Автозапуск тогда идёт "
-             "через планировщик заданий Windows"),
+           T("FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один раз, дальше "
+             "он запускается через планировщик заданий без вопросов"),
            "isMonitorAdmin", false);
 
     // The flag in the tray: the sets are the folders in "flags" next to the program.
@@ -811,6 +811,8 @@ bool SettingsFrame::Apply()
     Engine::ReloadConfig(m_engine);
     wxString problem;
     const long state = Engine::GetState(m_engine);
+    if (m_edit.GetBool("isMonitorAdmin", false) && state && !(state & Engine::StateElevated) && !m_enginePid)
+        return RestartElevated();
     if (m_autostart != ((state & Engine::StateAutostart) != 0) && !Engine::SetAutostart(m_engine, m_autostart))
         problem = T("Автозапуск не изменился: в режиме «от имени администратора» для этого нужны права администратора. ");
     if (m_enabled != ((state & Engine::StateEnabled) != 0) && !Engine::SetEnabled(m_engine, m_enabled))
@@ -825,6 +827,46 @@ bool SettingsFrame::Apply()
         SetStatus(problem.Strip(wxString::trailing), true);
         return false;
     }
+    return true;
+}
+
+bool SettingsFrame::RestartElevated()
+{
+    if (!AskFluent(this,
+                   T("Чтобы работать в программах, запущенных от имени администратора, FluentSwitcher перезапустится "
+                     "с правами администратора. Windows спросит разрешения один раз: дальше программа запускается "
+                     "через планировщик заданий, без вопросов"),
+                   T("Перезапустить"), T("Не сейчас")))
+    {
+        RefreshEngine();
+        SetStatus(T("Без прав администратора FluentSwitcher выключен: перезапустите его или выключите работу "
+                    "в программах администратора"), true);
+        return false;
+    }
+    // The engine goes; the new one, as administrator, takes the autostart wish with it: with the rights it
+    // can make the scheduler task.
+    DWORD pid = 0;
+    GetWindowThreadProcessId(m_engine, &pid);
+    HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, pid);
+    Engine::Quit(m_engine);
+    if (process)
+    {
+        WaitForSingleObject(process, 5000);
+        CloseHandle(process);
+    }
+    bool elevated = Engine::Start(m_folder, m_autostart ? "/set-autostart=1" : "/set-autostart=0", true);
+    if (!elevated)
+        Engine::Start(m_folder, "/no-elevate"); // No to Windows: back as it was, without asking again
+    for (int wait = 0; wait < 50 && !Engine::Find(m_folder, 0); wait++)
+        wxMilliSleep(100);
+    m_state = 0;
+    RefreshEngine();
+    if (!elevated)
+    {
+        SetStatus(T("Windows не дала прав администратора: FluentSwitcher запущен без них и выключен"), true);
+        return false;
+    }
+    SetStatus(T("FluentSwitcher перезапущен с правами администратора"), false);
     return true;
 }
 

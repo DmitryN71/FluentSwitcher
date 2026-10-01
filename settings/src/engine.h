@@ -34,6 +34,7 @@ bool RunCommand(HWND engine, int index);
 // The debug log (log\FluentSwitcher.exe.log next to the engine), until the engine quits.
 bool SetLogging(HWND engine, bool on);
 
-// Starts FluentSwitcher.exe from `folder`. False if it is not there or does not start.
-bool Start(const wxString& folder);
+// Starts FluentSwitcher.exe from `folder` with `args`; `elevated`: as administrator (Windows asks).
+// False if it is not there or does not start (also when the user says No to Windows).
+bool Start(const wxString& folder, const wxString& args = wxString(), bool elevated = false);
 }

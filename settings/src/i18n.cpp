@@ -68,7 +68,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Сохранить", "Save" },
         { "Сохранено", "Saved" },
         { "Применить", "Apply" },
-        { "Не удалось прочитать SimpleSwitcher.json: ", "Can't read SimpleSwitcher.json: " },
+        { "Не удалось прочитать FluentSwitcher.json: ", "Can't read FluentSwitcher.json: " },
         { "Не удалось сохранить: ", "Can't save: " },
         { "Автозапуск не изменился: в режиме «от имени администратора» для этого нужны права администратора. ",
           "Autostart did not change: in the “as administrator” mode this needs administrator rights. " },
@@ -90,10 +90,23 @@ const std::unordered_map<std::string, const char*>& English()
         { "Программа стартует при входе в Windows, видно только флаг у часов",
           "Starts when you sign in to Windows; only the flag by the clock shows" },
         { "Работать в программах, запущенных от имени администратора", "Work in apps run as administrator" },
-        { "Для этого и сам FluentSwitcher нужно запускать от имени администратора. Автозапуск тогда идёт "
-          "через планировщик заданий Windows",
-          "FluentSwitcher itself then has to run as administrator too. Autostart then goes through the Windows "
-          "Task Scheduler" },
+        { "FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один раз, дальше "
+          "он запускается через планировщик заданий без вопросов",
+          "FluentSwitcher then runs as administrator: Windows asks once, after that it starts through the Task "
+          "Scheduler without asking" },
+        { "Чтобы работать в программах, запущенных от имени администратора, FluentSwitcher перезапустится "
+          "с правами администратора. Windows спросит разрешения один раз: дальше программа запускается "
+          "через планировщик заданий, без вопросов",
+          "To work in programs run as administrator, FluentSwitcher will restart as administrator. Windows asks "
+          "once: after that the app starts through the Task Scheduler without asking" },
+        { "Перезапустить", "Restart" },
+        { "Не сейчас", "Not now" },
+        { "Без прав администратора FluentSwitcher выключен: перезапустите его или выключите работу "
+          "в программах администратора",
+          "Without administrator rights FluentSwitcher is off: restart it or turn off work in administrator apps" },
+        { "Windows не дала прав администратора: FluentSwitcher запущен без них и выключен",
+          "Windows gave no administrator rights: FluentSwitcher runs without them and is off" },
+        { "FluentSwitcher перезапущен с правами администратора", "FluentSwitcher restarted as administrator" },
         { "Глянцевые", "Glossy" },
         { "Круглые", "Round" },
         { "Квадратные", "Square" },

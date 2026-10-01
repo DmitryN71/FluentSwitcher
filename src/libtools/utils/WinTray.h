@@ -133,7 +133,7 @@ public:
 		//nid.uID = ID_TRAY_APP_ICON;
 		nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 		nid.uCallbackMessage = WM_TRAYICON;
-		swprintf_s(nid.szTip, L"SimpleSwitcher %S", GET_SW_VERSION());
+		swprintf_s(nid.szTip, L"FluentSwitcher %S", details::SW_VERSION);
 
 
 	}

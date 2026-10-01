@@ -110,6 +110,49 @@ inline void MigrateOldAutostart() {
 	IFS_LOG(func());
 }
 
+// Аргументы этого запуска: командная строка без пути к exe.
+inline std::wstring OwnArgs() {
+	std::wstring_view cmd = GetCommandLineW();
+	size_t end = cmd.starts_with(L'"') ? cmd.find(L'"', 1) : cmd.find(L' ');
+	if (end == std::wstring_view::npos) return {};
+	cmd.remove_prefix(end + 1);
+	while (cmd.starts_with(L' ')) cmd.remove_prefix(1);
+	return std::wstring(cmd);
+}
+
+// Режим "работать в программах администратора", а запущены без прав: запускаем копию с правами, эта выходит.
+// Есть наша задача планировщика (автозапуск в этом режиме) - через неё, без запроса Windows; нет - запрос UAC.
+// /no-elevate: не повышать (окно настроек так запускает движок, если в запросе Windows нажали "Нет").
+// false - копия не запустилась (в запросе отказали): работаем как есть, только в обычных программах.
+inline bool RunElevatedCopy() {
+	const auto args = OwnArgs();
+	if (args.contains(L"/no-elevate")) {
+		return false;
+	}
+	bool taskOk = false;
+	bool hasTask = false;
+	IFS_LOG(CheckSchedule(taskOk, hasTask));
+	// /set-autostart задача не передаст: с ним - через запрос.
+	if (taskOk && !args.contains(L"/set-autostart")) {
+		if (Startup::RunTaskShedule(c_wszTaskName) == TStatus::SW_ERR_SUCCESS) {
+			LOG_ANY(L"elevated copy started by the task");
+			return true;
+		}
+	}
+	std::wstring exe;
+	IFS_LOG(PathUtils::GetPath_exe_noLower(exe));
+	SHELLEXECUTEINFOW sei = { sizeof(sei) };
+	sei.lpVerb = L"runas";
+	sei.lpFile = exe.c_str();
+	sei.lpParameters = args.c_str();
+	sei.nShow = SW_SHOWNORMAL;
+	if (!ShellExecuteExW(&sei)) {
+		LOG_WARN(L"elevated copy not started: {}", GetLastError());
+		return false;
+	}
+	return true;
+}
+
 inline bool autostart_get() {
 	bool isUserAllOk = false;
 	bool isUserHasTask = false;
@@ -146,6 +189,17 @@ inline bool autostart_set(bool enable) {
 		RETURN_SUCCESS;
 	};
 	return func() == TStatus::SW_ERR_SUCCESS;
+}
+
+// /set-autostart=1 или =0 от окна настроек: включить или выключить автозапуск, когда права уже есть.
+inline void ApplyAutostartArg() {
+	const auto args = OwnArgs();
+	for (bool on : { true, false }) {
+		if (args.contains(on ? L"/set-autostart=1" : L"/set-autostart=0")) {
+			LOG_ANY(L"autostart from the command line: {}", on);
+			autostart_set(on);
+		}
+	}
 }
 
 

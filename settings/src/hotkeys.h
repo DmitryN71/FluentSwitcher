@@ -1,4 +1,4 @@
-// Hotkeys as the engine keeps them in SimpleSwitcher.json and as this window shows and records them.
+// Hotkeys as the engine keeps them in FluentSwitcher.json and as this window shows and records them.
 // Stored: "Ctrl + Shift + K", "Win + Shift #up" (on release), "Shift #double" (pressed twice), up to two
 // per action separated by a comma: "Break, Shift + F24".
 #pragma once

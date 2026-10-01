@@ -182,7 +182,7 @@ void MainWindow::DrawFrameActual() {
 
 			{
 				ImGui::AlignTextToFramePadding();
-				ImGui::TextLinkOpenURL("SimpleSwitcher.json", config_path.c_str());
+				ImGui::TextLinkOpenURL("FluentSwitcher.json", config_path.c_str());
 				ImGui::SameLine();
 
 				if (ImGui::Button(LOC("Reload"))) {

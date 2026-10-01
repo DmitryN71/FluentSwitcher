@@ -20,7 +20,9 @@ class IconMgr {
 		if (cfg->flagsSet != ProgramConfig::showFlags_AppIcon && !fs::is_directory(flagFold / folder_name)) {
 			folder_name = L"Glossy";
 		}
-		wstring key = std::format(L"{}$&{}{}", local_id, folder_name, is_gray ? L"$%^&!" : L"");
+		// Британский флаг - в ключе: без него после включения настройки из кэша брался прежний, американский.
+		wstring key = std::format(L"{}$&{}{}{}", local_id, folder_name, is_gray ? L"$%^&!" : L"",
+			cfg->useBritishFlag ? L"$gb" : L"");
 
 		auto it = icons.find(key);
 		if (it != icons.end()) {

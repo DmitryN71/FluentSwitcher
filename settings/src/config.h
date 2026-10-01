@@ -1,4 +1,4 @@
-// SimpleSwitcher.json, the engine's settings file, as the settings window sees it: read whole, the
+// FluentSwitcher.json, the engine's settings file, as the settings window sees it: read whole, the
 // fields it shows are changed in place, and it is written back whole, so fields this window does not
 // know (or that a newer engine added) stay as they were. Written like the engine writes it
 // (nlohmann::json, sorted keys, two spaces), to a .tmp next to it and moved over the old file.

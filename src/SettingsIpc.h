@@ -3,15 +3,15 @@
 // Команды отдельного окна настроек (FluentSwitcher Settings) движку.
 // Окно настроек находит окно движка FindWindowEx(HWND_MESSAGE, nullptr, L"SimpleSwitcher_Timer_001", nullptr)
 // и шлёт ему SendMessageTimeout с сообщением RegisterWindowMessage(имя). Отвечает поток интерфейса движка.
-// Сами настройки окно пишет в SimpleSwitcher.json, движок только перечитывает файл.
+// Сами настройки окно пишет в FluentSwitcher.json, движок только перечитывает файл.
 //
-//   SimpleSwitcher.ReloadConfig          -> 1; перечитать SimpleSwitcher.json и применить
+//   SimpleSwitcher.ReloadConfig          -> 1; перечитать FluentSwitcher.json и применить
 //   SimpleSwitcher.GetState              -> биты SettingsState
 //   SimpleSwitcher.SetEnabled (0/1)      -> 1 или 0, если для включения нужны права администратора
 //   SimpleSwitcher.SetAutostart (0/1)    -> 1 или 0, если не вышло (задаче планировщика нужны права администратора)
 //   SimpleSwitcher.Quit                  -> 1; движок закрывается, как по "Выход" в меню трея
 //   SimpleSwitcher.RunCommand (номер)    -> 1; выполнить команду run_programs[номер], как по её сочетанию
-//   SimpleSwitcher.SetLogging (0/1)      -> 1; журнал отладки (log\SimpleSwitcher.exe.log) до выхода движка
+//   SimpleSwitcher.SetLogging (0/1)      -> 1; журнал отладки (log\FluentSwitcher.exe.log) до выхода движка
 //
 // Движок, запущенный от администратора, пропускает эти сообщения из обычной программы (ChangeWindowMessageFilterEx).
 

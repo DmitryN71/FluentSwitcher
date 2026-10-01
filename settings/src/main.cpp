@@ -1,8 +1,8 @@
 // FluentSwitcher's settings window: a program of its own next to the engine (FluentSwitcher.exe).
-// It edits SimpleSwitcher.json and tells the running engine to read it again (engine.h).
+// It edits FluentSwitcher.json and tells the running engine to read it again (engine.h).
 //
 //   FluentSwitcherSettings.exe                 the settings of the engine in this folder
-//   --config=<SimpleSwitcher.json>             another copy's settings (the engine looked for is in that folder)
+//   --config=<FluentSwitcher.json>             another copy's settings (the engine looked for is in that folder)
 //   --engine-pid=<pid>                         that engine process exactly (tests)
 //   --section=<n>                              open on that section (0 = the first)
 //   --wait-pid=<pid>                           first wait for that process to end (the window restarting itself)
@@ -95,7 +95,12 @@ public:
                 }
                 return false;
             }
-            configPath = wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath() + "\\SimpleSwitcher.json";
+            // SimpleSwitcher.json until 7.0.6 test19: the engine renames it when it starts, and so do we
+            // when the window comes first.
+            const wxString folder = wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath();
+            configPath = folder + "\\FluentSwitcher.json";
+            if (!wxFileName::FileExists(configPath) && wxFileName::FileExists(folder + "\\SimpleSwitcher.json"))
+                MoveFileExW((folder + "\\SimpleSwitcher.json").wc_str(), configPath.wc_str(), MOVEFILE_WRITE_THROUGH);
         }
         unsigned long pid = 0;
         enginePid.ToULong(&pid);

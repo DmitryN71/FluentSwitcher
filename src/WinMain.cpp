@@ -19,6 +19,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	SetLogLevel(Utils::IsDebug() ? LOG_LEVEL_2 : LOG_LEVEL_DISABLE);
 
+	// Настройки раньше назывались SimpleSwitcher.json: переименовываем, пока FluentSwitcher.json нет.
+	{
+		const auto dir = PathUtils::GetPath_folder_noLower2();
+		std::error_code ec;
+		if (!std::filesystem::exists(dir / L"FluentSwitcher.json", ec) && std::filesystem::exists(dir / L"SimpleSwitcher.json", ec)) {
+			MoveFileExW((dir / L"SimpleSwitcher.json").c_str(), (dir / L"FluentSwitcher.json").c_str(), MOVEFILE_WRITE_THROUGH);
+		}
+	}
+
 	if (!cfg_details::ReloadGuiConfig()) {
 		MessageBox(
 			NULL,
@@ -35,7 +44,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	COM::CAutoCOMInitialize autoCom;
 	IFS_LOG(autoCom.Init());
 
+	if (conf_get_unsafe()->isMonitorAdmin && !Utils::IsSelfElevated() && RunElevatedCopy()) {
+		LOG_ANY("an elevated copy took over");
+		return 0;
+	}
+
 	MigrateOldAutostart();
+	ApplyAutostartArg();
 
 	CMainWorker::Inst().Init();
 

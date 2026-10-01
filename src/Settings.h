@@ -121,6 +121,10 @@ public:
 	// 8 мс он справляется (проверено в FluentClipper). 0 - всё разом, как раньше.
 	uint32_t retype_delay_ms = 8;
 	//int inject_delay_after_lang_ms = 0;
+	// Флажок раскладки у текстового курсора (CaretFlag.h): 0 - нет, 1 - всегда, 2 - ненадолго после смены
+	// раскладки или окна. Размер - в точках при 100 % (картинка набора флагов ближайшего размера).
+	int caret_flag = 1;
+	int caret_flag_size = 20;
 
     std::vector< CHotKeySet> hotkeysList;
     std::vector< RunProgramInfo> run_programs;

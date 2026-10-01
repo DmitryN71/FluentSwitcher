@@ -115,7 +115,9 @@ namespace nlohmann {
 			useBritishFlag,
 			treat_as_letters,
 			retype_keys,
-			retype_delay_ms
+			retype_delay_ms,
+			caret_flag,
+			caret_flag_size
 			//,inject_delay_after_lang_ms
 		)
 }

@@ -320,6 +320,25 @@ void SettingsFrame::BuildGeneral()
     Choice(T("Флаг у часов"), T("Показывает текущую раскладку"), names, values.Index(flags),
            [this, values](int i) { m_edit.SetString("flagsSet", values[i]); });
 
+    // The flag at the text cursor (the engine's CaretFlag.h): 1 always, 2 for a moment, 0 none.
+    const std::vector<int> caretModes = { 1, 2, 0 };
+    const wxArrayString caretNames = { T("Всегда"), T("Ненадолго"), T("Не показывать") };
+    const int caretMode = m_edit.GetInt("caret_flag", 1);
+    const auto caretAt = std::find(caretModes.begin(), caretModes.end(), caretMode);
+    Choice(T("Флажок у текстового курсора"),
+           T("Раскладка там, где вы печатаете. «Ненадолго» – полторы секунды после смены раскладки или окна"),
+           caretNames, caretAt == caretModes.end() ? 0 : int(caretAt - caretModes.begin()),
+           [this, caretModes](int i) { m_edit.SetInt("caret_flag", caretModes[i]); });
+    const std::vector<int> caretSizes = { 16, 20, 24, 32 };
+    const wxArrayString sizeNames = { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") };
+    const int caretSize = m_edit.GetInt("caret_flag_size", 20);
+    int sizeAt = 1;
+    for (size_t i = 0; i < caretSizes.size(); i++)
+        if (std::abs(caretSizes[i] - caretSize) < std::abs(caretSizes[sizeAt] - caretSize))
+            sizeAt = int(i);
+    Choice(T("Размер флажка у курсора"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"), sizeNames,
+           sizeAt, [this, caretSizes](int i) { m_edit.SetInt("caret_flag_size", caretSizes[i]); });
+
     // Each language by its own name, in either language of the window.
     const wxArrayString langValues = { "English", "Russian" };
     const wxArrayString langNames = { wxString("English"), wxString::FromUTF8("Русский") };

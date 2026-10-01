@@ -6,20 +6,24 @@ class IconMgr {
 	using Bundle = std::vector<Images::ImageIcon>;
 	std::map<wstring, Bundle> icons;
 
+	// Папка набора флагов. Набора нет (удалён, как прежний "Fluent") - глянцевый.
+	wstring FolderName() {
+		GETCONF;
+		auto folder_name = StrUtils::Convert(cfg->flagsSet);
+		if (cfg->flagsSet != ProgramConfig::showFlags_AppIcon && !std::filesystem::is_directory(flagFold / folder_name)) {
+			folder_name = L"Glossy";
+		}
+		return folder_name;
+	}
+
 	const Bundle& GetBundle(TStr local_id_, bool is_gray = false) {
 
 		wstring local_id = local_id_;
 		StrUtils::ToLower(local_id);
 
-		namespace fs = std::filesystem;
-
 		GETCONF;
 
-		auto folder_name = StrUtils::Convert(cfg->flagsSet);
-		// Набора нет (удалён, как прежний "Fluent") - глянцевый.
-		if (cfg->flagsSet != ProgramConfig::showFlags_AppIcon && !fs::is_directory(flagFold / folder_name)) {
-			folder_name = L"Glossy";
-		}
+		auto folder_name = FolderName();
 		// Британский флаг - в ключе: без него после включения настройки из кэша брался прежний, американский.
 		wstring key = std::format(L"{}$&{}{}{}", local_id, folder_name, is_gray ? L"$%^&!" : L"",
 			cfg->useBritishFlag ? L"$gb" : L"");
@@ -28,6 +32,20 @@ class IconMgr {
 		if (it != icons.end()) {
 			return it->second;
 		}
+
+		Bundle res;
+		for (auto& it : LoadImages(local_id, folder_name, is_gray)) {
+			res.push_back(Images::ImageToIconConsume(it));
+		}
+		return icons.emplace(key, res).first->second;
+	}
+
+	// Все размеры флага языка local_id (в нижнем регистре) из набора folder_name, RGBA.
+	std::vector<Images::Image> LoadImages(const wstring& local_id, const wstring& folder_name, bool is_gray) {
+
+		namespace fs = std::filesystem;
+
+		GETCONF;
 
 		std::vector<Images::Image> bndl;
 
@@ -90,13 +108,7 @@ class IconMgr {
 			}
 		}
 
-		Bundle res;
-
-		for (auto& it : bndl) {
-			res.push_back(Images::ImageToIconConsume(it));
-		}
-
-		return icons.emplace(key, res).first->second;
+		return bndl;
 	}
 public:
 	UStr folder() {
@@ -137,6 +149,24 @@ public:
 		if (pr3) return pr3;
 
 		return std::make_shared<Images::ImageIcon::element_type>(); // empty
+	}
+
+	// Картинка флага (RGBA) для флажка у текстового курсора: ближайшего к size размера (поровну - больший).
+	// Пусто - флага нет. Не кэшируется: флажок у курсора держит свою последнюю картинку сам.
+	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false) {
+		wstring local_id = contry_id;
+		StrUtils::ToLower(local_id);
+		Images::Image best;
+		auto better = [size](const Images::Image& a, const Images::Image& b) {
+			// a лучше b?
+			if (!b) return true;
+			int da = std::abs(a->width - size), db = std::abs(b->width - size);
+			return da != db ? da < db : a->width > b->width;
+		};
+		for (auto& it : LoadImages(local_id, FolderName(), is_gray)) {
+			if (better(it, best)) best = it;
+		}
+		return best;
 	}
 
 	void ClearCache() {

@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "CaretFlagPoke.h"
 
 class Hooker {
 
@@ -80,6 +81,7 @@ private: inline static HookerKeyboard hookerKeyb;
 			else {
 				hookerKeyb.last_mouse_click_time.SetToNow();
 				Worker()->PostMsg(Message_ClearWorlds{});
+				CaretFlagPoke(80); // щелчок или прокрутка двигают каретку
 			}
 		}
 

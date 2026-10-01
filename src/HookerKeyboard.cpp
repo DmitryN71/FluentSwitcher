@@ -308,6 +308,8 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 	process();
 
+	CaretFlagPoke(40); // набор и стрелки двигают каретку, Ctrl+Shift меняет раскладку
+
 	if (need_disable_event && (g_enabled.IsEnabled() || msg_hotkey.hk == hk_ToggleEnabled)){
 		// делаем вид, что клавиша не была нажата.
 		return 1; 

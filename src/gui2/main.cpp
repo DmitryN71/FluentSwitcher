@@ -13,6 +13,7 @@
 
 #include "main_wnd.h"
 #include "TrayIcon.h"
+#include "CaretFlag.h"
 #include "SettingsIpc.h"
 #include "LoadFonts.h"
 #include "utils/WinTimer.h"
@@ -91,6 +92,9 @@ void StartGui() {
 	// Создаем tray
 	TrayIcon trayIcon;
 
+	// Флажок раскладки у текстового курсора
+	CaretFlag caretFlag;
+
 	// Создаем нотификатор
 	Notific::Notificator notif;
 	Notific::g_notif = &notif;
@@ -138,6 +142,7 @@ void StartGui() {
 
 			if (msg == WM_LayNotif) {
 				trayIcon.Update((HKL)wParam);
+				caretFlag.OnLayout((HKL)wParam);
 				return 0;
 			}
 

@@ -37,6 +37,10 @@ void StartGui() {
 			}
 
 			if (msg == WM_LayNotif) {
+				// Раскладку добавили в Windows, пока мы работаем.
+				if (wParam && !conf_gui()->layouts_info.HasLayout((HKL)wParam)) {
+					SyncLayouts();
+				}
 				trayIcon.Update((HKL)wParam);
 				caretFlag.OnLayout((HKL)wParam);
 				return 0;

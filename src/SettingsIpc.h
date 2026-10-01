@@ -58,6 +58,7 @@ namespace SettingsIpc {
 		if (msg == msgReloadConfig) {
 			LOG_ANY("ipc: reload config");
 			cfg_details::ReloadGuiConfig();
+			SyncLayouts(); // в файле могли остаться не все раскладки Windows
 			ApplyAcessebil();
 			if (!IsAdminOk()) {
 				g_enabled.TryEnable(false); // "работать в программах от администратора" без прав - как в старом окне

@@ -239,6 +239,37 @@ inline void SaveApplyGuiConfig() {
 	
 }
 
+// Список раскладок настроек (layouts_info) = раскладки Windows: убрать удалённые, добавить новые (включёнными).
+// Без него исправлять не на что: новый файл настроек приходит с пустым списком. Раньше это делало старое окно
+// ImGui при каждом запуске (gui2/gui_utils.h), с test22 его нет - теперь при запуске, после перечитывания
+// настроек и когда в Windows появилась раскладка, которой нет в списке. Только в главном потоке (conf_gui).
+inline void SyncLayouts() {
+	HKL all_lays[50] = { 0 };
+	int all_lay_size = GetKeyboardLayoutList((int)std::size(all_lays), all_lays);
+	if (all_lay_size <= 0) return;
+	auto has_system_layout = [&](HKL lay) { return std::find(all_lays, all_lays + all_lay_size, lay) != all_lays + all_lay_size; };
+
+	auto& list = conf_gui()->layouts_info;
+	auto& info = list.info;
+	bool was_changes = false;
+	for (int i = (int)info.size() - 1; i >= 0; i--) {
+		if (!has_system_layout(info[i].layout)) {
+			Utils::RemoveAt(info, i);
+			was_changes = true;
+		}
+	}
+	for (int i = 0; i < all_lay_size; i++) {
+		if (!list.HasLayout(all_lays[i])) {
+			info.push_back({ .layout = all_lays[i] });
+			was_changes = true;
+		}
+	}
+	if (was_changes) {
+		LOG_ANY("layouts synced with Windows: {}", info.size());
+		SaveApplyGuiConfig();
+	}
+}
+
 inline void ApplyLocalization() {
 	Localization::Reinit(conf_gui()->gui_lang.c_str());
 }

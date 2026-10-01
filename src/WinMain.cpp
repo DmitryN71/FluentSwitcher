@@ -45,6 +45,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 
 	IFS_LOG(update_cur_dir());
+	SyncLayouts();
 	LOG_ANY("Start program {}", GET_SW_VERSION());
 
 	COM::CAutoCOMInitialize autoCom;

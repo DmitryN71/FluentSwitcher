@@ -1,4 +1,4 @@
-"""Makes the FluentSwitcher icon: settings/app.ico (the settings window) and src/res/app.ico (the engine).
+"""Makes the FluentSwitcher icon: src/res/app.ico (the program and its settings window).
 
 A keyboard with a "switch" badge, in the style of FluentClipper's icon: glyphs of Microsoft's Fluent UI
 System Icons (github.com/microsoft/fluentui-system-icons, MIT, see fluentui/LICENSE-FluentUI-System-Icons.txt)
@@ -26,7 +26,7 @@ BADGE = 0.5          # the badge's box, of the icon's size
 GAP = 1.0            # the gap around the badge's disc, in 24 px units
 
 HERE = Path(__file__).resolve().parent.parent          # ...\settings
-OUTS = [HERE / "app.ico", HERE.parent / "src" / "res" / "app.ico"]
+OUTS = [HERE.parent / "src" / "res" / "app.ico"]
 
 
 def badge_svg(px):

@@ -2,7 +2,6 @@
 
 #include "utils/WinTray.h"
 #include "IconManager.h"
-#include "gui2/Notificator/Notificator.h"
 
 class TrayIcon {
 	HKL curlay = 0;
@@ -33,18 +32,7 @@ public:
 		tray.OnCreateMenu([this]() {
 			std::vector<WinTray::TrayItem> res;
 
-			// notif
-			if (conf_get_unsafe()->ShowReminderInTrayMenu) {
-				bool has_notif = false;
-				for (const auto& it : Notific::g_notif->SordedEntries()) {
-					has_notif = true;
-					res.push_back({ .name = it, .callback = []() { show_main_wind(1); } });
-				}
-				if (has_notif) {
-					res.push_back({ .is_separator = true });
-				}
-			}
-
+			// "Напоминалки" SimpleSwitcher (ShowReminderInTrayMenu) в FluentSwitcher нет.
 			// Раскладок в меню нет (ShowLangsInTrayMenu не используется): пока меню открыто, активно оно само,
 			// и выбранная раскладка доставалась не тому окну - пункты ничего не делали.
 

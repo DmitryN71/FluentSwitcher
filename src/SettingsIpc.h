@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SwAutostart.h"
+
 // Команды отдельного окна настроек (FluentSwitcher Settings) движку.
 // Окно настроек находит окно движка FindWindowEx(HWND_MESSAGE, nullptr, L"SimpleSwitcher_Timer_001", nullptr)
 // и шлёт ему SendMessageTimeout с сообщением RegisterWindowMessage(имя). Отвечает поток интерфейса движка.

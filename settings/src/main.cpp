@@ -1,7 +1,7 @@
-// FluentSwitcher's settings window: a program of its own next to the engine (FluentSwitcher.exe).
-// It edits FluentSwitcher.json and tells the running engine to read it again (engine.h).
+// FluentSwitcher's settings window: FluentSwitcher.exe --settings, a process of its own next to the engine
+// (the same exe). It edits FluentSwitcher.json and tells the running engine to read it again (engine.h).
 //
-//   FluentSwitcherSettings.exe                 the settings of the engine in this folder
+//   FluentSwitcher.exe --settings              the settings of the engine in this folder
 //   --config=<FluentSwitcher.json>             another copy's settings (the engine looked for is in that folder)
 //   --engine-pid=<pid>                         that engine process exactly (tests)
 //   --section=<n>                              open on that section (0 = the first)
@@ -158,4 +158,10 @@ private:
     HANDLE m_instance = nullptr;
 };
 
-wxIMPLEMENT_APP(App);
+// Inside FluentSwitcher.exe: its WinMain calls this for "--settings" (wxWidgets takes the command line itself).
+wxIMPLEMENT_APP_NO_MAIN(App);
+
+int RunSettingsWindow(HINSTANCE instance)
+{
+    return wxEntry(instance, nullptr, nullptr, SW_SHOWNORMAL);
+}

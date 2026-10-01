@@ -1,3 +1,0 @@
-*endfile:
-%{mdaz-ftz:crtfastmath.o%s;Ofast|ffast-math|funsafe-math-optimizations:%{!shared:%{!mno-daz-ftz:crtfastmath.o%s}}} crtend.o%s
-

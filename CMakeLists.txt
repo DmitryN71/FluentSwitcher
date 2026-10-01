@@ -1,5 +1,5 @@
-﻿cmake_minimum_required (VERSION 3.31.5)
-project(SimpleSwitcher VERSION 1.0 LANGUAGES CXX)
+cmake_minimum_required (VERSION 3.31.5)
+project(SimpleSwitcher VERSION 1.0 LANGUAGES C CXX)
 
 # Глобальные настройки
 
@@ -7,7 +7,6 @@ if(WIN7_COMPAT)
 	add_compile_definitions(_WIN32_WINNT=0x0601)
 	add_compile_definitions(SS_WIN_7_COMPAT)
 else()
-	add_compile_definitions(IMGUI_USE_WCHAR32)
 endif()
 
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
@@ -72,44 +71,6 @@ block()
 endblock()
 
 
-# ImguiLib
-block()
-	add_library(ImguiLib OBJECT)
-	file(GLOB src 
-		"imgui_tiny_app/imgui/*.cpp"
-		"imgui_tiny_app/imgui/misc/cpp/imgui_stdlib.cpp"
-	)
-	if(WIN32)
-		list(APPEND src imgui_tiny_app/imgui/backends/imgui_impl_dx11.cpp)
-		list(APPEND src imgui_tiny_app/imgui/backends/imgui_impl_win32.cpp)
-	endif()
-	target_sources(ImguiLib PRIVATE ${src})
-	target_include_directories(ImguiLib PUBLIC "imgui_tiny_app" "imgui_tiny_app/imgui") # PUBLIC - автоматически прокидываем дальше
-	add_compile_definitions(IMGUI_DISABLE_OBSOLETE_FUNCTIONS) 
-	add_compile_definitions(IMGUI_IMPL_WIN32_DISABLE_GAMEPAD)
-	add_compile_definitions("$<$<CONFIG:Release>:IMGUI_DISABLE_DEMO_WINDOWS;IMGUI_DISABLE_DEBUG_TOOLS>")
-	target_link_libraries(${PROJECT_NAME} PRIVATE ImguiLib)
-	block()
-		target_sources(ImguiLib PRIVATE imgui_tiny_app/imgui/misc/freetype/imgui_freetype.cpp)
-		target_compile_definitions(ImguiLib PRIVATE IMGUI_ENABLE_FREETYPE) # включаем поддержку в imgui
-		set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-		set(SKIP_INSTALL_ALL ON CACHE INTERNAL "" FORCE) 
-		set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
-		set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
-		set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
-		message(STATUS "Fetching freetype")
-		include(FetchContent)
-		FetchContent_Declare(
-			freetype GIT_REPOSITORY https://github.com/freetype/freetype GIT_TAG VER-2-14-3
-        GIT_SHALLOW    TRUE   # <--- ВОТ ЭТА ШТУКА (аналог --depth 1)
-        GIT_PROGRESS   TRUE   # Чтобы видеть проценты в консоли, а не сидеть в тишине
-		)
-		FetchContent_MakeAvailable(freetype)
-		target_link_libraries(${PROJECT_NAME} PRIVATE freetype)
-		target_include_directories(ImguiLib PRIVATE "${freetype_SOURCE_DIR}/include")
-	endblock()
-endblock()
-
 # ExternLib
 block()
 	file(GLOB_RECURSE src  extern/*.cpp )
@@ -138,19 +99,43 @@ block()
 	target_link_libraries(${PROJECT_NAME} PRIVATE LibUnits)
 endblock()
 
+# Окно настроек: settings/ (wxWidgets и набор элементов FluentClipper) - в том же exe, отдельным процессом:
+# FluentSwitcher.exe --settings. wxWidgets 3.3 - из FLUENTSWITCHER_WX_DIR (исходники), иначе скачивается.
+block()
+	set(FLUENTSWITCHER_WX_DIR "" CACHE PATH "wxWidgets 3.3 source tree; empty - download the release")
+	set(wxBUILD_SHARED OFF CACHE BOOL "" FORCE)
+	set(wxBUILD_USE_STATIC_RUNTIME ON CACHE BOOL "" FORCE)
+	set(wxBUILD_SAMPLES OFF CACHE STRING "" FORCE)
+	set(wxBUILD_TESTS OFF CACHE STRING "" FORCE)
+	set(wxBUILD_DEMOS OFF CACHE BOOL "" FORCE)
+	set(wxBUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+	set(wxBUILD_INSTALL OFF CACHE BOOL "" FORCE)
+	set(wxBUILD_CXX_STANDARD 17 CACHE STRING "" FORCE)
+	foreach(opt wxUSE_WEBVIEW wxUSE_MEDIACTRL wxUSE_STC wxUSE_RICHTEXT wxUSE_AUI wxUSE_PROPGRID wxUSE_RIBBON wxUSE_XRC
+			wxUSE_HTML wxUSE_WXHTML_HELP wxUSE_MS_HTML_HELP wxUSE_HELP wxUSE_OPENGL wxUSE_WEBREQUEST wxUSE_FS_INET wxUSE_URL wxUSE_PROTOCOL)
+		set(${opt} OFF CACHE BOOL "" FORCE)
+	endforeach()
+	foreach(opt wxUSE_LIBJPEG wxUSE_LIBTIFF wxUSE_LIBWEBP wxUSE_LUNASVG)
+		set(${opt} OFF CACHE STRING "" FORCE)
+	endforeach()
+	# Свои флаги проекта (C++ latest, /we5030, сквозная оптимизация) wxWidgets не нужны.
+	get_directory_property(own_options COMPILE_OPTIONS)
+	set_directory_properties(PROPERTIES COMPILE_OPTIONS "")
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE)
+	if(FLUENTSWITCHER_WX_DIR)
+		add_subdirectory("${FLUENTSWITCHER_WX_DIR}" "${CMAKE_BINARY_DIR}/wx" EXCLUDE_FROM_ALL)
+	else()
+		include(FetchContent)
+		FetchContent_Declare(wxWidgets
+			URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.3/wxWidgets-3.3.3.tar.bz2
+			EXCLUDE_FROM_ALL)
+		FetchContent_MakeAvailable(wxWidgets)
+	endif()
+	set_directory_properties(PROPERTIES COMPILE_OPTIONS "${own_options}")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	file(GLOB src settings/src/*.cpp settings/fluentui/*.cpp)
+	add_library(SettingsUi STATIC ${src})
+	target_include_directories(SettingsUi PRIVATE settings/fluentui extern)
+	target_link_libraries(SettingsUi PUBLIC wx::core wx::base dwmapi)
+	target_link_libraries(${PROJECT_NAME} PRIVATE SettingsUi imm32 dwmapi)
+endblock()

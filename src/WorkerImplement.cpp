@@ -363,11 +363,6 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         return;
     }
 
-    if (hk == hk_ShowRemainderWnd) {
-        show_main_wind(1);
-        return;
-    }
-
     if (TestFlag(hk, hk_RunProgram_flag)) {
         IFS_LOG(RunProcess(hk));
         return;

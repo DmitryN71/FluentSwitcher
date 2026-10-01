@@ -36,7 +36,7 @@ public:
 		add(hk_InvertCaseSelected);
 		add(hk_ToggleEnabled,true);
 		add(hk_ShowMainWindow,true);
-		add(hk_ShowRemainderWnd);
+		// hk_ShowRemainderWnd - "Напоминалка" SimpleSwitcher, в FluentSwitcher её нет.
 		// hk_InsertWithoutFormat ("вставить без оформления") не нужен переключателю раскладки: это есть у
 		// менеджера буфера (FluentClipper: Ctrl+Shift+Insert).
 		add(hk_RevertLine);

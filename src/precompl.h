@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #define UNICODE
 #define _UNICODE
@@ -47,10 +47,6 @@
 //#include <flat_map>
 #include <ranges>
 
-#include "imgui.h"
-#include "imgui_internal.h" 
-#include "imgui_sugar.hpp"
-#include "misc/cpp/imgui_stdlib.h"
 
 // unit-utils
 #include "TimePoint.h"
@@ -72,7 +68,6 @@
 #include "utils/layout-utils.h"
 
 #include "utils/win_utils.h"
-#include "utils/ImGuiUtils.h"
 #include "utils/rand.h"
 
 

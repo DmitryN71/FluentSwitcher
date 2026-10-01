@@ -1,4 +1,6 @@
 101 ICON "app.ico"
+// The same icon under the name the settings window (settings/src/pages.cpp, wxICON(aaaa)) asks for.
+aaaa ICON "app.ico"
 
 // The name Task Manager and the file's properties show.
 1 VERSIONINFO

@@ -13,7 +13,13 @@ inline TStatus update_cur_dir() {
 
 
 extern void StartGui();
+extern int RunSettingsWindow(HINSTANCE instance); // settings/src/main.cpp
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+
+	// Окно настроек - этот же exe с --settings, своим процессом: движок тогда не запускается вовсе.
+	if (OwnArgs().contains(L"--settings")) {
+		return RunSettingsWindow(hInstance);
+	}
 
 	setlocale(LC_ALL, "en_US.utf8");
 
@@ -54,7 +60,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	CMainWorker::Inst().Init();
 
-	g_isAura = std::filesystem::is_directory(PathUtils::GetPath_folder_noLower2() / "UI_Skins");
 	ApplyLocalization();
 	ApplyAcessebil();
 

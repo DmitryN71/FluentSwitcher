@@ -64,6 +64,15 @@ public:
 		return double_cnt + 1;
 	}
 
+	// Щелчок мыши после последнего нажатия: следующее нажатие той же клавиши - уже не "дважды"
+	// (Shift+щелчок, Shift+щелчок подряд при выделении).
+	void BreakDoubleIfClicked(const TimePoint& click) {
+		if (last_down_vk != 0 && click > last_down_time) {
+			last_down_vk = 0;
+			double_cnt = 0;
+		}
+	}
+
 	const CHotKey& GetHk()const { return one_value; }
 	int Size() const { return all_keys.size(); }
 	bool IsDownNow(TKeyCode vk) const { return all_keys.contains(vk); }

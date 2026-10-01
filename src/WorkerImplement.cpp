@@ -127,10 +127,14 @@ TStatus WorkerImplement::GetClipStringCallback() {
             std::vector<HKL> layouts{ std::from_range, cfg->layouts_info.EnabledLayouts() };
             HKL from = LayoutConvert::Source(data, layouts, CurLay());
             HKL to = cfg->layouts_info.NextEnabledLayout(from);
+            auto converted = (to == 0 || to == from) ? data : LayoutConvert::Convert(data, from, to);
             if (to == 0 || to == from) {
                 LOG_WARN(L"no layout to convert {} to", (void*)from);
+            } else if (converted == data) {
+                // Ни одной буквы (цифры, знаки; Excel без выделения копирует всю ячейку): текст тот же,
+                // и раскладку не меняем - иначе она переключится "сама".
+                LOG_ANY(L"convert: nothing changes. skip");
             } else {
-                auto converted = LayoutConvert::Convert(data, from, to);
                 LOG_ANY(L"convert selected {} -> {}, {} chars", (void*)from, (void*)to, converted.size());
                 m_cycleList.Clear();
                 RequestWaitClip(CLRMY_hk_INSERT);

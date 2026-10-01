@@ -76,6 +76,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 		//if (curKeys.Size() == 0) { disable_up = 0; } // все отпущено, ничего запрещать не надо.
 
+		curKeys.BreakDoubleIfClicked(last_mouse_click_time);
 		curKeys.Update(vkCode, isDown, isInjected); // сразу обновляем
 		const auto& curk = curKeys.GetHk();
 

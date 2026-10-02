@@ -24,9 +24,9 @@ free and open source under GPL-3.0.
   Scheduler without asking.
 - The settings window is in English and Russian.
 
-The default hotkeys are SimpleSwitcher's: CapsLock – the last word, Shift + CapsLock – several words,
-Ctrl + CapsLock – the selected text, Win + F8 – on / off, Win + Shift – settings. Change them in the settings
-window, "Hotkeys".
+The default hotkeys: Shift twice – the last word, or the selected text when no word was typed;
+Shift + CapsLock – several words, Ctrl + CapsLock – all recent text, Win + F8 – on / off, Win + Shift –
+settings. Change them in the settings window, "Hotkeys".
 
 ## What is different from SimpleSwitcher
 
@@ -48,7 +48,7 @@ window, "Hotkeys".
 
 ## Install
 
-Download from the Releases page:
+Download from the [Releases](https://github.com/DmitryN71/FluentSwitcher/releases) page:
 
 - `FluentSwitcher-<version>-setup.exe` – the installer. Installs for the current user into
   `%LOCALAPPDATA%\Programs\FluentSwitcher` without administrator rights, with a Start menu shortcut. Remove it in

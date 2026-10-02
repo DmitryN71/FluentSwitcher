@@ -1,4 +1,4 @@
-﻿enum HotKeyType : uint32_t {
+enum HotKeyType : uint32_t {
 	hk_NULL,
 
 	hk_RevertLastWord,
@@ -37,6 +37,8 @@ inline std::string_view HotKeyTypeName(HotKeyType hk_type) { return simple_enum:
 inline std::generator<CHotKey> GetHk_Defaults(HotKeyType hk) {
 	switch (hk) {
 	case hk_RevertLastWord:
+		// FluentSwitcher: "Shift дважды" (в SimpleSwitcher - CapsLock); CapsLock остаётся CapsLock'ом.
+		co_yield CHotKey(VK_SHIFT).SetDouble();
 		co_yield CHotKey(VKE_CapsLock);
 		co_yield CHotKey(VK_PAUSE);
 		co_yield CHotKey(VK_F24);
@@ -51,6 +53,8 @@ inline std::generator<CHotKey> GetHk_Defaults(HotKeyType hk) {
 		co_yield CHotKey(VK_CONTROL, VK_F24);
 		co_return;
 	case hk_RevertSelelected:
+		// То же сочетание, что у последнего слова: нет набранного слова - исправляется выделенное.
+		co_yield CHotKey(VK_SHIFT).SetDouble();
 		co_yield CHotKey{ VK_CONTROL, VKE_CapsLock };
 		co_yield CHotKey(VK_CONTROL, VK_F24);
 		co_return;

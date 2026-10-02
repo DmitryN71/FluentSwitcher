@@ -729,7 +729,13 @@ void SettingsFrame::BuildAbout()
 
     AddSettingsCard(m_page, m_column, wxString::Format("FluentSwitcher %s", kVersion),
                     T("Исправляет текст, набранный не в той раскладке, и переключает раскладки"),
-                    [](wxWindow*) { return nullptr; });
+                    [](wxWindow* card) {
+                        FluentButton* open = new FluentButton(card, wxID_ANY, T("Открыть на GitHub"));
+                        open->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
+                            wxLaunchDefaultBrowser("https://github.com/DmitryN71/FluentSwitcher");
+                        });
+                        return open;
+                    });
     AddSettingsCard(m_page, m_column, T("Основан на SimpleSwitcher"),
                     T("Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: окно настроек и флаги в стиле "
                       "Windows 11, флажок у курсора, исправление с начала строки, запуск от администратора без "

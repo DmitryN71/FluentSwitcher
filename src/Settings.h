@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "ConfigData.h"
 #include "ConfigData_hk.h"
@@ -127,7 +127,7 @@ public:
 	int caret_flag = 1;
 	int caret_flag_size = 20;
 	int caret_flag_place = 0;
-	int caret_flag_opacity = 70;
+	int caret_flag_opacity = 60;
 	int caret_flag_brief_ms = 2000;
 
     std::vector< CHotKeySet> hotkeysList;

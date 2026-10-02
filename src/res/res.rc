@@ -1,11 +1,13 @@
+#include "fs_version.h"
+
 101 ICON "app.ico"
 // The same icon under the name the settings window (settings/src/pages.cpp, wxICON(aaaa)) asks for.
 aaaa ICON "app.ico"
 
 // The name Task Manager and the file's properties show.
 1 VERSIONINFO
-FILEVERSION 7, 0, 6, 0
-PRODUCTVERSION 7, 0, 6, 0
+FILEVERSION FS_VER_MAJOR, FS_VER_MINOR, FS_VER_PATCH, 0
+PRODUCTVERSION FS_VER_MAJOR, FS_VER_MINOR, FS_VER_PATCH, 0
 FILEOS 0x40004
 FILETYPE 0x1
 BEGIN
@@ -14,12 +16,12 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "FileDescription", "FluentSwitcher"
-            VALUE "FileVersion", "7.0.6"
+            VALUE "FileVersion", FS_VERSION
             VALUE "InternalName", "FluentSwitcher"
             VALUE "LegalCopyright", "GPL-3.0. Based on SimpleSwitcher by Aegel5"
             VALUE "OriginalFilename", "FluentSwitcher.exe"
             VALUE "ProductName", "FluentSwitcher"
-            VALUE "ProductVersion", "7.0.6"
+            VALUE "ProductVersion", FS_VERSION
         END
     END
     BLOCK "VarFileInfo"

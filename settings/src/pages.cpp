@@ -1,3 +1,4 @@
+#include "fs_version.h"
 #include "pages.h"
 
 #include "engine.h"
@@ -12,7 +13,7 @@
 
 namespace
 {
-const char* const kVersion = "7.0.6"; // the engine's (src/ver.h)
+const char* const kVersion = FS_VERSION; // fs_version.h, made by CMake: the same as the program's
 
 // A one-line text box in the Windows 11 look (the kit has one for numbers only).
 class TextField : public wxPanel
@@ -497,8 +498,9 @@ void SettingsFrame::BuildFlags()
             { 0, 1 }, { T("Под курсором"), T("Над курсором") });
     numbers(T("Размер флажка у курсора"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"),
             "caret_flag_size", 20, { 16, 20, 24, 32 }, { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") });
-    numbers(T("Прозрачность флажка у курсора"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 70,
-            { 100, 85, 70, 55, 40 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная") });
+    numbers(T("Прозрачность флажка у курсора"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
+            { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
+            T("Максимальная") });
     FinishPage();
 }
 
@@ -729,8 +731,9 @@ void SettingsFrame::BuildAbout()
                     T("Исправляет текст, набранный не в той раскладке, и переключает раскладки"),
                     [](wxWindow*) { return nullptr; });
     AddSettingsCard(m_page, m_column, T("Основан на SimpleSwitcher"),
-                    T("Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: новые флаги и окно настроек, "
-                      "исправлены Ctrl+Break, правый Ctrl, окно записи сочетаний и работа с буфером"),
+                    T("Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: окно настроек и флаги в стиле "
+                      "Windows 11, флажок у курсора, исправление с начала строки, запуск от администратора без "
+                      "вопросов и другие исправления"),
                     [this](wxWindow* card) {
                         FluentButton* open = new FluentButton(card, wxID_ANY, T("Открыть на GitHub"));
                         open->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
@@ -738,10 +741,21 @@ void SettingsFrame::BuildAbout()
                         });
                         return open;
                     });
+    // THIRD-PARTY-NOTICES.txt lies next to the program (the installer and the zip put it there).
     AddSettingsCard(m_page, m_column, T("Лицензия GPL-3.0"),
-                    T("Программа бесплатная, исходный код открыт. Поставляется без каких-либо гарантий. "
-                      "Оформление окна – из FluentClipper, лицензия MIT; иконки – Fluent UI System Icons (Microsoft, MIT)"),
-                    [](wxWindow*) { return nullptr; });
+                    T("Программа бесплатная, исходный код открыт. Поставляется без каких-либо гарантий. Части "
+                      "других авторов – под своими лицензиями: wxWidgets, оформление FluentClipper, значки Fluent "
+                      "UI System Icons (Microsoft), флаги GoSquared и другие"),
+                    [this](wxWindow* card) {
+                        FluentButton* open = new FluentButton(card, wxID_ANY, T("Лицензии"));
+                        open->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                            const wxString notices = m_folder + "\\THIRD-PARTY-NOTICES.txt";
+                            if (!wxFileName::FileExists(notices))
+                                return SetStatus(T("Рядом с программой нет файла THIRD-PARTY-NOTICES.txt"), true);
+                            wxLaunchDefaultApplication(notices);
+                        });
+                        return open;
+                    });
     FinishPage();
 }
 

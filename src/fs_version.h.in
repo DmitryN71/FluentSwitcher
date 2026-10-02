@@ -1,0 +1,8 @@
+// The version of FluentSwitcher: made by CMake from FLUENTSWITCHER_VERSION (CMakeLists.txt), one place for the
+// program, its file properties (res.rc) and the settings window.
+#pragma once
+
+#define FS_VERSION "@FLUENTSWITCHER_VERSION@"
+#define FS_VER_MAJOR @FLUENTSWITCHER_VERSION_MAJOR@
+#define FS_VER_MINOR @FLUENTSWITCHER_VERSION_MINOR@
+#define FS_VER_PATCH @FLUENTSWITCHER_VERSION_PATCH@

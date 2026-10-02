@@ -139,6 +139,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Средняя", "Medium" },
         { "Сильная", "Strong" },
         { "Очень сильная", "Very strong" },
+        { "Максимальная", "Maximum" },
         { "При масштабе 100 %; на экранах с большим масштабом он крупнее",
           "At 100 % scale; on screens with a larger scale it is larger" },
         { "Значок программы вместо флага", "App icon instead of a flag" },
@@ -259,16 +260,22 @@ const std::unordered_map<std::string, const char*>& English()
         { "Исправляет текст, набранный не в той раскладке, и переключает раскладки",
           "Fixes text typed in the wrong keyboard layout and switches layouts" },
         { "Основан на SimpleSwitcher", "Based on SimpleSwitcher" },
-        { "Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: новые флаги и окно настроек, "
-          "исправлены Ctrl+Break, правый Ctrl, окно записи сочетаний и работа с буфером",
-          "The original is by Aegel5. FluentSwitcher is a modified version: new flags and settings window; fixed "
-          "Ctrl+Break, the right Ctrl, hotkey recording and clipboard handling" },
+        { "Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: окно настроек и флаги в стиле "
+          "Windows 11, флажок у курсора, исправление с начала строки, запуск от администратора без "
+          "вопросов и другие исправления",
+          "The original is by Aegel5. FluentSwitcher is a modified version: a settings window and flags in the "
+          "Windows 11 style, the flag at the cursor, fixing from the start of the line, running as administrator "
+          "without prompts and other fixes" },
         { "Открыть на GitHub", "Open on GitHub" },
         { "Лицензия GPL-3.0", "GPL-3.0 license" },
-        { "Программа бесплатная, исходный код открыт. Поставляется без каких-либо гарантий. "
-          "Оформление окна – из FluentClipper, лицензия MIT; иконки – Fluent UI System Icons (Microsoft, MIT)",
-          "The app is free and open source. It comes without any warranty. The window design is from FluentClipper, "
-          "MIT license; the icons are Fluent UI System Icons (Microsoft, MIT)" },
+        { "Программа бесплатная, исходный код открыт. Поставляется без каких-либо гарантий. Части "
+          "других авторов – под своими лицензиями: wxWidgets, оформление FluentClipper, значки Fluent "
+          "UI System Icons (Microsoft), флаги GoSquared и другие",
+          "The app is free and open source. It comes without any warranty. Parts by others are under their own "
+          "licenses: wxWidgets, the FluentClipper design, Fluent UI System Icons (Microsoft), GoSquared flags "
+          "and more" },
+        { "Лицензии", "Licenses" },
+        { "Рядом с программой нет файла THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.txt is not next to the app" },
     };
     return table;
 }

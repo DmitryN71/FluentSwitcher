@@ -38,9 +38,18 @@ else()
 endif()
 
 
+# Версия FluentSwitcher - одна на программу, свойства файла и окно настроек: build/.../generated/fs_version.h.
+set(FLUENTSWITCHER_VERSION 1.0.0)
+string(REPLACE "." ";" fs_version_parts ${FLUENTSWITCHER_VERSION})
+list(GET fs_version_parts 0 FLUENTSWITCHER_VERSION_MAJOR)
+list(GET fs_version_parts 1 FLUENTSWITCHER_VERSION_MINOR)
+list(GET fs_version_parts 2 FLUENTSWITCHER_VERSION_PATCH)
+configure_file(src/fs_version.h.in "${CMAKE_BINARY_DIR}/generated/fs_version.h" @ONLY)
+
 # Project
 add_executable (${PROJECT_NAME} WIN32)
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "FluentSwitcher")
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/generated")
 target_sources(${PROJECT_NAME}  PRIVATE src/manifest.manifest src/res/res.rc)
 target_include_directories(${PROJECT_NAME} PRIVATE "src/libtools")
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/precompl.h)
@@ -135,7 +144,7 @@ block()
 
 	file(GLOB src settings/src/*.cpp settings/fluentui/*.cpp)
 	add_library(SettingsUi STATIC ${src})
-	target_include_directories(SettingsUi PRIVATE settings/fluentui extern)
+	target_include_directories(SettingsUi PRIVATE settings/fluentui extern "${CMAKE_BINARY_DIR}/generated")
 	target_link_libraries(SettingsUi PUBLIC wx::core wx::base dwmapi)
 	target_link_libraries(${PROJECT_NAME} PRIVATE SettingsUi imm32 dwmapi)
 endblock()

@@ -59,7 +59,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Убрать сочетание", "Remove the hotkey" },
 
         // Window
-        { "Папка программы", "App folder" },
+        { "Папка журнала", "Log folder" },
+        { "Там файл FluentSwitcher.exe.log – его можно приложить к сообщению об ошибке",
+          "FluentSwitcher.exe.log is there – attach it to a bug report" },
+        { "Открыть", "Open" },
+        { "Журнала ещё нет: включите его выше и повторите ошибку", "No log yet: turn it on above and repeat the problem" },
         { "Закрыть FluentSwitcher", "Quit FluentSwitcher" },
         { "Закрыть FluentSwitcher? Исправление раскладки не будет работать до следующего запуска.",
           "Quit FluentSwitcher? Layout fixing will not work until it starts again." },

@@ -118,15 +118,11 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     BuildAdvanced();
     BuildAbout();
 
-    m_nav->AddAction(kIconFolder, T("Папка программы"));
+    // The program's folder has no button of its own (FluentClipper's "database folder" is useful, ours is not):
+    // the debug log card opens the log's folder.
     m_nav->AddAction(kIconQuit, T("Закрыть FluentSwitcher"));
     m_nav->onSelect = [this](int section) { ShowSection(section); };
-    m_nav->onAction = [this](int action) {
-        if (action == 0)
-        {
-            wxLaunchDefaultApplication(m_folder);
-            return;
-        }
+    m_nav->onAction = [this](int) {
         if (!m_engine)
         {
             Close();
@@ -720,6 +716,18 @@ void SettingsFrame::BuildAdvanced()
             SetStatus(T("FluentSwitcher не запущен: журнал вести некому"), true);
         }
     };
+    AddSettingsCard(m_page, m_column, T("Папка журнала"),
+                    T("Там файл FluentSwitcher.exe.log – его можно приложить к сообщению об ошибке"),
+                    [this](wxWindow* card) {
+                        FluentButton* open = new FluentButton(card, wxID_ANY, T("Открыть"));
+                        open->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                            const wxString folder = m_folder + "\\log";
+                            if (!wxDirExists(folder))
+                                return SetStatus(T("Журнала ещё нет: включите его выше и повторите ошибку"), true);
+                            wxLaunchDefaultApplication(folder);
+                        });
+                        return open;
+                    });
     FinishPage();
 }
 

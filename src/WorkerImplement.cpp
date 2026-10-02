@@ -401,8 +401,12 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         if (key.IsDouble() && single.lay && GetTickCount64() - single.time < 1000 &&
             key.Compare(single.key, CHotKey::COMPARE_IGNORE_KEYUP | CHotKey::COMPARE_IGNORE_DOUBLE)) {
             LOG_ANY("double {} after the single press: layout back to {:x}", key.ToString(), (ULONGLONG)single.lay);
-            if (CurLay() != single.lay)
+            if (CurLay() != single.lay) {
                 IFS_RET(ProcessRevert({.lay = single.lay, .flags = SW_CLIENT_SetLang}));
+                // CurLay() - запомненная раскладка, сама она обновится только через 200 мс (TimerCheckLay);
+                // исправление ниже должно считать от возвращённой, иначе напечатает слово как было.
+                topWndInfo2.lay = single.lay;
+            }
         }
 
         if (hk == hk_CycleSwitchLayout) {

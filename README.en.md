@@ -19,10 +19,12 @@ free and open source under GPL-3.0.
 - **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like.
 - **Hotkeys on any keys**: left and right Ctrl, Shift, Alt, Win apart, double presses ("Shift twice"), firing on
   release, two hotkeys per action. Recorded in the settings window.
+- **The layout with one Shift**, as in Punto: "Next layout" on a single Shift (left, right or either) fires on
+  release, not with a letter, and gets along with "Shift twice".
 - **Commands**: run programs and paste text with a hotkey.
 - **Works in apps run as administrator**: Windows asks once, after that FluentSwitcher starts through the Task
   Scheduler without asking.
-- The settings window is in English and Russian.
+- The settings window is in English and Russian, its theme as in Windows, light or dark.
 
 The default hotkeys: Shift twice – the last word, or the selected text when no word was typed;
 Shift + CapsLock – several words, Ctrl + CapsLock – all recent text, Win + F8 – on / off, Win + Shift –

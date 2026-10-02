@@ -38,7 +38,10 @@ const std::unordered_map<std::string, const char*>& English()
         { "Выделенное иНВЕРСИЕЙ рЕГИСТРА", "Selection in iNVERTED cASE" },
         { "Для текста, набранного с нажатым CapsLock", "For text typed with CapsLock on" },
         { "Следующая раскладка", "Next layout" },
-        { "Переключает раскладку без исправления текста", "Switches the layout without fixing text" },
+        { "Переключает раскладку без исправления текста. Можно и одним Shift, как в Punto: он срабатывает при "
+          "отпускании, а с буквой – нет",
+          "Switches the layout without fixing text. A single Shift works too, as in Punto: it fires on release, "
+          "and not when pressed with a letter" },
         { "Нажать CapsLock", "Press CapsLock" },
         { "Если CapsLock занят под сочетание, включить его можно так", "If CapsLock is taken by a hotkey, this turns it on" },
         { "Включить / выключить FluentSwitcher", "Turn FluentSwitcher on / off" },
@@ -153,6 +156,12 @@ const std::unordered_map<std::string, const char*>& English()
         { "Язык", "Language" },
         { "Этого окна и меню у флага. Окно откроется на новом языке после сохранения",
           "Of this window and of the flag's menu. The window reopens in the new language after saving" },
+        { "Тема", "Theme" },
+        { "Этого окна. Оно откроется в новой теме после сохранения",
+          "Of this window. It reopens in the new theme after saving" },
+        { "Как в Windows", "As in Windows" },
+        { "Светлая", "Light" },
+        { "Тёмная", "Dark" },
 
         // Typing
         { "Набор текста", "Typing" },

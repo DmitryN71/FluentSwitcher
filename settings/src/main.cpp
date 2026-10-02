@@ -108,13 +108,27 @@ public:
         section.ToLong(&first);
 
         SetAppDisplayName("FluentSwitcher"); // the title of AskFluent
-        MSWEnableDarkMode(DarkMode_Auto);    // scroll bars and the frame follow Windows
-        g = MakeTheme(wxSystemSettings::GetAppearance().IsDark(), "windows");
 
         Config config;
         wxString error;
         config.Load(configPath, &error);
         SetEnglish(EnglishFor(config.GetString("gui_lang", wxString())));
+
+        // The theme (ui_theme): as Windows, or light or dark whatever Windows has. Dark mode also gives the
+        // scroll bars and the frame; it must be on before the first window.
+        const wxString theme = config.GetString("ui_theme", wxString());
+        bool dark = false;
+        if (theme == "Dark")
+        {
+            MSWEnableDarkMode(DarkMode_Always);
+            dark = true;
+        }
+        else if (theme != "Light")
+        {
+            MSWEnableDarkMode(DarkMode_Auto);
+            dark = wxSystemSettings::GetAppearance().IsDark();
+        }
+        g = MakeTheme(dark, "windows");
         SettingsFrame* frame = new SettingsFrame(config, wxFileName(configPath).GetPath(), pid, error, (int)first);
         // A new window is on the screen before it has painted anything, and for a moment it is a white
         // rectangle. Hidden from the screen (cloaked) until all of it has painted, it appears finished.

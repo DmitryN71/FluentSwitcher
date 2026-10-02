@@ -109,6 +109,7 @@ namespace nlohmann {
 			win_hotkey_cycle_lang,
 			theme,
 			ui_skin,
+			ui_theme,
 			gui_lang,
 			ShowLangsInTrayMenu,
 			ShowReminderInTrayMenu,

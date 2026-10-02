@@ -292,6 +292,13 @@ void SettingsFrame::BuildGeneral()
     const wxArrayString langNames = { wxString("English"), wxString::FromUTF8("Русский") };
     Choice(T("Язык"), T("Этого окна и меню у флага. Окно откроется на новом языке после сохранения"), langNames,
            IsEnglish() ? 0 : 1, [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
+
+    // "" - as Windows; main.cpp reads it when the window starts.
+    const wxArrayString themeValues = { wxString(), wxString("Light"), wxString("Dark") };
+    const wxArrayString themeNames = { T("Как в Windows"), T("Светлая"), T("Тёмная") };
+    const int theme = themeValues.Index(m_edit.GetString("ui_theme", wxString()));
+    Choice(T("Тема"), T("Этого окна. Оно откроется в новой теме после сохранения"), themeNames,
+           theme == wxNOT_FOUND ? 0 : theme, [this, themeValues](int i) { m_edit.SetString("ui_theme", themeValues[i]); });
     FinishPage();
 }
 
@@ -837,6 +844,7 @@ bool SettingsFrame::Apply()
     if (!m_canSave)
         return false;
     const wxString oldLanguage = m_saved.GetString("gui_lang", wxString());
+    const wxString oldTheme = m_saved.GetString("ui_theme", wxString());
     if (m_edit != m_saved)
     {
         wxString error;
@@ -846,9 +854,11 @@ bool SettingsFrame::Apply()
             return false;
         }
         m_saved = m_edit;
-        if (m_edit.GetString("gui_lang", wxString()) != oldLanguage)
+        if (m_edit.GetString("gui_lang", wxString()) != oldLanguage ||
+            m_edit.GetString("ui_theme", wxString()) != oldTheme)
         {
-            // The texts are read when the window is built: a new window in the new language, on this section.
+            // The texts and colours are read when the window is built: a new window in the new language or
+            // theme, on this section.
             wxString command = wxString(GetCommandLineW());
             command += wxString::Format(" --section=%d --wait-pid=%lu", m_section, GetCurrentProcessId());
             STARTUPINFOW si = { sizeof(si) };

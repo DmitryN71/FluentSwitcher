@@ -216,6 +216,13 @@ class WorkerImplement {
 
    private:
     ULONGLONG m_lastHotKeyTime = 0;
+    // Раскладка до "Следующей раскладки" по одному модификатору при отпускании (LShift, как в Punto):
+    // если это было первое нажатие "дважды" той же клавиши, её возвращают перед исправлением.
+    struct {
+        ULONGLONG time = 0;
+        HKL lay = 0;
+        CHotKey key;
+    } m_singleSwitch;
     ULONGLONG m_dwLastCtrlCReqvest = 0;
     EClipRequest m_clipRequest = CLRMY_NONE;
     DWORD m_dwIdThreadForeground = -1;

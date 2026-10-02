@@ -383,7 +383,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         return;
     }
 
-    auto process = [this, hk, cfg]() -> TStatus {
+    auto process = [this, hk, cfg, &key]() -> TStatus {
         if (hk == hk_InsertWithoutFormat) {
             IFS_RET(m_clipWorker.ClipboardClearFormat());
             CHotKey ctrlv(VK_CONTROL, VKE_V);
@@ -395,8 +395,21 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
 
         IFS_RET(AnalizeTopWnd());
 
+        // Первое нажатие уже переключило раскладку (LShift при отпускании), а это было "Shift дважды":
+        // раскладку назад, дальше как будто одного нажатия не было.
+        const auto single = std::exchange(m_singleSwitch, {});
+        if (key.IsDouble() && single.lay && GetTickCount64() - single.time < 1000 &&
+            key.Compare(single.key, CHotKey::COMPARE_IGNORE_KEYUP | CHotKey::COMPARE_IGNORE_DOUBLE)) {
+            LOG_ANY("double {} after the single press: layout back to {:x}", key.ToString(), (ULONGLONG)single.lay);
+            if (CurLay() != single.lay)
+                IFS_RET(ProcessRevert({.lay = single.lay, .flags = SW_CLIENT_SetLang}));
+        }
+
         if (hk == hk_CycleSwitchLayout) {
+            const HKL before = CurLay();
             IFS_RET(ProcessRevert({.lay = getNextLang(), .flags = SW_CLIENT_SetLang}));
+            if (key.OnlyMods() && key.GetKeyup())
+                m_singleSwitch = { GetTickCount64(), before, key };
             RETURN_SUCCESS;
         }
 

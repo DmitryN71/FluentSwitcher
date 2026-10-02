@@ -108,6 +108,8 @@ public:
     CHotKey win_hotkey_cycle_lang { VK_LMENU, VK_SHIFT };
 	std::string theme = "Light";
 	string ui_skin = "";
+	// Тема окна настроек: "" - как в Windows, "Light", "Dark" (theme выше - от окна SimpleSwitcher, не используется).
+	string ui_theme = "";
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
 	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
 	bool useBritishFlag = false;

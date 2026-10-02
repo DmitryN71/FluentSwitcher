@@ -256,7 +256,8 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			//else {
 				// ищем наш хот-кей.
 				// даже если нашли, up никогда не запрещаем.
-				if (!possible_hk_up_current.IsEmpty()) {
+				// Отпускание второго нажатия "дважды" (msg_hotkey уже есть) важнее: не затираем его.
+				if (!possible_hk_up_current.IsEmpty() && msg_hotkey.IsEmpty()) {
 					msg_hotkey.hotkey = possible_hk_up_current;
 					msg_hotkey.hk = possible_hktype_up;
 				}

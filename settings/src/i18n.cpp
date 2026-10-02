@@ -190,9 +190,13 @@ const std::unordered_map<std::string, const char*>& English()
 
         // Hotkeys, layouts
         { "Сочетания клавиш", "Hotkeys" },
-        { "При записи различать левые и правые Ctrl, Shift, Alt, Win", "Tell left and right Ctrl, Shift, Alt, Win apart when recording" },
-        { "Только для записи: включите, чтобы записать, например, только правый Ctrl. Выключено – годится любой",
-          "Only for recording: turn it on to record the right Ctrl only, for example. Off – either one fits" },
+        { "Различать левые и правые Ctrl, Shift, Alt, Win", "Tell left and right Ctrl, Shift, Alt, Win apart" },
+        { "При записи сочетания: включите и запишите сочетание заново – например, только левый Shift. "
+          "Выключено – годится любой",
+          "When recording a hotkey: turn it on and record the hotkey again – the left Shift only, for example. "
+          "Off – either one fits" },
+        { "Запишите нужное сочетание заново: теперь левые и правые клавиши различаются",
+          "Record the hotkey again: left and right keys are told apart now" },
         { "Раскладки", "Layouts" },
         { "Раскладок пока нет", "No layouts yet" },
         { "FluentSwitcher заполнит список раскладками Windows при запуске",

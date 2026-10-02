@@ -110,6 +110,8 @@ public:
 	string ui_skin = "";
 	// Тема окна настроек: "" - как в Windows, "Light", "Dark" (theme выше - от окна SimpleSwitcher, не используется).
 	string ui_theme = "";
+	// Окно настроек: записывать левые и правые Ctrl, Shift, Alt, Win по отдельности.
+	bool record_sides = false;
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
 	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
 	bool useBritishFlag = false;

@@ -110,6 +110,7 @@ namespace nlohmann {
 			theme,
 			ui_skin,
 			ui_theme,
+			record_sides,
 			gui_lang,
 			ShowLangsInTrayMenu,
 			ShowReminderInTrayMenu,

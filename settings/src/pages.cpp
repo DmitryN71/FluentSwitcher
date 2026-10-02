@@ -356,18 +356,20 @@ void SettingsFrame::BuildHotkeys()
 {
     Section(kIconHotkeys, T("Сочетания клавиш"));
 
-    // Recording keeps left and right Ctrl, Shift, Alt, Win apart only when asked: "Ctrl" fits either.
-    ToggleSwitch* sides = nullptr;
-    AddSettingsCard(m_page, m_column, T("При записи различать левые и правые Ctrl, Shift, Alt, Win"),
-                    T("Только для записи: включите, чтобы записать, например, только правый Ctrl. Выключено – годится любой"),
-                    [&](wxWindow* card) { return sides = new ToggleSwitch(card, false); });
+    // Recording keeps left and right Ctrl, Shift, Alt, Win apart only when asked: "Ctrl" fits either. A saved
+    // setting (record_sides), so that it stays on; the hotkeys recorded before stay as they are.
+    ToggleSwitch* sides = static_cast<ToggleSwitch*>(
+        Toggle(T("Различать левые и правые Ctrl, Shift, Alt, Win"),
+               T("При записи сочетания: включите и запишите сочетание заново – например, только левый Shift. "
+                 "Выключено – годится любой"),
+               "record_sides", false));
     std::vector<HotkeyEditor*> editors;
     for (const HotkeyAction& action : HotkeyActions())
     {
         HotkeyEditor* editor = nullptr;
         const char* key = action.key;
         AddSettingsCard(m_page, m_column, T(action.title), T(action.description), [&](wxWindow* card) {
-            return editor = new HotkeyEditor(card, m_edit.GetHotkeys(key), 2, false);
+            return editor = new HotkeyEditor(card, m_edit.GetHotkeys(key), 2, sides->IsOn());
         }, true);
         editor->onChange = [this, editor, key] {
             m_edit.SetHotkeys(key, editor->Value());
@@ -376,9 +378,12 @@ void SettingsFrame::BuildHotkeys()
         editor->sameAs = [this, key](const wxString& one) { return SameHotkey(one, key); };
         editors.push_back(editor);
     }
-    sides->onChange = [sides, editors] {
+    sides->onChange = [this, sides, editors, save = sides->onChange] {
+        save(); // record_sides, and Save / Apply light up
         for (HotkeyEditor* editor : editors)
             editor->SetSides(sides->IsOn());
+        if (sides->IsOn())
+            SetStatus(T("Запишите нужное сочетание заново: теперь левые и правые клавиши различаются"), false);
     };
     FinishPage();
 }

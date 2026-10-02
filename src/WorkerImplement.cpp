@@ -338,7 +338,10 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         Sleep(5);
     }
 
-    if (!IsNeedSavedWords(hk) && !Utils::is_in(hk, hk_EmulateCapsLock, hk_EmulateScrollLock)) {
+    // "Следующая раскладка" одним модификатором (Shift, как в Punto) набранное не забывает: это может быть
+    // первое нажатие "Shift дважды", которое исправляет слово, набранное до него.
+    const bool singleSwitch = hk == hk_CycleSwitchLayout && key.OnlyMods() && key.GetKeyup();
+    if (!IsNeedSavedWords(hk) && !Utils::is_in(hk, hk_EmulateCapsLock, hk_EmulateScrollLock) && !singleSwitch) {
         ClearAllWords();
     }
 

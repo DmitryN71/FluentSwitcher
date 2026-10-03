@@ -117,6 +117,8 @@ public:
 	// Щелчки по флагу у часов: "" - ничего, "menu", "next_layout", "toggle", "settings" (TrayIcon.h).
 	string tray_click = "";
 	string tray_double_click = "settings";
+	// Звук при смене раскладки, громкость в процентах (LayoutSound.h); 0 - без звука.
+	int sound_volume = 0;
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
 	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
 	bool useBritishFlag = false;

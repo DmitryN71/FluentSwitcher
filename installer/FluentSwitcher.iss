@@ -1,6 +1,6 @@
 ; The FluentSwitcher installer (Inno Setup 6). Built by tools\make_release.ps1, which passes:
 ;   AppVersion - "1.0.0" (the program's own, from FluentSwitcher.exe)
-;   SourceDir  - the folder with FluentSwitcher.exe, flags\, LICENSE and THIRD-PARTY-NOTICES.txt
+;   SourceDir  - the folder with FluentSwitcher.exe, flags\, sounds\, LICENSE and THIRD-PARTY-NOTICES.txt
 ;   OutputDir  - where FluentSwitcher-<version>-setup.exe goes
 ; For the current user, without administrator rights: into %LOCALAPPDATA%\Programs\FluentSwitcher, a shortcut
 ; in the Start menu, removal in Settings - Apps. The settings file (FluentSwitcher.json) stays on an update.
@@ -52,6 +52,7 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "{#SourceDir}\FluentSwitcher.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\flags\*"; DestDir: "{app}\flags"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\sounds\*"; DestDir: "{app}\sounds"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 

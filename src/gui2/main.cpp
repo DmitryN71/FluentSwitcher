@@ -3,6 +3,7 @@
 
 #include "TrayIcon.h"
 #include "CaretFlag.h"
+#include "LayoutSound.h"
 #include "SettingsIpc.h"
 #include "Update.h"
 #include "utils/WinTimer.h"
@@ -19,6 +20,7 @@ void StartGui() {
 
 	TrayIcon trayIcon;
 	CaretFlag caretFlag;
+	LayoutSound layoutSound;
 
 	// Проверка обновлений: раз в минуту смотрим, не пора ли. Пора - через день после прошлого ответа GitHub
 	// (первый раз - через минуту после запуска), после неудачи - не раньше чем через 6 часов. Запрос - в своём
@@ -115,6 +117,10 @@ void StartGui() {
 				}
 				trayIcon.Update((HKL)wParam);
 				caretFlag.OnLayout((HKL)wParam);
+				if (wParam)
+					layoutSound.OnLayout((HKL)wParam);
+				else
+					layoutSound.Reset(); // настройки перечитаны или FluentSwitcher включили / выключили
 				return 0;
 			}
 

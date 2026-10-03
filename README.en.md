@@ -19,6 +19,8 @@ free and open source under GPL-3.0.
 - **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like. A click and
   a double click on it do what you choose: the menu, the next layout (of the window you were typing in), on / off,
   settings.
+- **A sound of a layout change**, as in Punto: its own for each language, so the ear tells which layout is on.
+  The sounds are the project's own (tools/make_sounds.py) and can be replaced with any WAV files in `sounds`.
 - **Hotkeys on any keys**: left and right Ctrl, Shift, Alt, Win apart, double presses ("Shift twice"), firing on
   release, two hotkeys per action. Recorded in the settings window.
 - **The layout with one Shift**, as in Punto: "Next layout" on a single Shift (left, right or either) fires on

@@ -1,5 +1,5 @@
 # Makes a FluentSwitcher release in build\release:
-#   FluentSwitcher-<version>.zip        FluentSwitcher.exe, flags\, LICENSE, THIRD-PARTY-NOTICES.txt
+#   FluentSwitcher-<version>.zip        FluentSwitcher.exe, flags\, sounds\, LICENSE, THIRD-PARTY-NOTICES.txt
 #   FluentSwitcher-<version>-setup.exe  the installer (Inno Setup 6, installer\FluentSwitcher.iss)
 # The version is the program's own (FLUENTSWITCHER_VERSION in CMakeLists.txt, read from the built exe).
 #   powershell -File tools\make_release.ps1 [-NoBuild] [-Iscc <path to ISCC.exe>]
@@ -22,6 +22,7 @@ if (Test-Path $folder) { Remove-Item -LiteralPath $folder -Recurse -Force }
 New-Item -ItemType Directory -Force $folder | Out-Null
 Copy-Item $exe $folder
 Copy-Item "$root\bin_files\flags" "$folder\flags" -Recurse
+Copy-Item "$root\bin_files\sounds" "$folder\sounds" -Recurse
 Copy-Item "$root\LICENSE", "$root\THIRD-PARTY-NOTICES.txt" $folder
 
 $zip = "$out\FluentSwitcher-$version.zip"

@@ -143,6 +143,14 @@ const std::unordered_map<std::string, const char*>& English()
         { "Чтобы не отвлекал от текста", "So that it does not distract from the text" },
         { "Нет", "None" },
         { "Ничего", "Nothing" },
+        { "Тихий", "Quiet" },
+        { "Средний", "Medium" },
+        { "Громкий", "Loud" },
+        { "Звук при смене раскладки", "Sound of a layout change" },
+        { "Свой у каждого языка: английский выше, русский ниже, остальные – между ними. Звуки – в папке "
+          "sounds рядом с программой, их можно заменить своими WAV: en.wav, ru.wav, other.wav",
+          "Its own for each language: English higher, Russian lower, the others in between. The sounds are in the "
+          "sounds folder next to the app; they can be replaced with WAV files of your own: en.wav, ru.wav, other.wav" },
         { "Меню", "Menu" },
         { "Включить / выключить", "Turn on / off" },
         { "Щелчок по флагу у часов", "Click on the flag by the clock" },

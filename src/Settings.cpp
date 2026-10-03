@@ -114,6 +114,7 @@ namespace nlohmann {
 			check_updates,
 			tray_click,
 			tray_double_click,
+			sound_volume,
 			gui_lang,
 			ShowLangsInTrayMenu,
 			ShowReminderInTrayMenu,

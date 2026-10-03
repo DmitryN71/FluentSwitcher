@@ -11,6 +11,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 	Message_Hotkey msg_hotkey;
 	bool need_disable_event = false;
+	bool held_event = false; // придержано (KeyHold.h): в программу не идёт
 
 	auto process = [&]() {
 
@@ -49,6 +50,17 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 		if (k->dwExtraInfo == c_MyInjectedId) {
 			LOG_ANY(L"skip our keys");
+			return;
+		}
+
+		// "ДВе ЗАглавные": пока движок исправляет слово, нажатия придерживаются и уходят потом (KeyHold.h).
+		const bool replayed = k->dwExtraInfo == KeyHold::c_Replayed;
+		if (replayed) {
+			KeyHold::OnReplayed();
+		}
+		else if (KeyHold::active) {
+			KeyHold::Hold(*k);
+			held_event = true;
 			return;
 		}
 
@@ -297,17 +309,36 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			&& !key_up_exists
 
 			) {
+			// Пробел после слова, которое может быть "ДВух": следующие нажатия придерживаются, пока движок решает.
+			bool hold = false;
+			if (vkCode == VK_SPACE) {
+				hold = KeyHold::CandidateAtSpace() && !replayed && curk.Size() == 1 && cfg->two_caps &&
+					g_enabled.IsEnabled() && KeyHold::CanHold();
+				if (hold) {
+					LOG_ANY("hold: keys wait for the two caps check");
+					KeyHold::Start();
+				}
+			}
+			else {
+				KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,
+					curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN));
+			}
 			Worker()->PostMsg(Message_KeyType{
 				.vkCode = vkCode,
 				.scan_ext = { (TScanCode)scan_code, isExtended },
 				.cur_hotKey = curk, // без учета disabled, но не критично
 				.is_caps = iscaps == 1,
+				.hold = hold,
 				});
 		}
 
 	};
 
 	process();
+
+	if (held_event) {
+		return 1; // придержано: уйдёт, когда движок исправит слово
+	}
 
 	CaretFlagPoke(40); // набор и стрелки двигают каретку, Ctrl+Shift меняет раскладку
 

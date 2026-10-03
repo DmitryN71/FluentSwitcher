@@ -15,6 +15,7 @@ class CoreWorker {
 
 		m_hWnd = WinUtils::CreateMsgWin(L"SimpleSw_325737FD_Serv");
 		IFW_LOG(m_hWnd != NULL);
+		KeyHold::window = m_hWnd.load();
 		
 		IFW_LOG(AddClipboardFormatListener(m_hWnd));
 		IFW_LOG(ChangeWindowMessageFilterEx(m_hWnd, WM_ClearWordsBuffer, MSGFLT_ALLOW, 0));
@@ -49,6 +50,8 @@ class CoreWorker {
 						IFW_LOG(session_notif_reg);
 					}
 				}
+			}else if (msg.message == KeyHold::WM_Release) {
+				KeyHold::OnRelease();
 			}else if(msg.message == WM_ClearWordsBuffer){
 				LOG_ANY("get clear request");
 				Worker()->PostMsg(Message_ClearWorlds{});

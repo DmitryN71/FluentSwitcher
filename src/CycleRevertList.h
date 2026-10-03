@@ -231,6 +231,18 @@ public: RevertKeysData FillKeyToRevert(HotKeyType typeRevert, bool always_full_t
 
 	return keyList;
 }
+public: size_t Size() const { return m_symbolList.size(); }
+// Клавиши слова перед пробелом, которым кончается набранное (ДВе ЗАглавные), - до прошлого пробела.
+public: std::vector<TKeyBaseInfo*> LastWordKeys() {
+	std::vector<TKeyBaseInfo*> keys;
+	if (m_symbolList.size() < 2 || m_symbolList.back().key.type != KEYTYPE_SPACE) return keys;
+	for (int i = (int)m_symbolList.size() - 2; i >= 0; --i) {
+		if (m_symbolList[i].key.type == KEYTYPE_SPACE) break;
+		keys.push_back(&m_symbolList[i].key);
+	}
+	std::reverse(keys.begin(), keys.end());
+	return keys;
+}
 public: void SetSeparateLast() {
 	if (!m_symbolList.empty())
 		m_symbolList.back().is_last_revert = true;

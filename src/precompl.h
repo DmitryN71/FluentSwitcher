@@ -89,6 +89,8 @@
 
 // core-worker
 #include "globals.h"
+#include "KeyHold.h"
+#include "TwoCaps.h"
 #include "IconManager.h"
 #include "CClipWorker.h"
 #include "CMainWorker.h"

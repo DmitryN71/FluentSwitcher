@@ -143,6 +143,16 @@ const std::unordered_map<std::string, const char*>& English()
         { "Чтобы не отвлекал от текста", "So that it does not distract from the text" },
         { "Нет", "None" },
         { "Ничего", "Nothing" },
+        { "Исправлять ДВе ЗАглавные", "Fix TWo INitial CApitals" },
+        { "«ДВух» после пробела станет «Двух». PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
+          "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся и "
+          "попадёт в исключения",
+          "“THis” becomes “This” after a space. PCs, IDs, GHz, eM, iPhone and the exceptions are left alone. "
+          "Fixed by mistake? Press “Fix the last word” (Shift twice) right away: the word comes back and goes "
+          "to the exceptions" },
+        { "Исключения для ДВух ЗАглавных", "Exceptions for TWo INitial CApitals" },
+        { "Через пробел. Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники",
+          "With spaces between them. A word also covers the words that start with it: IPsec – and IPsecs" },
         { "Тихий", "Quiet" },
         { "Средний", "Medium" },
         { "Громкий", "Loud" },

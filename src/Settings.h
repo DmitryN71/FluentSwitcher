@@ -121,6 +121,9 @@ public:
 	// флагу) и исправление текста.
 	int sound_switch = 0;
 	int sound_fix = 0;
+	// ДВе ЗАглавные (TwoCaps.h): исправлять после пробела; свои исключения (UTF-8).
+	bool two_caps = false;
+	std::vector<std::string> two_caps_exceptions;
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
 	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
 	bool useBritishFlag = false;

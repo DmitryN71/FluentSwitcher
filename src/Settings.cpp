@@ -116,6 +116,8 @@ namespace nlohmann {
 			tray_double_click,
 			sound_switch,
 			sound_fix,
+			two_caps,
+			two_caps_exceptions,
 			gui_lang,
 			ShowLangsInTrayMenu,
 			ShowReminderInTrayMenu,

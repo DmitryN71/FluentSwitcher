@@ -103,6 +103,18 @@ void StartGui() {
 				return 0;
 			}
 
+			if (msg == WM_TwoCapsLearn) {
+				// Слово вернули сразу после исправления ДВух ЗАглавных - больше его не трогать.
+				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
+				const std::string utf8 = StrUtils::Convert(*word);
+				auto& list = conf_gui()->two_caps_exceptions;
+				if (std::ranges::find(list, utf8) == list.end()) {
+					list.push_back(utf8);
+					SaveApplyGuiConfig();
+				}
+				return 0;
+			}
+
 			if (msg == WM_TextFixed) {
 				layoutSound.OnFix();
 				return 0;

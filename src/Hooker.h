@@ -80,6 +80,7 @@ private: inline static HookerKeyboard hookerKeyb;
 			}
 			else {
 				hookerKeyb.last_mouse_click_time.SetToNow();
+				KeyHold::ResetWord(); // курсор мог переехать: слово уже не то
 				Worker()->PostMsg(Message_ClearWorlds{});
 				CaretFlagPoke(80); // щелчок или прокрутка двигают каретку
 			}

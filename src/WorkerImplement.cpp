@@ -60,6 +60,12 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
             break;
         }
     }
+
+    if (keyData.hold) {
+        // Хук придерживает нажатия после этого пробела: решить и отпустить, что бы ни случилось.
+        struct Release { ~Release() { KeyHold::RequestRelease(); } } release;
+        FixTwoCaps();
+    }
 }
 
 // TStatus ClipHasTextFormating(bool& fres)
@@ -104,6 +110,58 @@ void InvertCase(std::wstring& buf) {
             c = std::towupper(c);
         }
     }
+}
+
+namespace {
+// Поле пароля (обычное поле Windows с ES_PASSWORD): там ничего не исправляем.
+bool IsPasswordFocus() {
+    GUITHREADINFO gti{ sizeof(gti) };
+    HWND fg = GetForegroundWindow();
+    if (!fg || !GetGUIThreadInfo(GetWindowThreadProcessId(fg, nullptr), &gti) || !gti.hwndFocus) return false;
+    wchar_t cls[64] = {};
+    GetClassNameW(gti.hwndFocus, cls, 64);
+    _wcslwr_s(cls);
+    return wcsstr(cls, L"edit") && (GetWindowLongW(gti.hwndFocus, GWL_STYLE) & ES_PASSWORD);
+}
+}
+
+void WorkerImplement::FixTwoCaps() {
+    GETCONF;
+    if (!cfg->two_caps || !KeyHold::fixAllowed || cfg->IsSkipProgramTop() || IsPasswordFocus()) return;
+    auto keys = m_cycleList.LastWordKeys();
+    if (keys.empty()) return;
+    const HKL lay = CurLay();
+    std::wstring text;
+    for (auto* key : keys) {
+        if (key->is_caps) return; // с CapsLock регистр значит другое
+        auto c = InputSender::KeyText(*key, lay, false);
+        if (c.size() != 1) return; // клавиша = один символ, иначе не сосчитать, что стирать
+        text += c;
+    }
+    std::vector<std::wstring> exceptions;
+    for (const auto& e : cfg->two_caps_exceptions) exceptions.push_back(StrUtils::Convert(e));
+    const auto fix = TwoCaps::Analyze(text, exceptions);
+    if (fix.tail.empty()) return;
+    const std::wstring typed = text.substr(fix.from);
+    LOG_ANY(L"two caps: {} -> {}{}", text, text.substr(0, fix.from), fix.tail);
+    TextFixed();
+    const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
+    InputSender::SendVkKeyPaced(VK_BACK, (int)typed.size() + 1, delay); // со второй буквы и пробел
+    InputSender::SendTextPaced(fix.tail + L" ", delay);
+    keys[fix.from]->is_shift = false; // и в буфере слов вторая буква теперь строчная
+    m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from] };
+}
+
+bool WorkerImplement::UndoTwoCaps() {
+    auto last = std::exchange(m_twoCaps, {});
+    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size) return false;
+    LOG_ANY(L"two caps: {} back, it is an exception now", last.word);
+    const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+    InputSender::SendVkKeyPaced(VK_BACK, (int)last.fixed.size() + 1, delay);
+    InputSender::SendTextPaced(last.typed + L" ", delay);
+    last.key->is_shift = true;
+    PostMessageW(g_guiHandle, WM_TwoCapsLearn, 0, (LPARAM)new std::wstring(last.word));
+    return true;
 }
 
 TStatus WorkerImplement::GetClipStringCallback() {
@@ -412,6 +470,12 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
                 // исправление ниже должно считать от возвращённой, иначе напечатает слово как было.
                 topWndInfo2.lay = single.lay;
             }
+        }
+
+        // Сразу после исправления ДВух ЗАглавных "Исправить последнее слово" возвращает слово (уже после того, как
+        // возвращена раскладка одиночного Shift выше).
+        if (hk == hk_RevertLastWord && UndoTwoCaps()) {
+            RETURN_SUCCESS;
         }
 
         if (hk == hk_CycleSwitchLayout) {

@@ -334,6 +334,35 @@ void SettingsFrame::BuildTyping()
         Changed();
     };
 
+    // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions (an array
+    // in the file, words with spaces between them here).
+    Toggle(T("Исправлять ДВе ЗАглавные"),
+           T("«ДВух» после пробела станет «Двух». PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
+             "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся и "
+             "попадёт в исключения"),
+           "two_caps", false);
+    wxString words;
+    const nlohmann::json& file = std::as_const(m_edit).Json();
+    if (auto list = file.find("two_caps_exceptions"); list != file.end() && list->is_array())
+        for (const auto& w : *list)
+            if (w.is_string())
+                words += (words.empty() ? "" : " ") + wxString::FromUTF8(w.get<std::string>());
+    TextField* exceptions = nullptr;
+    AddSettingsCard(m_page, m_column, T("Исключения для ДВух ЗАглавных"),
+                    T("Через пробел. Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники"),
+                    [&](wxWindow* card) { return exceptions = new TextField(card, words, 360); }, true);
+    exceptions->onChange = [this, exceptions] {
+        nlohmann::json list = nlohmann::json::array();
+        for (wxString w : wxSplit(exceptions->Value(), ' '))
+        {
+            w.Trim(true).Trim(false);
+            if (!w.empty())
+                list.push_back(w.utf8_string());
+        }
+        m_edit.Json()["two_caps_exceptions"] = list;
+        Changed();
+    };
+
     const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
     Choice(T("Как переключать раскладку"),
            T("Если в какой-то программе раскладка после исправления не переключается, выберите второй способ: "

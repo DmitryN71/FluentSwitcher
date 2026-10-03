@@ -164,6 +164,20 @@ public:
 		inputSender.Send();
 	}
 
+	// Готовые символы (KEYEVENTF_UNICODE); delay_ms > 0 - по одному, с паузой после каждого.
+	static void SendTextPaced(const std::wstring& text, int delay_ms) {
+		InputSender inputSender;
+		for (wchar_t c : text) {
+			inputSender.AddUnicodePress(c);
+			if (delay_ms > 0) {
+				inputSender.Send();
+				inputSender.Clear();
+				Sleep(delay_ms);
+			}
+		}
+		inputSender.Send();
+	}
+
 	// count нажатий клавиши; delay_ms > 0 - по одному, с паузой после каждого.
 	static void SendVkKeyPaced(TKeyCode vk, int count, int delay_ms) {
 		if (delay_ms <= 0) {

@@ -145,6 +145,19 @@ class WorkerImplement {
     // Исправление текста начинается: звук исправления, а смена раскладки из-за него - без звука переключения.
     static void TextFixed() { PostMessage(g_guiHandle, WM_TextFixed, 0, 0); }
 
+    // ДВе ЗАглавные (TwoCaps.h): слово перед только что набранным пробелом; хук держит нажатия, пока решаем.
+    void FixTwoCaps();
+    // "Исправить последнее слово" сразу после такого исправления: вернуть слово и запомнить его в исключениях.
+    bool UndoTwoCaps();
+    struct {
+        std::wstring word;       // слово, как набрано
+        std::wstring typed;      // набранное со второй буквы (до исправления)
+        std::wstring fixed;      // чем заменили
+        ULONGLONG at = 0;
+        size_t size = 0;         // набранных клавиш после исправления: другое число - уже печатали дальше
+        TKeyBaseInfo* key = nullptr; // клавиша второй буквы в буфере слов
+    } m_twoCaps;
+
     TStatus FixCtrlAlt(CHotKey key);
 
     void SetNewLay(HKL lay) {

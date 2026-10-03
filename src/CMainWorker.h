@@ -5,6 +5,7 @@ struct Message_KeyType {
 	TScanCode_Ext scan_ext;
 	CHotKey cur_hotKey;
 	bool is_caps = false;
+	bool hold = false; // пробел, после которого хук придерживает нажатия: решить про ДВе ЗАглавные и отпустить
 };
 
 struct Message_Hotkey {

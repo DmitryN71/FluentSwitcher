@@ -61,11 +61,6 @@ Source: "{#SourceDir}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignorev
 Type: files; Name: "{app}\FluentSwitcherSettings.exe"
 Type: files; Name: "{app}\SimpleSwitcher.exe"
 Type: files; Name: "{app}\imgui.ini"
-; The tones of 1.3.0 test1 (en.wav there would win over switch.wav). Only test builds had them: no one had sounds
-; of their own before 1.3.0. Drop these lines after 1.3.0, so that a user's own en.wav is never removed.
-Type: files; Name: "{app}\sounds\en.wav"
-Type: files; Name: "{app}\sounds\ru.wav"
-Type: files; Name: "{app}\sounds\other.wav"
 Type: filesandordirs; Name: "{app}\flags\Fluent"
 Type: filesandordirs; Name: "{app}\flags\Round"
 Type: filesandordirs; Name: "{app}\flags\Square"

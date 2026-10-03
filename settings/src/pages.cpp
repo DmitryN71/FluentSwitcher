@@ -488,6 +488,24 @@ void SettingsFrame::BuildFlags()
            [this, values](int i) { m_edit.SetString("flagsSet", values[i]); });
     Toggle(T("Британский флаг для английского"), T("Вместо американского"), "useBritishFlag", false);
 
+    // Clicks on the flag by the clock (the engine's TrayIcon.h): tray_click, tray_double_click.
+    const wxArrayString clickValues = { wxString(), wxString("menu"), wxString("next_layout"), wxString("toggle"),
+                                        wxString("settings") };
+    const wxArrayString clickNames = { T("Ничего"), T("Меню"), T("Следующая раскладка"), T("Включить / выключить"),
+                                       T("Открыть настройки") };
+    auto clickIndex = [this, &clickValues](const char* key, const char* byDefault) {
+        const int i = clickValues.Index(m_edit.GetString(key, byDefault));
+        return i == wxNOT_FOUND ? clickValues.Index(byDefault) : i;
+    };
+    Choice(T("Щелчок по флагу у часов"),
+           T("«Следующая раскладка» – у окна, где вы печатали, и курсор остаётся там. Если назначен и двойной "
+             "щелчок, одиночный срабатывает чуть позже: ждёт, не будет ли второго"),
+           clickNames, clickIndex("tray_click", ""),
+           [this, clickValues](int i) { m_edit.SetString("tray_click", clickValues[i]); });
+    Choice(T("Двойной щелчок по флагу у часов"), T("Правый щелчок всегда открывает меню"), clickNames,
+           clickIndex("tray_double_click", "settings"),
+           [this, clickValues](int i) { m_edit.SetString("tray_double_click", clickValues[i]); });
+
     // The flag at the text cursor (the engine's CaretFlag.h). Each choice is a number in the file; a number
     // that is not in the list shows as the nearest one.
     auto numbers = [this](const wxString& title, const wxString& description, const char* key, int byDefault,

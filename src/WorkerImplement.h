@@ -36,6 +36,11 @@ class WorkerImplement {
     }
 
     void ClearAllWords() { m_cycleList.Clear(); }
+    // Следующая раскладка у окна, которое сейчас впереди (щелчок по флагу у часов, TrayIcon.h).
+    void SwitchToNextLayout() {
+        IFS_LOG(AnalizeTopWnd());
+        IFS_LOG(ProcessRevert({ .lay = getNextLang(), .flags = SW_CLIENT_SetLang }));
+    }
     TStatus AnalizeTopWnd();
     void SwitchLangByEmulate(HKL lay);
     void CliboardChanged();

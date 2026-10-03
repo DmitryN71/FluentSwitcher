@@ -142,6 +142,16 @@ const std::unordered_map<std::string, const char*>& English()
         { "Прозрачность флажка у курсора", "Transparency of the flag at the cursor" },
         { "Чтобы не отвлекал от текста", "So that it does not distract from the text" },
         { "Нет", "None" },
+        { "Ничего", "Nothing" },
+        { "Меню", "Menu" },
+        { "Включить / выключить", "Turn on / off" },
+        { "Щелчок по флагу у часов", "Click on the flag by the clock" },
+        { "«Следующая раскладка» – у окна, где вы печатали, и курсор остаётся там. Если назначен и двойной "
+          "щелчок, одиночный срабатывает чуть позже: ждёт, не будет ли второго",
+          "“Next layout” – of the window you were typing in, and the cursor stays there. If a double click is set "
+          "too, a single one fires a bit later: it waits to see if a second comes" },
+        { "Двойной щелчок по флагу у часов", "Double click on the flag by the clock" },
+        { "Правый щелчок всегда открывает меню", "A right click always opens the menu" },
         { "Слабая", "Light" },
         { "Средняя", "Medium" },
         { "Сильная", "Strong" },

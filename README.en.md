@@ -16,7 +16,9 @@ free and open source under GPL-3.0.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment after a layout change, below or above the cursor, four
   sizes, transparency.
-- **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like.
+- **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like. A click and
+  a double click on it do what you choose: the menu, the next layout (of the window you were typing in), on / off,
+  settings.
 - **Hotkeys on any keys**: left and right Ctrl, Shift, Alt, Win apart, double presses ("Shift twice"), firing on
   release, two hotkeys per action. Recorded in the settings window.
 - **The layout with one Shift**, as in Punto: "Next layout" on a single Shift (left, right or either) fires on

@@ -17,8 +17,12 @@ private:
 	inline static WinTray* Inst = 0;
 
 	std::function<void()> double_click;
+	std::function<void()> left_click;
 	std::function<void()> r_click;
 	std::function<void()> balloon_click;
+	std::function<void()> timer_func;
+	bool after_double = false; // отпускание после двойного щелчка - не новый одиночный
+	static const UINT_PTR ID_CLICK_TIMER = 1;
 	std::function<std::vector<TrayItem>()> createMenu;
 	std::vector<TrayItem> last_menu;
 
@@ -60,33 +64,18 @@ private:
 				}
 			}
 			else if (lParam == WM_RBUTTONDOWN) {
-				if (Inst->createMenu) {
-					Inst->last_menu = Inst->createMenu();
-					// Show context menu on right-click
-					POINT cursorPos;
-					GetCursorPos(&cursorPos);
-
-					HMENU hMenu = CreatePopupMenu();
-					for (int i = 0; auto & it : Inst->last_menu) {
-						i++;
-						if (it.is_separator) {
-							AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-							continue;
-						}
-						if (it.is_checkbox) {
-							AppendMenu(hMenu, MF_STRING | (it.edit_val ? MF_CHECKED : MF_UNCHECKED), i, StrUtils::Convert(it.name).c_str());
-							continue;
-						}
-						AppendMenu(hMenu, MF_STRING, i, StrUtils::Convert(it.name).c_str());
-					}
-
-					MenuThemeLikeTaskbar();
-					SetForegroundWindow(hwnd);
-					TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, cursorPos.x, cursorPos.y, 0, hwnd, NULL);
-					DestroyMenu(hMenu);
+				Inst->ShowMenu();
+			}
+			else if (lParam == WM_LBUTTONUP) {
+				if (Inst->after_double) {
+					Inst->after_double = false;
+				}
+				else if (Inst->left_click) {
+					Inst->left_click();
 				}
 			}
 			else if (lParam == WM_LBUTTONDBLCLK) {
+				Inst->after_double = true;
 				if (Inst->double_click) {
 					Inst->double_click();
 				}
@@ -99,6 +88,16 @@ private:
 			break;
 		}
 
+
+		case WM_TIMER: {
+			if (wParam == ID_CLICK_TIMER) {
+				KillTimer(hwnd, ID_CLICK_TIMER);
+				auto func = std::move(Inst->timer_func);
+				Inst->timer_func = nullptr;
+				if (func) func();
+			}
+			break;
+		}
 
 		case WM_COMMAND: {
 			for (int i = 0; auto & it : Inst->last_menu) {
@@ -124,6 +123,45 @@ public:
 	}
 	void OnDouble(auto&& func) {
 		double_click = std::move(func);
+	}
+	// Одиночный щелчок левой (на отпускание; отпускание после двойного щелчка - не он).
+	void OnLeftClick(auto&& func) {
+		left_click = std::move(func);
+	}
+	// Отложенное действие на окне значка: одиночный щелчок ждёт, не будет ли второго.
+	void StartTimer(UINT ms, std::function<void()> func) {
+		timer_func = std::move(func);
+		SetTimer(hwnd, ID_CLICK_TIMER, ms, nullptr);
+	}
+	void StopTimer() {
+		KillTimer(hwnd, ID_CLICK_TIMER);
+		timer_func = nullptr;
+	}
+	// Меню у флага, у курсора (правый щелчок; по настройке - и левый).
+	void ShowMenu() {
+		if (!createMenu) return;
+		last_menu = createMenu();
+		POINT cursorPos;
+		GetCursorPos(&cursorPos);
+
+		HMENU hMenu = CreatePopupMenu();
+		for (int i = 0; auto & it : last_menu) {
+			i++;
+			if (it.is_separator) {
+				AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+				continue;
+			}
+			if (it.is_checkbox) {
+				AppendMenu(hMenu, MF_STRING | (it.edit_val ? MF_CHECKED : MF_UNCHECKED), i, StrUtils::Convert(it.name).c_str());
+				continue;
+			}
+			AppendMenu(hMenu, MF_STRING, i, StrUtils::Convert(it.name).c_str());
+		}
+
+		MenuThemeLikeTaskbar();
+		SetForegroundWindow(hwnd);
+		TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, cursorPos.x, cursorPos.y, 0, hwnd, NULL);
+		DestroyMenu(hMenu);
 	}
 	void OnRight(auto&& func) {
 		r_click = std::move(func);

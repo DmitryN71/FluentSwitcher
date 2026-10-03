@@ -200,6 +200,10 @@ void WorkerImplement::FixTwoCapsInKeys(TKeyRevert& keys, HKL lay) {
     if (fixed != text) LOG_ANY(L"two caps in the layout fix: {} -> {}", text, fixed);
 }
 
+bool WorkerImplement::TwoCapsUndoReady() const {
+    return !m_twoCaps.word.empty() && GetTickCount64() - m_twoCaps.at <= 10000 && m_cycleList.Size() == m_twoCaps.size;
+}
+
 bool WorkerImplement::UndoTwoCaps() {
     auto last = std::exchange(m_twoCaps, {});
     if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size) return false;
@@ -512,10 +516,18 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         const auto single = std::exchange(m_singleSwitch, {});
         if (key.IsDouble() && single.lay && GetTickCount64() - single.time < 1000 &&
             key.Compare(single.key, CHotKey::COMPARE_IGNORE_KEYUP | CHotKey::COMPARE_IGNORE_DOUBLE)) {
-            LOG_ANY("double {} after the single press: layout back to {:x}", key.ToString(), (ULONGLONG)single.lay);
-            if (CurLay() != single.lay) {
+            if (hk == hk_RevertLastWord && !TwoCapsUndoReady()) {
+                // Перевод слова сам поставит раскладку, и она та же, что уже дал одиночный Shift: не переключать туда
+                // и обратно (новый Блокнот теряет символы, когда раскладка меняется несколько раз подряд), а только
+                // считать от прежней - ProcessRevert увидит, что нужная уже стоит.
+                LOG_ANY("double {} after the single press: counted from {:x}, no switch back", key.ToString(),
+                        (ULONGLONG)single.lay);
+                topWndInfo2.lay = single.lay;
+            }
+            else if (CurLay() != single.lay) {
+                LOG_ANY("double {} after the single press: layout back to {:x}", key.ToString(), (ULONGLONG)single.lay);
                 IFS_RET(ProcessRevert({.lay = single.lay, .flags = SW_CLIENT_SetLang}));
-                // CurLay() - запомненная раскладка, сама она обновится только через 200 мс (TimerCheckLay);
+                // CurLay() - запомненная раскладка, сама она обновится только через 100 мс (TimerCheckLay);
                 // исправление ниже должно считать от возвращённой, иначе напечатает слово как было.
                 topWndInfo2.lay = single.lay;
             }
@@ -600,12 +612,22 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     // Раскладка, в которой будет набран текст: новая, если её меняем, иначе текущая.
     HKL target = CurLay();
     if (TestFlag(ctxRevert.flags, SW_CLIENT_SetLang) && ctxRevert.lay) {
-    	auto prevLay = CurLay();		
-        SetNewLay(ctxRevert.lay);
-		HKL got = WaitOtherLay(prevLay, 15, 40);
-        target = ctxRevert.lay != (HKL)HKL_NEXT ? ctxRevert.lay
+        auto prevLay = CurLay();
+        const HKL want = ctxRevert.lay != (HKL)HKL_NEXT ? ctxRevert.lay
             : conf_get_unsafe()->layouts_info.NextEnabledLayout(prevLay);
-        if (target == 0) target = got;
+        if (want && want != prevLay && GetKeyboardLayout(topWndInfo2.threadid_default) == want) {
+            // Нужная раскладка уже стоит (её только что переключил одиночный Shift): второй раз не переключаем.
+            LOG_ANY(L"layout {} is already there, no switch", (void*)want);
+            target = want;
+            topWndInfo2.lay = want;
+        }
+        else {
+            // Сразу нужную, а не "следующую": если прошлое переключение ещё не дошло, два "следующих" вернули бы назад.
+            SetNewLay(want ? want : ctxRevert.lay);
+            HKL got = WaitOtherLay(prevLay, 15, 40);
+            target = want;
+            if (target == 0) target = got;
+        }
     }
 
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);

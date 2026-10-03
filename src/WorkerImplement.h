@@ -154,6 +154,8 @@ class WorkerImplement {
     static void FixTwoCapsInKeys(TKeyRevert& keys, HKL lay);
     // "Исправить последнее слово" сразу после такого исправления: вернуть слово и запомнить его в исключениях.
     bool UndoTwoCaps();
+    // Отмена сейчас сработала бы (слово исправлено только что, дальше не печатали).
+    bool TwoCapsUndoReady() const;
     struct {
         std::wstring word;       // слово, как набрано
         std::wstring typed;      // набранное со второй буквы (до исправления)

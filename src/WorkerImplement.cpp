@@ -137,6 +137,7 @@ TStatus WorkerImplement::GetClipStringCallback() {
             } else {
                 LOG_ANY(L"convert selected {} -> {}, {} chars", (void*)from, (void*)to, converted.size());
                 m_cycleList.Clear();
+                TextFixed();
                 RequestWaitClip(CLRMY_hk_INSERT);
                 m_clipWorker.setString(converted);
                 IFS_LOG(ProcessRevert({ .lay = to, .flags = SW_CLIENT_SetLang | SW_CLIENT_NO_WAIT_LANG | SW_CLIENT_CTRLV }));
@@ -150,6 +151,7 @@ TStatus WorkerImplement::GetClipStringCallback() {
             else
                 InvertCase(data);
 
+            TextFixed();
             RequestWaitClip(CLRMY_hk_INSERT);
             m_clipWorker.setString(data);
 

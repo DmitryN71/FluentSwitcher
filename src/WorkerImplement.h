@@ -32,7 +32,7 @@ class WorkerImplement {
 
     void TimerCheckLay() {
         CheckCurLay();
-        Worker()->PostMsg([](auto p) { p->TimerCheckLay(); }, 200);
+        Worker()->PostMsg([](auto p) { p->TimerCheckLay(); }, 100); // и звук переключения - без заметной задержки
     }
 
     void ClearAllWords() { m_cycleList.Clear(); }
@@ -103,6 +103,7 @@ class WorkerImplement {
             return;
         }
         m_cycleList.SetSeparateLast();
+        TextFixed();
         bool isNeedLangChange = to_revert.needLanguageChange;
         ContextRevert data;
         data.keylist = std::move(to_revert.keys);
@@ -131,10 +132,18 @@ class WorkerImplement {
             topWndInfo2.lay = old_lay;
         } else {
             if (old_lay != topWndInfo2.lay) {
-                new_layout_request(topWndInfo2.lay);
+                // Окно - то, где раскладка менялась в прошлый раз, а не при прошлом опросе: щелчок по флагу на миг
+                // делает активной панель задач, а переключение всё равно в том же окне.
+                const bool otherWindow = m_layWindow && topWndInfo2.hwnd_top != m_layWindow;
+                m_layWindow = topWndInfo2.hwnd_top;
+                new_layout_request(topWndInfo2.lay, otherWindow);
             }
         }
     }
+    HWND m_layWindow = nullptr; // окно впереди при последней смене раскладки
+
+    // Исправление текста начинается: звук исправления, а смена раскладки из-за него - без звука переключения.
+    static void TextFixed() { PostMessage(g_guiHandle, WM_TextFixed, 0, 0); }
 
     TStatus FixCtrlAlt(CHotKey key);
 

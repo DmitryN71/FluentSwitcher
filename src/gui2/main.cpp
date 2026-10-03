@@ -103,6 +103,11 @@ void StartGui() {
 				return 0;
 			}
 
+			if (msg == WM_TextFixed) {
+				layoutSound.OnFix();
+				return 0;
+			}
+
 			if (msg == WM_UpdateChecked) {
 				auto state = Update::Load(folder);
 				notifyUpdate(state, true);
@@ -118,7 +123,7 @@ void StartGui() {
 				trayIcon.Update((HKL)wParam);
 				caretFlag.OnLayout((HKL)wParam);
 				if (wParam)
-					layoutSound.OnLayout((HKL)wParam);
+					layoutSound.OnLayout((HKL)wParam, lParam != 0);
 				else
 					layoutSound.Reset(); // настройки перечитаны или FluentSwitcher включили / выключили
 				return 0;

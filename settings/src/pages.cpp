@@ -408,20 +408,23 @@ void SettingsFrame::BuildLayouts()
 {
     Section(kIconLayouts, T("Раскладки"));
 
-    // The sound of a layout change (the engine's LayoutSound.h): sound_volume, per cent; 0 - none.
-    {
+    // Sounds (the engine's LayoutSound.h): sound_switch, sound_fix - per cent, 0 - none.
+    auto sound = [this](const wxString& title, const wxString& description, const char* key) {
         const std::vector<int> volumes = { 0, 30, 60, 100 };
         const wxArrayString names = { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") };
-        const int now = m_edit.GetInt("sound_volume", 0);
+        const int now = m_edit.GetInt(key, 0);
         int index = 0;
         for (size_t i = 0; i < volumes.size(); i++)
             if (std::abs(volumes[i] - now) < std::abs(volumes[index] - now))
                 index = (int)i;
-        Choice(T("Звук при смене раскладки"),
-               T("Свой у каждого языка: английский выше, русский ниже, остальные – между ними. Звуки – в папке "
-                 "sounds рядом с программой, их можно заменить своими WAV: en.wav, ru.wav, other.wav"),
-               names, index, [this, volumes](int i) { m_edit.SetInt("sound_volume", volumes[i]); });
-    }
+        Choice(title, description, names, index, [this, volumes, key](int i) { m_edit.SetInt(key, volumes[i]); });
+    };
+    sound(T("Звук при переключении раскладки"),
+          T("Сочетанием FluentSwitcher или Windows, щелчком по флагу. Звук – switch.wav в папке sounds рядом с "
+            "программой; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
+          "sound_switch");
+    sound(T("Звук при исправлении текста"),
+          T("Когда FluentSwitcher исправляет слово или выделенный текст. Звук – fix.wav в папке sounds"), "sound_fix");
 
     auto& layouts = m_edit.Json()["layouts_info"];
     if (!layouts.is_array() || layouts.empty())

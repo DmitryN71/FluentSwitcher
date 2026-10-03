@@ -15,5 +15,6 @@ if defined WXDIR if exist "%WXDIR%\CMakeLists.txt" set WXARG=-DFLUENTSWITCHER_WX
 cmake --preset x64-release %WXARG% || exit /b 1
 cmake --build build\x64-release || exit /b 1
 xcopy /e /i /y /q bin_files\flags build\x64-release\flags >nul
+if exist build\x64-release\sounds rmdir /s /q build\x64-release\sounds
 xcopy /e /i /y /q bin_files\sounds build\x64-release\sounds >nul
 echo Built %CD%\build\x64-release\FluentSwitcher.exe

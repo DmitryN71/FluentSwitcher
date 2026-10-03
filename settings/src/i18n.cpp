@@ -146,11 +146,14 @@ const std::unordered_map<std::string, const char*>& English()
         { "Тихий", "Quiet" },
         { "Средний", "Medium" },
         { "Громкий", "Loud" },
-        { "Звук при смене раскладки", "Sound of a layout change" },
-        { "Свой у каждого языка: английский выше, русский ниже, остальные – между ними. Звуки – в папке "
-          "sounds рядом с программой, их можно заменить своими WAV: en.wav, ru.wav, other.wav",
-          "Its own for each language: English higher, Russian lower, the others in between. The sounds are in the "
-          "sounds folder next to the app; they can be replaced with WAV files of your own: en.wav, ru.wav, other.wav" },
+        { "Звук при переключении раскладки", "Sound when the layout is switched" },
+        { "Сочетанием FluentSwitcher или Windows, щелчком по флагу. Звук – switch.wav в папке sounds рядом с "
+          "программой; положите туда en.wav, ru.wav – и у каждого языка будет свой",
+          "With a hotkey of FluentSwitcher or Windows, with a click on the flag. The sound is switch.wav in the "
+          "sounds folder next to the app; put en.wav, ru.wav there for a sound of each language" },
+        { "Звук при исправлении текста", "Sound when text is fixed" },
+        { "Когда FluentSwitcher исправляет слово или выделенный текст. Звук – fix.wav в папке sounds",
+          "When FluentSwitcher fixes a word or the selected text. The sound is fix.wav in the sounds folder" },
         { "Меню", "Menu" },
         { "Включить / выключить", "Turn on / off" },
         { "Щелчок по флагу у часов", "Click on the flag by the clock" },

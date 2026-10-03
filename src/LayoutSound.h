@@ -1,7 +1,8 @@
-// Звук при смене раскладки (sound_volume): короткий звук языка новой раскладки, как у Punto Switcher, - по нему
-// слышно, какая раскладка включилась. Файлы - в папке sounds рядом с программой: сначала <ru-ru>.wav, потом
-// <ru>.wav, иначе other.wav; свои звуки (tools/make_sounds.py) можно заменить любыми WAV. Громкость - уровнем
-// самих отсчётов (PCM 8/16 бит), остальные форматы играются как есть.
+// Звуки, как у Punto Switcher: короткий щелчок, когда раскладку переключили (своим сочетанием FluentSwitcher,
+// сочетанием Windows, щелчком по флагу) - sound_switch, и когда FluentSwitcher исправляет текст - sound_fix.
+// Переход в окно с другой раскладкой - не переключение, без звука. Файлы - в папке sounds рядом с программой:
+// переключение - <ru-ru>.wav, <ru>.wav, иначе switch.wav (свой звук языка - по желанию); исправление - fix.wav.
+// Любой можно заменить своим WAV. Громкость - уровнем самих отсчётов (PCM 8/16 бит), другие форматы - как есть.
 #pragma once
 
 #include <mmsystem.h>
@@ -15,6 +16,7 @@
 
 class LayoutSound {
 	HKL m_last = 0;
+	ULONGLONG m_fixAt = 0; // когда началось последнее исправление: его смена раскладки - без звука переключения
 	std::map<std::wstring, std::vector<char>> m_cache; // "<файл>|<громкость>" -> WAV в памяти (играет из неё)
 
 	static std::wstring Lower(std::wstring s) {
@@ -60,32 +62,19 @@ class LayoutSound {
 		return false;
 	}
 
-	static std::wstring FileFor(HKL lay) {
+	// Первый из файлов names.wav, который есть в папке sounds.
+	static std::wstring Find(const std::vector<std::wstring>& names) {
 		const std::wstring folder = (PathUtils::GetPath_folder_noLower2() / L"sounds").wstring() + L"\\";
-		const std::wstring name = Lower(Utils::GetNameForHKL_simple(lay)); // "ru-ru"
-		std::vector<std::wstring> tries{ name };
-		if (auto dash = name.find(L'-'); dash != std::wstring::npos) tries.push_back(name.substr(0, dash));
-		tries.push_back(L"other");
-		for (const auto& t : tries) {
-			const std::wstring path = folder + t + L".wav";
+		for (const auto& name : names) {
+			const std::wstring path = folder + name + L".wav";
 			if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) return path;
 		}
 		return {};
 	}
 
-public:
-	// Раскладка у окна впереди (WM_LayNotif). Первая известная - без звука; потом - при каждой смене.
-	void OnLayout(HKL lay) {
-		if (!lay) return;
-		if (!m_last || lay == m_last) {
-			m_last = lay;
-			return;
-		}
-		m_last = lay;
-		const int volume = std::clamp(conf_get_unsafe()->sound_volume, 0, 100);
-		if (volume == 0) return;
-		const std::wstring path = FileFor(lay);
-		if (path.empty()) return;
+	void Play(const std::wstring& path, int volume) {
+		volume = std::clamp(volume, 0, 100);
+		if (path.empty() || volume == 0) return;
 		const std::wstring key = path + L"|" + std::to_wstring(volume);
 		auto it = m_cache.find(key);
 		if (it == m_cache.end()) {
@@ -102,6 +91,32 @@ public:
 		LOG_ANY(L"sound: {} at {}%", path, volume);
 		// Из памяти и не дожидаясь конца; следующий звук прерывает этот, буфер в кэше живёт дальше.
 		PlaySoundW((LPCWSTR)it->second.data(), nullptr, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+	}
+
+public:
+	// Раскладка у окна впереди сменилась (WM_LayNotif). Первая известная - без звука; otherWindow - перешли в окно
+	// со своей раскладкой, это не переключение; сразу после начала исправления - звук был свой.
+	void OnLayout(HKL lay, bool otherWindow) {
+		if (!lay) return;
+		if (!m_last || lay == m_last) {
+			m_last = lay;
+			return;
+		}
+		m_last = lay;
+		if (otherWindow || GetTickCount64() - m_fixAt < 1500) return;
+		const int volume = conf_get_unsafe()->sound_switch;
+		if (volume <= 0) return;
+		const std::wstring name = Lower(Utils::GetNameForHKL_simple(lay)); // "ru-ru"
+		std::vector<std::wstring> names{ name };
+		if (auto dash = name.find(L'-'); dash != std::wstring::npos) names.push_back(name.substr(0, dash));
+		names.push_back(L"switch");
+		Play(Find(names), volume);
+	}
+
+	// FluentSwitcher начинает исправлять текст (WM_TextFixed).
+	void OnFix() {
+		m_fixAt = GetTickCount64();
+		Play(Find({ L"fix" }), conf_get_unsafe()->sound_fix);
 	}
 
 	// Настройки перечитаны: файлы могли смениться. Звук из кэша сначала останавливается - он играет из его памяти.

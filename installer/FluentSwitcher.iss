@@ -77,6 +77,7 @@ Filename: "{app}\FluentSwitcher.exe"; Parameters: "--cleanup"; RunOnceId: "Clean
 
 [UninstallDelete]
 Type: files; Name: "{app}\FluentSwitcher.json"
+Type: files; Name: "{app}\update.json"
 Type: filesandordirs; Name: "{app}\log"
 Type: dirifempty; Name: "{app}"
 

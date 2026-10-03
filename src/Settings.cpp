@@ -111,6 +111,7 @@ namespace nlohmann {
 			ui_skin,
 			ui_theme,
 			record_sides,
+			check_updates,
 			gui_lang,
 			ShowLangsInTrayMenu,
 			ShowReminderInTrayMenu,

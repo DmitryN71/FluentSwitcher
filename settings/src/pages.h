@@ -13,6 +13,8 @@
 #include <functional>
 #include <vector>
 
+namespace Update { struct State; } // Update.h
+
 
 class SettingsFrame : public wxFrame
 {
@@ -39,6 +41,10 @@ private:
     void FillCommands(); // the cards of the commands again (one added, removed, its kind changed)
     void BuildAdvanced();
     void BuildAbout();
+    // What the last update check found (update.json, Update.h); m_updatePage: a newer version's page, the
+    // page of all versions when GitHub could not be reached (the browser may still get there), or empty.
+    wxString UpdateText(const Update::State& state);
+    void CheckUpdateNow(FluentButton* button);
 
     void ShowSection(int section);
     // A note if another action has the hotkey `one` too.
@@ -73,6 +79,9 @@ private:
     wxBoxSizer* m_column = nullptr;
     std::vector<wxScrolledWindow*> m_pages;
     wxArrayString m_titles;
+
+    wxStaticText* m_updateLabel = nullptr; // the description of the "Обновления" card
+    wxString m_updatePage;
 
     wxScrolledWindow* m_commandsPage = nullptr;
     wxBoxSizer* m_commandsColumn = nullptr;

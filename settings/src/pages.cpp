@@ -5,11 +5,14 @@
 #include "hotkeys.h"
 #include "icons.h"
 
+#include <wx/datetime.h>
 #include <wx/dcbuffer.h>
 #include <wx/dir.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/utils.h>
+
+#include "../../src/Update.h" // after wxWidgets: Windows headers of its own
 
 namespace
 {
@@ -736,7 +739,7 @@ void SettingsFrame::BuildAdvanced()
                             const wxString folder = m_folder + "\\log";
                             if (!wxDirExists(folder))
                                 return SetStatus(T("Журнала ещё нет: включите его выше и повторите ошибку"), true);
-                            wxLaunchDefaultApplication(folder);
+                            OpenAsUser(folder.ToStdWstring());
                         });
                         return open;
                     });
@@ -752,10 +755,25 @@ void SettingsFrame::BuildAbout()
                     [](wxWindow* card) {
                         FluentButton* open = new FluentButton(card, wxID_ANY, T("Открыть на GitHub"));
                         open->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
-                            wxLaunchDefaultBrowser("https://github.com/DmitryN71/FluentSwitcher");
+                            OpenAsUser(L"https://github.com/DmitryN71/FluentSwitcher");
                         });
                         return open;
                     });
+    Toggle(T("Проверять обновления"),
+           T("Раз в день программа спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
+             "Скачивать и ставить новую – решаете вы"),
+           "check_updates", true);
+    // "Проверить сейчас"; once a newer version is known, "Скачать" opens its page; when GitHub could not be
+    // reached, "Открыть страницу загрузки" leaves it to the browser.
+    m_updateLabel = AddSettingsCard(m_page, m_column, T("Обновления"), UpdateText(Update::Load(m_folder.ToStdWstring())),
+                                    [this](wxWindow* card) {
+                                        FluentButton* button = new FluentButton(card, wxID_ANY, T("Проверить сейчас"));
+                                        button->Bind(wxEVT_BUTTON, [this, button](wxCommandEvent&) { CheckUpdateNow(button); });
+                                        if (!m_updatePage.empty())
+                                            button->SetText(m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")
+                                                                                                : T("Скачать"));
+                                        return button;
+                                    });
     AddSettingsCard(m_page, m_column, T("Основан на SimpleSwitcher"),
                     T("Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: окно настроек и флаги в стиле "
                       "Windows 11, флажок у курсора, исправление с начала строки, запуск от администратора без "
@@ -763,7 +781,7 @@ void SettingsFrame::BuildAbout()
                     [this](wxWindow* card) {
                         FluentButton* open = new FluentButton(card, wxID_ANY, T("Открыть на GitHub"));
                         open->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
-                            wxLaunchDefaultBrowser("https://github.com/Aegel5/SimpleSwitcher");
+                            OpenAsUser(L"https://github.com/Aegel5/SimpleSwitcher");
                         });
                         return open;
                     });
@@ -778,11 +796,67 @@ void SettingsFrame::BuildAbout()
                             const wxString notices = m_folder + "\\THIRD-PARTY-NOTICES.txt";
                             if (!wxFileName::FileExists(notices))
                                 return SetStatus(T("Рядом с программой нет файла THIRD-PARTY-NOTICES.txt"), true);
-                            wxLaunchDefaultApplication(notices);
+                            OpenAsUser(notices.ToStdWstring());
                         });
                         return open;
                     });
     FinishPage();
+}
+
+wxString SettingsFrame::UpdateText(const Update::State& state)
+{
+    m_updatePage.clear();
+    if (state.failed)
+    {
+        m_updatePage = Update::kReleasesPage;
+        return T("Не удалось связаться с GitHub. Страница загрузки откроется в браузере");
+    }
+    if (!state.checkedAt || state.latest.empty())
+        return T("Ещё не проверялось");
+    const wxString when = wxString::Format(T("Проверено: %s"),
+                                           wxDateTime((time_t)(state.checkedAt / 1000)).Format("%d.%m.%Y, %H:%M"));
+    const wxString dot = wxString::FromUTF8(" \xC2\xB7 ");
+    if (Update::NewerKnown(state))
+    {
+        m_updatePage = state.page.empty() ? wxString(Update::kReleasesPage) : wxString(state.page);
+        return wxString::Format(T("Вышла версия %s"), wxString::FromUTF8(state.latest)) + dot + when;
+    }
+    return T("У вас последняя версия") + dot + when;
+}
+
+void SettingsFrame::CheckUpdateNow(FluentButton* button)
+{
+    if (!m_updatePage.empty())
+    {
+        OpenAsUser(m_updatePage.ToStdWstring());
+        return;
+    }
+    // Seen at once, before the wait for GitHub (some 10 s when there is no network).
+    wxBusyCursor busy;
+    button->Enable(false);
+    SetCardDescription(m_updateLabel, T("Проверяю…"));
+    m_updateLabel->GetParent()->Update();
+    const Update::Result result = Update::Check();
+    const std::wstring folder = m_folder.ToStdWstring();
+    Update::State state = Update::Load(folder);
+    Update::Apply(state, result, true);
+    if (Update::NewerKnown(state))
+        state.notified = state.latest; // seen here: the engine does not tell about it by the clock again
+    if (!Update::Save(folder, state))
+        SetStatus(T("Не удалось записать update.json в папку программы"), true);
+    SetCardDescription(m_updateLabel, UpdateText(state));
+    button->SetText(m_updatePage.empty()                   ? T("Проверить сейчас")
+                    : m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")
+                                                            : T("Скачать"));
+    button->Enable(true);
+    // The card may have grown: its page lays out again (m_page is the page being built, not this one).
+    for (wxWindow* w = m_updateLabel; w; w = w->GetParent())
+        if (wxScrolledWindow* page = wxDynamicCast(w, wxScrolledWindow))
+        {
+            page->Layout();
+            page->FitInside();
+            break;
+        }
 }
 
 void SettingsFrame::FinishPage()

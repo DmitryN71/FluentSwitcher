@@ -1,9 +1,10 @@
-// Главный поток движка: служебное окно (таймеры, команды окна настроек - SettingsIpc.h), значок у часов
-// и флажок у текстового курсора. Окно настроек - этот же exe с --settings, своим процессом (settings/).
+// Главный поток движка: служебное окно (таймеры, команды окна настроек - SettingsIpc.h), значок у часов,
+// флажок у текстового курсора и проверка обновлений (Update.h). Окно настроек - этот же exe с --settings, своим процессом (settings/).
 
 #include "TrayIcon.h"
 #include "CaretFlag.h"
 #include "SettingsIpc.h"
+#include "Update.h"
 #include "utils/WinTimer.h"
 
 void StartGui() {
@@ -19,6 +20,34 @@ void StartGui() {
 	TrayIcon trayIcon;
 	CaretFlag caretFlag;
 
+	// Проверка обновлений: раз в минуту смотрим, не пора ли. Пора - через день после прошлого ответа GitHub
+	// (первый раз - через минуту после запуска), после неудачи - не раньше чем через 6 часов. Запрос - в своём
+	// потоке, ответ приходит сюда как WM_UpdateResult.
+	const std::wstring folder = PathUtils::GetPath_folder_noLower2().wstring();
+	struct {
+		long long nextLook = 0; // раньше этого update.json даже не читаем
+		long long lastTry = 0;
+		bool busy = false;
+	} updates;
+	timer.CycleTimer([&] {
+		if (!conf_get_unsafe()->check_updates || updates.busy) return;
+		const long long now = Update::NowMs();
+		if (now < updates.nextLook) return;
+		updates.nextLook = now + 60LL * 60 * 1000; // не позже чем через час: файл могло обновить окно настроек
+		const auto state = Update::Load(folder);
+		if (now - state.checkedAt < Update::kDayMs) {
+			updates.nextLook = std::min(updates.nextLook, state.checkedAt + Update::kDayMs);
+			return;
+		}
+		if (now - updates.lastTry < 6LL * 60 * 60 * 1000) return;
+		updates.lastTry = now;
+		updates.busy = true;
+		std::thread([hwnd = g_guiHandle] {
+			auto* result = new Update::Result(Update::Check());
+			if (!PostMessageW(hwnd, WM_UpdateResult, 0, (LPARAM)result)) delete result;
+		}).detach();
+	}, 60 * 1000);
+
 	timer.CustomHandler(
 		[&](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			if (msg == WM_ShowWindow) {
@@ -33,6 +62,27 @@ void StartGui() {
 						LOG_WARN(L"can't start {} --settings: {}", exe, (int)res);
 					}
 				}
+				return 0;
+			}
+
+			if (msg == WM_UpdateResult) {
+				std::unique_ptr<Update::Result> result(reinterpret_cast<Update::Result*>(lParam));
+				updates.busy = false;
+				if (!result->ok) {
+					LOG_WARN("update check: {}", result->error);
+					return 0;
+				}
+				LOG_ANY("update check: latest {}", result->latest);
+				auto state = Update::Load(folder);
+				Update::Apply(state, *result, false);
+				// О новой версии - один раз; щелчок по уведомлению открывает её страницу.
+				if (Update::NewerKnown(state) && state.notified != state.latest) {
+					const auto title = StrUtils::Convert(std::vformat(LOC("FluentSwitcher {} is out"), std::make_format_args(state.latest)));
+					const auto text = StrUtils::Convert(std::string(LOC("Click to open the download page")));
+					if (trayIcon.Notify(title, text, [page = state.page] { OpenAsUser(page); }))
+						state.notified = state.latest;
+				}
+				Update::Save(folder, state);
 				return 0;
 			}
 

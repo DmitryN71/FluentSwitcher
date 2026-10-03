@@ -284,6 +284,23 @@ const std::unordered_map<std::string, const char*>& English()
           "Windows 11 style, the flag at the cursor, fixing from the start of the line, running as administrator "
           "without prompts and other fixes" },
         { "Открыть на GitHub", "Open on GitHub" },
+        { "Проверять обновления", "Check for updates" },
+        { "Раз в день программа спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
+          "Скачивать и ставить новую – решаете вы",
+          "Once a day the app asks GitHub for the number of the latest version and sends nothing else. "
+          "Whether to download and install it is up to you" },
+        { "Обновления", "Updates" },
+        { "Проверить сейчас", "Check now" },
+        { "Скачать", "Download" },
+        { "Открыть страницу загрузки", "Open the download page" },
+        { "Проверяю…", "Checking…" },
+        { "Ещё не проверялось", "Not checked yet" },
+        { "Проверено: %s", "Checked: %s" },
+        { "Вышла версия %s", "Version %s is out" },
+        { "У вас последняя версия", "You have the latest version" },
+        { "Не удалось связаться с GitHub. Страница загрузки откроется в браузере",
+          "Could not reach GitHub. The download page opens in the browser" },
+        { "Не удалось записать update.json в папку программы", "Could not write update.json in the app's folder" },
         { "Лицензия GPL-3.0", "GPL-3.0 license" },
         { "Программа бесплатная, исходный код открыт. Поставляется без каких-либо гарантий. Части "
           "других авторов – под своими лицензиями: wxWidgets, оформление FluentClipper, значки Fluent "

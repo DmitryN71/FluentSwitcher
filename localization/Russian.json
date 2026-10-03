@@ -89,5 +89,7 @@
   "Delete": "Удалить",
   "Run now": "Запустить сейчас",
   "Need admin rights": "Требуются права администратора",
-  "Error loading config file": "Ошибка загрузки файла конфигурации"
+  "Error loading config file": "Ошибка загрузки файла конфигурации",
+  "FluentSwitcher {} is out": "Вышла FluentSwitcher {}",
+  "Click to open the download page": "Нажмите, чтобы открыть страницу загрузки"
 }

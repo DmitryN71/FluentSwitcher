@@ -25,6 +25,9 @@ free and open source under GPL-3.0.
 - **Works in apps run as administrator**: Windows asks once, after that FluentSwitcher starts through the Task
   Scheduler without asking.
 - The settings window is in English and Russian, its theme as in Windows, light or dark.
+- **Update check**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
+  it tells about a new version with a notification by the clock, whether to download and install it is up to
+  you. Turned off in "About", where "Check now" is too.
 
 The default hotkeys: Shift twice – the last word, or the selected text when no word was typed;
 Shift + CapsLock – several words, Ctrl + CapsLock – all recent text, Win + F8 – on / off, Win + Shift –

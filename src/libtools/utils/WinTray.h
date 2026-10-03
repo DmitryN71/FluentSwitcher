@@ -18,6 +18,7 @@ private:
 
 	std::function<void()> double_click;
 	std::function<void()> r_click;
+	std::function<void()> balloon_click;
 	std::function<std::vector<TrayItem>()> createMenu;
 	std::vector<TrayItem> last_menu;
 
@@ -90,6 +91,11 @@ private:
 					Inst->double_click();
 				}
 			}
+			else if (lParam == NIN_BALLOONUSERCLICK) {
+				if (Inst->balloon_click) {
+					Inst->balloon_click();
+				}
+			}
 			break;
 		}
 
@@ -122,6 +128,10 @@ public:
 	void OnRight(auto&& func) {
 		r_click = std::move(func);
 	}
+	// Щелчок по уведомлению (ShowBalloon).
+	void OnBalloonClick(auto&& func) {
+		balloon_click = std::move(func);
+	}
 
 	WinTray() {
 		Inst = this;
@@ -150,6 +160,15 @@ public:
 				// todo - by timer
 			}
 		}
+	}
+	// Уведомление у значка (в Windows 10/11 - всплывающее сообщение и Центр уведомлений). Значка нет - нет и его.
+	bool ShowBalloon(const std::wstring& title, const std::wstring& text) {
+		NOTIFYICONDATA balloon = nid;
+		balloon.uFlags = NIF_INFO;
+		wcsncpy_s(balloon.szInfoTitle, title.c_str(), _TRUNCATE);
+		wcsncpy_s(balloon.szInfo, text.c_str(), _TRUNCATE);
+		balloon.dwInfoFlags = NIIF_INFO | NIIF_RESPECT_QUIET_TIME;
+		return Shell_NotifyIcon(NIM_MODIFY, &balloon) != FALSE;
 	}
 	void DeleteIcon() {
 		Shell_NotifyIcon(NIM_DELETE, &nid); // Remove icon from tray

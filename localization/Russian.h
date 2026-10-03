@@ -1,7 +1,7 @@
 #include <utility>
 #include <array>
 
-constexpr std::array<std::pair<const char*, const char*>, 91> _Localization_Russian = {{
+constexpr std::array<std::pair<const char*, const char*>, 93> _Localization_Russian = {{
     {"More info:", "Подробнее:"},
     {"❤ Support ❤", "❤ Поддержать ❤"},
     {"The program develops only thanks to your support! 🤝", "Программа развивается только благодаря вашей поддержке! 🤝"},
@@ -92,5 +92,7 @@ constexpr std::array<std::pair<const char*, const char*>, 91> _Localization_Russ
     {"Delete", "Удалить"},
     {"Run now", "Запустить сейчас"},
     {"Need admin rights", "Требуются права администратора"},
-    {"Error loading config file", "Ошибка загрузки файла конфигурации"}
+    {"Error loading config file", "Ошибка загрузки файла конфигурации"},
+    {"FluentSwitcher {} is out", "Вышла FluentSwitcher {}"},
+    {"Click to open the download page", "Нажмите, чтобы открыть страницу загрузки"}
 }};

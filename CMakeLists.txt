@@ -39,7 +39,7 @@ endif()
 
 
 # Версия FluentSwitcher - одна на программу, свойства файла и окно настроек: build/.../generated/fs_version.h.
-set(FLUENTSWITCHER_VERSION 1.1.0)
+set(FLUENTSWITCHER_VERSION 1.2.0)
 string(REPLACE "." ";" fs_version_parts ${FLUENTSWITCHER_VERSION})
 list(GET fs_version_parts 0 FLUENTSWITCHER_VERSION_MAJOR)
 list(GET fs_version_parts 1 FLUENTSWITCHER_VERSION_MINOR)

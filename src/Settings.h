@@ -112,6 +112,8 @@ public:
 	string ui_theme = "";
 	// Окно настроек: записывать левые и правые Ctrl, Shift, Alt, Win по отдельности.
 	bool record_sides = false;
+	// Раз в день спрашивать у GitHub номер последней версии (Update.h).
+	bool check_updates = true;
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
 	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
 	bool useBritishFlag = false;

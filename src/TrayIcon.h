@@ -43,6 +43,13 @@ public:
 			return res;
 			});
 	}
+	// Уведомление у флага, щелчок по нему - onClick. Флаг у часов скрыт ("Nothing") - уведомления нет.
+	bool Notify(const std::wstring& title, const std::wstring& text, std::function<void()> onClick) {
+		if (conf_get_unsafe()->flagsSet == ProgramConfig::showFlags_Nothing)
+			return false;
+		tray.OnBalloonClick(std::move(onClick));
+		return tray.ShowBalloon(title, text);
+	}
 	void Update(HKL lay = 0) {
 
 		if (lay != 0) {

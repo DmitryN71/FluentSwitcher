@@ -3,6 +3,12 @@
 #include "LayoutConvert.h"
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
+    if (keyData.held_end) {
+        // Хук придержал Enter / Tab после слова: исправить и отпустить. Сама клавиша придёт потом, как обычный набор.
+        struct Release { ~Release() { KeyHold::RequestRelease(); } } release;
+        FixTwoCaps(false);
+        return;
+    }
     TKeyCode vkCode = keyData.vkCode;
     auto scan_ext = keyData.scan_ext;
 
@@ -125,10 +131,10 @@ bool IsPasswordFocus() {
 }
 }
 
-void WorkerImplement::FixTwoCaps() {
+void WorkerImplement::FixTwoCaps(bool afterSpace) {
     GETCONF;
     if (!cfg->two_caps || !KeyHold::fixAllowed || cfg->IsSkipProgramTop() || IsPasswordFocus()) return;
-    auto keys = m_cycleList.LastWordKeys();
+    auto keys = afterSpace ? m_cycleList.LastWordKeys() : m_cycleList.TrailingWordKeys();
     if (keys.empty()) return;
     const HKL lay = CurLay();
     std::wstring text;
@@ -140,14 +146,37 @@ void WorkerImplement::FixTwoCaps() {
     }
     const auto fix = TwoCaps::Analyze(text, TwoCapsExceptions());
     if (fix.tail.empty()) return;
+    // Слово, набранное в чужой раскладке ("GJgsnrf" - не английское, "попытка" - русское): правило его не трогает, его
+    // исправит перевод раскладки, и сразу с заглавными ("Попытка"). Словари - Windows (WinDictionary.h); нет словаря -
+    // как раньше.
+    if (SpellCheck::Check(fix.word, Utils::GetNameForHKL_simple(lay)) == SpellCheck::Result::NotWord) {
+        for (HKL other : cfg->layouts_info.EnabledLayouts()) {
+            if (other == lay) continue;
+            std::wstring there;
+            for (auto* key : keys) there += InputSender::KeyText(*key, other, false);
+            size_t begin = 0, end = there.size();
+            while (begin < end && !TwoCaps::IsLetter(there[begin])) begin++;
+            while (end > begin && !TwoCaps::IsLetter(there[end - 1])) end--;
+            const std::wstring word = there.substr(begin, end - begin);
+            if (!word.empty() && SpellCheck::Check(word, Utils::GetNameForHKL_simple(other)) == SpellCheck::Result::Word) {
+                LOG_ANY(L"two caps: {} is {} in the other layout, left for the layout fix", fix.word, word);
+                return;
+            }
+        }
+    }
     const std::wstring typed = text.substr(fix.from);
     LOG_ANY(L"two caps: {} -> {}{}", text, text.substr(0, fix.from), fix.tail);
     TextFixed();
     const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
-    InputSender::SendVkKeyPaced(VK_BACK, (int)typed.size() + 1, delay); // со второй буквы и пробел
-    InputSender::SendTextPaced(fix.tail + L" ", delay);
+    const std::wstring space = afterSpace ? L" " : L"";
+    InputSender::SendVkKeyPaced(VK_BACK, (int)(typed.size() + space.size()), delay); // со второй буквы (и пробел)
+    InputSender::SendTextPaced(fix.tail + space, delay);
     keys[fix.from]->is_shift = false; // и в буфере слов вторая буква теперь строчная
-    m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from] };
+    // Отмена - только после пробела: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
+    if (afterSpace)
+        m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from] };
+    else
+        m_twoCaps = {};
 }
 
 std::vector<std::wstring> WorkerImplement::TwoCapsExceptions() {

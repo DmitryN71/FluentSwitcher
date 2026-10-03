@@ -12,7 +12,7 @@ free and open source under GPL-3.0.
 
 - **Fixes the last word** typed in the wrong layout: erases it, types it in the other layout and switches to it.
 - **Fixes the selected text** in any app.
-- **TWo INitial CApitals**: "THis" becomes "This" after a space. PCs, IDs, GHz, eM, iPhone are left alone, and there
+- **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab. PCs, IDs, GHz, eM, iPhone are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back and remembers it.
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.

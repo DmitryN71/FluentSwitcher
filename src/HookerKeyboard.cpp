@@ -319,6 +319,17 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					KeyHold::Start();
 				}
 			}
+			else if ((vkCode == VK_RETURN || vkCode == VK_TAB) && KeyHold::CandidateAtSpace() && !replayed &&
+				curk.Size() == 1 && cfg->two_caps && g_enabled.IsEnabled() && KeyHold::CanHold()) {
+				// Enter или Tab сразу после "ДВух": они действуют сразу (сообщение уходит, курсор в другое поле), поэтому
+				// ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе с придержанными.
+				LOG_ANY("hold: Enter / Tab waits for the two caps check");
+				KeyHold::Start();
+				KeyHold::Hold(*k);
+				held_event = true;
+				Worker()->PostMsg(Message_KeyType{ .vkCode = vkCode, .cur_hotKey = curk, .held_end = true });
+				return;
+			}
 			else {
 				KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,
 					curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN));

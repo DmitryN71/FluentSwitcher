@@ -6,6 +6,7 @@ struct Message_KeyType {
 	CHotKey cur_hotKey;
 	bool is_caps = false;
 	bool hold = false; // пробел, после которого хук придерживает нажатия: решить про ДВе ЗАглавные и отпустить
+	bool held_end = false; // Enter / Tab, придержанный хуком до исправления слова: только исправить (сама клавиша придёт потом)
 };
 
 struct Message_Hotkey {

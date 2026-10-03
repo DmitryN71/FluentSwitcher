@@ -243,6 +243,16 @@ public: std::vector<TKeyBaseInfo*> LastWordKeys() {
 	std::reverse(keys.begin(), keys.end());
 	return keys;
 }
+// Клавиши слова в самом конце набранного (за ним ещё ничего): Enter / Tab придержан и в буфер не попал.
+public: std::vector<TKeyBaseInfo*> TrailingWordKeys() {
+	std::vector<TKeyBaseInfo*> keys;
+	for (int i = (int)m_symbolList.size() - 1; i >= 0; --i) {
+		if (m_symbolList[i].key.type == KEYTYPE_SPACE) break;
+		keys.push_back(&m_symbolList[i].key);
+	}
+	std::reverse(keys.begin(), keys.end());
+	return keys;
+}
 public: void SetSeparateLast() {
 	if (!m_symbolList.empty())
 		m_symbolList.back().is_last_revert = true;

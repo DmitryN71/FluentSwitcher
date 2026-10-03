@@ -146,7 +146,8 @@ class WorkerImplement {
     static void TextFixed() { PostMessage(g_guiHandle, WM_TextFixed, 0, 0); }
 
     // ДВе ЗАглавные (TwoCaps.h): слово перед только что набранным пробелом; хук держит нажатия, пока решаем.
-    void FixTwoCaps();
+    // afterSpace: слово кончилось набранным пробелом (его тоже стереть и напечатать); иначе - придержанным Enter / Tab.
+    void FixTwoCaps(bool afterSpace = true);
     // Исключения из настроек - для TwoCaps.h.
     static std::vector<std::wstring> TwoCapsExceptions();
     // ДВе ЗАглавные и при переводе раскладки: "LDe[" -> "ДВух" -> "Двух" - вторые буквы без Shift.

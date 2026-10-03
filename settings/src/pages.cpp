@@ -408,7 +408,7 @@ void SettingsFrame::BuildTyping()
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions (an array
     // in the file, words with spaces between them here).
     Toggle(T("Исправлять ДВе ЗАглавные"),
-           T("«ДВух» после пробела станет «Двух». PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
+           T("«ДВух» станет «Двух» после пробела, Enter или Tab. PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
              "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Тот же "
              "перевод раскладки исправляет и ДВе ЗАглавные: LDe[ – Двух"),
            "two_caps", false);

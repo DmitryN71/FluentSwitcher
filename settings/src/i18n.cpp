@@ -144,10 +144,10 @@ const std::unordered_map<std::string, const char*>& English()
         { "Нет", "None" },
         { "Ничего", "Nothing" },
         { "Исправлять ДВе ЗАглавные", "Fix TWo INitial CApitals" },
-        { "«ДВух» после пробела станет «Двух». PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
+        { "«ДВух» станет «Двух» после пробела, Enter или Tab. PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
           "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Тот же "
           "перевод раскладки исправляет и ДВе ЗАглавные: LDe[ – Двух",
-          "“THis” becomes “This” after a space. PCs, IDs, GHz, eM, iPhone and the exceptions are left alone. "
+          "“THis” becomes “This” after a space, Enter or Tab. PCs, IDs, GHz, eM, iPhone and the exceptions are left alone. "
           "Fixed by mistake? Press “Fix the last word” (Shift twice) right away: the word comes back. A layout fix "
           "fixes TWo INitial CApitals too: ЕРшы becomes This" },
         { "Исключения для ДВух ЗАглавных", "Exceptions for TWo INitial CApitals" },

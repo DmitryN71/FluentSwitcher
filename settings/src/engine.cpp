@@ -90,6 +90,11 @@ bool SetLogging(HWND engine, bool on)
     return Command(engine, L"SimpleSwitcher.SetLogging", on);
 }
 
+bool UpdateChecked(HWND engine)
+{
+    return Command(engine, L"SimpleSwitcher.UpdateChecked");
+}
+
 bool Start(const wxString& folder, const wxString& args, bool elevated)
 {
     const wxString exe = wxFileName(folder, "FluentSwitcher.exe").GetFullPath();

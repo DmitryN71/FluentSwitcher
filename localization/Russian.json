@@ -91,5 +91,7 @@
   "Need admin rights": "Требуются права администратора",
   "Error loading config file": "Ошибка загрузки файла конфигурации",
   "FluentSwitcher {} is out": "Вышла FluentSwitcher {}",
-  "Click to open the download page": "Нажмите, чтобы открыть страницу загрузки"
+  "Click to open the download page": "Нажмите, чтобы открыть страницу загрузки",
+  "You have the latest version": "У вас последняя версия",
+  "Could not reach GitHub": "Не удалось связаться с GitHub"
 }

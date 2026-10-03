@@ -47,6 +47,27 @@ void StartGui() {
 			if (!PostMessageW(hwnd, WM_UpdateResult, 0, (LPARAM)result)) delete result;
 		}).detach();
 	}, 60 * 1000);
+	// Уведомление у флага о том, что нашла проверка. Само по себе - только о новой версии, один раз на версию
+	// (щелчок открывает её страницу); после "Проверить сейчас" в окне настроек - всегда, с любым ответом, чтобы
+	// было видно, что нажатие что-то сделало (как у FluentClipper).
+	auto notifyUpdate = [&](Update::State& state, bool manual) {
+		if (Update::NewerKnown(state)) {
+			if (!manual && state.notified == state.latest) return;
+			const auto title = StrUtils::Convert(std::vformat(LOC("FluentSwitcher {} is out"), std::make_format_args(state.latest)));
+			const auto text = StrUtils::Convert(std::string(LOC("Click to open the download page")));
+			const bool shown = trayIcon.Notify(title, text, [page = state.page] { OpenAsUser(page); });
+			LOG_ANY("update: note about {} shown {}", state.latest, shown);
+			if (shown)
+				state.notified = state.latest;
+		}
+		else if (manual) {
+			const std::string version = FS_VERSION;
+			const bool shown = trayIcon.Notify(L"FluentSwitcher " + std::wstring(version.begin(), version.end()),
+				StrUtils::Convert(std::string(state.failed ? LOC("Could not reach GitHub") : LOC("You have the latest version"))),
+				nullptr);
+			LOG_ANY("update: note after the check (failed {}) shown {}", state.failed, shown);
+		}
+	};
 
 	timer.CustomHandler(
 		[&](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -75,13 +96,14 @@ void StartGui() {
 				LOG_ANY("update check: latest {}", result->latest);
 				auto state = Update::Load(folder);
 				Update::Apply(state, *result, false);
-				// О новой версии - один раз; щелчок по уведомлению открывает её страницу.
-				if (Update::NewerKnown(state) && state.notified != state.latest) {
-					const auto title = StrUtils::Convert(std::vformat(LOC("FluentSwitcher {} is out"), std::make_format_args(state.latest)));
-					const auto text = StrUtils::Convert(std::string(LOC("Click to open the download page")));
-					if (trayIcon.Notify(title, text, [page = state.page] { OpenAsUser(page); }))
-						state.notified = state.latest;
-				}
+				notifyUpdate(state, false);
+				Update::Save(folder, state);
+				return 0;
+			}
+
+			if (msg == WM_UpdateChecked) {
+				auto state = Update::Load(folder);
+				notifyUpdate(state, true);
 				Update::Save(folder, state);
 				return 0;
 			}

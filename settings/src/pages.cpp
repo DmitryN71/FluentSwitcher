@@ -844,6 +844,9 @@ void SettingsFrame::CheckUpdateNow(FluentButton* button)
         state.notified = state.latest; // seen here: the engine does not tell about it by the clock again
     if (!Update::Save(folder, state))
         SetStatus(T("Не удалось записать update.json в папку программы"), true);
+    // The answer also comes as a note by the flag, as in FluentClipper.
+    if (HWND engine = Engine::Find(m_folder, m_enginePid))
+        Engine::UpdateChecked(engine);
     SetCardDescription(m_updateLabel, UpdateText(state));
     button->SetText(m_updatePage.empty()                   ? T("Проверить сейчас")
                     : m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")

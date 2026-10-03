@@ -9,6 +9,7 @@ static const UINT WM_LayNotif = 0xBFFF - 29;
 static const UINT WM_ShowWindow = 0xBFFF - 30; 
 static const UINT WM_ClearWordsBuffer = 0xBFFF - 28; 
 static const UINT WM_UpdateResult = 0xBFFF - 27; // lParam - Update::Result* от потока проверки (gui2/main.cpp)
+static const UINT WM_UpdateChecked = 0xBFFF - 26; // окно настроек проверило обновления: уведомление с ответом
 
 static const UINT c_timerKeyloggerDefence = 12;
 static const TChar c_sArgAutostart[] = L"/autostart";

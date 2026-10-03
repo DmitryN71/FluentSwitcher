@@ -33,6 +33,8 @@ bool Quit(HWND engine);
 bool RunCommand(HWND engine, int index);
 // The debug log (log\FluentSwitcher.exe.log next to the engine), until the engine quits.
 bool SetLogging(HWND engine, bool on);
+// The window checked for updates (update.json): the engine tells the answer with a note by the flag.
+bool UpdateChecked(HWND engine);
 
 // Starts FluentSwitcher.exe from `folder` with `args`; `elevated`: as administrator (Windows asks).
 // False if it is not there or does not start (also when the user says No to Windows).

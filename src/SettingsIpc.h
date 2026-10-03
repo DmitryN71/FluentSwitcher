@@ -14,6 +14,7 @@
 //   SimpleSwitcher.Quit                  -> 1; движок закрывается, как по "Выход" в меню трея
 //   SimpleSwitcher.RunCommand (номер)    -> 1; выполнить команду run_programs[номер], как по её сочетанию
 //   SimpleSwitcher.SetLogging (0/1)      -> 1; журнал отладки (log\FluentSwitcher.exe.log) до выхода движка
+//   SimpleSwitcher.UpdateChecked         -> 1; окно проверило обновления (update.json): уведомление у флага с ответом
 //
 // Движок, запущенный от администратора, пропускает эти сообщения из обычной программы (ChangeWindowMessageFilterEx).
 
@@ -34,9 +35,10 @@ namespace SettingsIpc {
 	inline const UINT msgQuit = RegisterWindowMessageW(L"SimpleSwitcher.Quit");
 	inline const UINT msgRunCommand = RegisterWindowMessageW(L"SimpleSwitcher.RunCommand");
 	inline const UINT msgSetLogging = RegisterWindowMessageW(L"SimpleSwitcher.SetLogging");
+	inline const UINT msgUpdateChecked = RegisterWindowMessageW(L"SimpleSwitcher.UpdateChecked");
 
 	inline void AllowFromNormalPrograms(HWND hwnd) {
-		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart, msgQuit, msgRunCommand, msgSetLogging }) {
+		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart, msgQuit, msgRunCommand, msgSetLogging, msgUpdateChecked }) {
 			IFW_LOG(ChangeWindowMessageFilterEx(hwnd, msg, MSGFLT_ALLOW, nullptr));
 		}
 	}
@@ -89,6 +91,10 @@ namespace SettingsIpc {
 		}
 		if (msg == msgSetLogging) {
 			SetLogLevel_print_info(wParam ? conf_get_unsafe()->logLevel : LOG_LEVEL_DISABLE);
+			return 1;
+		}
+		if (msg == msgUpdateChecked) {
+			PostMessageW(g_guiHandle, WM_UpdateChecked, 0, 0); // уведомление показывает значок (gui2/main.cpp)
 			return 1;
 		}
 		if (msg == msgQuit) {

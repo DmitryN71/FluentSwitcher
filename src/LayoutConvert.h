@@ -7,6 +7,10 @@
 // выбор при неверно определённой текущей раскладке превращал "rjv,byfwbz" в "ком,инация".
 // Так же делает LangBar++ (github.com/Krot66/LangBarXX): не набирается строка в текущей раскладке -
 // значит, она из другой.
+//
+// Слова, в которых нет ни одного символа той раскладки ("Ыещз" среди английских букв в «NTgthm» и «Ыещз»), общая
+// раскладка не трогает. Их переводит ConvertWords - из их собственной раскладки, но только если словарь скажет,
+// что это слово набрано не в той раскладке ("ыещз" - не русское слово, "stop" - английское), а "и" остаётся "и".
 
 namespace LayoutConvert {
 
@@ -67,6 +71,35 @@ namespace LayoutConvert {
 			else {
 				out += c; // мёртвая клавиша или клавиши в той раскладке нет
 			}
+		}
+		return out;
+	}
+
+	// Как Convert(text, from, to), но слова (между пробелами и переводами строк), в которых раскладки `from` нет
+	// совсем, - из их собственной раскладки `own` в next(own), если wrong(слово, own, перевод, next(own)).
+	template <class Next, class Wrong>
+	std::wstring ConvertWords(const std::wstring& text, HKL from, HKL to, const std::vector<HKL>& layouts, Next next,
+	                          Wrong wrong) {
+		std::wstring out;
+		out.reserve(text.size());
+		size_t i = 0;
+		while (i < text.size()) {
+			if (Keep(text[i])) {
+				out += text[i++];
+				continue;
+			}
+			size_t j = i;
+			while (j < text.size() && !Keep(text[j])) j++;
+			const std::wstring word = text.substr(i, j - i);
+			i = j;
+			if (Typeable(word, from) > 0) {
+				out += Convert(word, from, to);
+				continue;
+			}
+			const HKL own = Source(word, layouts, from);
+			const HKL ownTo = own != from ? next(own) : 0;
+			std::wstring conv = ownTo && ownTo != own ? Convert(word, own, ownTo) : word;
+			out += conv != word && wrong(word, own, conv, ownTo) ? conv : word;
 		}
 		return out;
 	}

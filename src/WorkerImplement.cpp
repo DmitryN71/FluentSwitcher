@@ -243,7 +243,18 @@ TStatus WorkerImplement::GetClipStringCallback() {
             std::vector<HKL> layouts{ std::from_range, cfg->layouts_info.EnabledLayouts() };
             HKL from = LayoutConvert::Source(data, layouts, CurLay());
             HKL to = cfg->layouts_info.NextEnabledLayout(from);
-            auto converted = (to == 0 || to == from) ? data : LayoutConvert::Convert(data, from, to);
+            // Слова другой раскладки среди текста ("Ыещз" в «NTgthm» и «Ыещз») - по словарю, каждое отдельно; больше
+            // 1000 таких слов не проверяем (выделили полдокумента - не держать буфер обмена).
+            int checks = 0;
+            auto next = [&cfg](HKL lay) { return cfg->layouts_info.NextEnabledLayout(lay); };
+            auto wrong = [&checks](const std::wstring& word, HKL lay, const std::wstring& conv, HKL to) {
+                if (++checks > 1000) return false;
+                if (!SpellCheck::WrongLayout(word, Utils::GetNameForHKL_simple(lay), conv, Utils::GetNameForHKL_simple(to)))
+                    return false;
+                LOG_ANY(L"convert: {} -> {} by the dictionary", word, conv);
+                return true;
+            };
+            auto converted = (to == 0 || to == from) ? data : LayoutConvert::ConvertWords(data, from, to, layouts, next, wrong);
             if (to == 0 || to == from) {
                 LOG_WARN(L"no layout to convert {} to", (void*)from);
             } else if (converted == data) {

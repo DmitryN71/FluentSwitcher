@@ -43,4 +43,18 @@ inline Result Check(std::wstring word, const std::wstring& language) {
 	return errors->Next(&error) == S_OK ? Result::NotWord : Result::Word;
 }
 
+// Слово набрано не в той раскладке: `typed` - не слово языка `language`, а `other` (те же клавиши в другой раскладке) -
+// слово языка `otherLanguage`. Знаки по краям ("«Ыещз»", "Ghbdtn?") не в счёт. Нет словаря - false.
+inline bool WrongLayout(const std::wstring& typed, const std::wstring& language, const std::wstring& other,
+                        const std::wstring& otherLanguage) {
+	auto letters = [](const std::wstring& s) {
+		size_t begin = 0, end = s.size();
+		while (begin < end && !IsCharAlphaW(s[begin])) begin++;
+		while (end > begin && !IsCharAlphaW(s[end - 1])) end--;
+		return s.substr(begin, end - begin);
+	};
+	const std::wstring a = letters(typed), b = letters(other);
+	return !a.empty() && !b.empty() && Check(a, language) == Result::NotWord && Check(b, otherLanguage) == Result::Word;
+}
+
 }

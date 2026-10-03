@@ -118,6 +118,10 @@ void InvertCase(std::wstring& buf) {
     }
 }
 
+// Пауза между стиранием и набором исправленного: новый Блокнот Windows 11, получив букву сразу за Backspace (и за
+// сменой раскладки), иногда её теряет ("Stop" -> "top"). С журналом отладки, который чуть замедляет отправку, - нет.
+static const DWORD c_afterErase = 40;
+
 namespace {
 // Поле пароля (обычное поле Windows с ES_PASSWORD): там ничего не исправляем.
 bool IsPasswordFocus() {
@@ -170,6 +174,7 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
     const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
     const std::wstring space = afterSpace ? L" " : L"";
     InputSender::SendVkKeyPaced(VK_BACK, (int)(typed.size() + space.size()), delay); // со второй буквы (и пробел)
+    Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
     InputSender::SendTextPaced(fix.tail + space, delay);
     keys[fix.from]->is_shift = false; // и в буфере слов вторая буква теперь строчная
     // Отмена - только после пробела: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
@@ -210,6 +215,7 @@ bool WorkerImplement::UndoTwoCaps() {
     LOG_ANY(L"two caps: {} back, it is an exception now", last.word);
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
     InputSender::SendVkKeyPaced(VK_BACK, (int)last.fixed.size() + 1, delay);
+    Sleep(c_afterErase);
     InputSender::SendTextPaced(last.typed + L" ", delay);
     last.key->is_shift = true;
     PostMessageW(g_guiHandle, WM_TwoCapsLearn, 0, (LPARAM)new std::wstring(last.word));
@@ -633,6 +639,7 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE)) {
         InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size(), delay);
+        Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
     }
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && target != 0 && conf_get_unsafe()->two_caps && !m_is_last_caps) {

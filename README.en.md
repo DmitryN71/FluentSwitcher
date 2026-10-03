@@ -13,7 +13,9 @@ free and open source under GPL-3.0.
 - **Fixes the last word** typed in the wrong layout: erases it, types it in the other layout and switches to it.
 - **Fixes the selected text** in any app.
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab. PCs, IDs, GHz, eM, iPhone are left alone, and there
-  are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back and remembers it.
+  are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
+  A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives
+  "Попытка" at once. Turned on in Typing.
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment after a layout change, below or above the cursor, four
@@ -49,7 +51,8 @@ settings. Change them in the settings window, "Hotkeys".
 - A fixed word goes in as ready characters with a short pause: the new Windows 11 Notepad neither loses nor
   repeats characters, Chrome and Electron do not lose the first letter.
 - The selected text is converted as a whole, by the layout of the whole line: punctuation does not turn into
-  letters.
+  letters. Words of the other layout in it go by the Windows dictionaries: "«NTgthm» и «Ыещз»" becomes
+  "«Теперь» и «Stop»".
 - "Shift twice" fires on the release of the second press only and does not confuse fast typing (Shift, then
   Shift + 7 at once).
 - Ctrl + Break works; Home, End and the arrows are sent as extended keys (NumLock on does not drop the

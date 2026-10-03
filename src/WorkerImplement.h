@@ -147,6 +147,10 @@ class WorkerImplement {
 
     // ДВе ЗАглавные (TwoCaps.h): слово перед только что набранным пробелом; хук держит нажатия, пока решаем.
     void FixTwoCaps();
+    // Исключения из настроек - для TwoCaps.h.
+    static std::vector<std::wstring> TwoCapsExceptions();
+    // ДВе ЗАглавные и при переводе раскладки: "LDe[" -> "ДВух" -> "Двух" - вторые буквы без Shift.
+    static void FixTwoCapsInKeys(TKeyRevert& keys, HKL lay);
     // "Исправить последнее слово" сразу после такого исправления: вернуть слово и запомнить его в исключениях.
     bool UndoTwoCaps();
     struct {

@@ -138,9 +138,7 @@ void WorkerImplement::FixTwoCaps() {
         if (c.size() != 1) return; // клавиша = один символ, иначе не сосчитать, что стирать
         text += c;
     }
-    std::vector<std::wstring> exceptions;
-    for (const auto& e : cfg->two_caps_exceptions) exceptions.push_back(StrUtils::Convert(e));
-    const auto fix = TwoCaps::Analyze(text, exceptions);
+    const auto fix = TwoCaps::Analyze(text, TwoCapsExceptions());
     if (fix.tail.empty()) return;
     const std::wstring typed = text.substr(fix.from);
     LOG_ANY(L"two caps: {} -> {}{}", text, text.substr(0, fix.from), fix.tail);
@@ -150,6 +148,27 @@ void WorkerImplement::FixTwoCaps() {
     InputSender::SendTextPaced(fix.tail + L" ", delay);
     keys[fix.from]->is_shift = false; // и в буфере слов вторая буква теперь строчная
     m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from] };
+}
+
+std::vector<std::wstring> WorkerImplement::TwoCapsExceptions() {
+    std::vector<std::wstring> words;
+    for (const auto& e : conf_get_unsafe()->two_caps_exceptions) words.push_back(StrUtils::Convert(e));
+    return words;
+}
+
+void WorkerImplement::FixTwoCapsInKeys(TKeyRevert& keys, HKL lay) {
+    std::wstring text;
+    for (const auto& key : keys) {
+        if (key.is_caps) return;
+        auto c = InputSender::KeyText(key, lay, false);
+        if (c.size() != 1) return; // клавиша = один символ, иначе не сопоставить
+        text += c;
+    }
+    const std::wstring fixed = TwoCaps::FixText(text, TwoCapsExceptions());
+    for (size_t i = 0; i < text.size(); i++) {
+        if (fixed[i] != text[i]) keys[i].is_shift = false;
+    }
+    if (fixed != text) LOG_ANY(L"two caps in the layout fix: {} -> {}", text, fixed);
 }
 
 bool WorkerImplement::UndoTwoCaps() {
@@ -193,6 +212,7 @@ TStatus WorkerImplement::GetClipStringCallback() {
                 // и раскладку не меняем - иначе она переключится "сама".
                 LOG_ANY(L"convert: nothing changes. skip");
             } else {
+                if (cfg->two_caps) converted = TwoCaps::FixText(converted, TwoCapsExceptions()); // "LDe[" -> "Двух"
                 LOG_ANY(L"convert selected {} -> {}, {} chars", (void*)from, (void*)to, converted.size());
                 m_cycleList.Clear();
                 TextFixed();
@@ -562,6 +582,10 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE)) {
         InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size(), delay);
+    }
+
+    if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && target != 0 && conf_get_unsafe()->two_caps && !m_is_last_caps) {
+        FixTwoCapsInKeys(ctxRevert.keylist, target);
     }
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT)) {

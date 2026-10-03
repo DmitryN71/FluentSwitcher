@@ -59,6 +59,77 @@ private:
     wxTextCtrl* m_text;
 };
 
+// A list of words in a window of its own, one per line (the exceptions of ДВе ЗАглавные). True - "Готово":
+// *words is the new list, without empty lines and repeats.
+bool EditWordList(wxWindow* parent, const wxString& title, const wxString& description, wxArrayString* words)
+{
+    wxDialog dialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    dialog.SetBackgroundColour(g.bg);
+    ApplyDwm(&dialog, false, &g.bg);
+    const int pad = dialog.FromDIP(20);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText* label = new wxStaticText(&dialog, wxID_ANY, wxString());
+    label->SetFont(UiFont(10));
+    label->SetForegroundColour(g.text);
+    SetWrappedLabel(label, description, dialog.FromDIP(380));
+    sizer->Add(label, 0, wxLEFT | wxRIGHT | wxTOP, pad);
+
+    // The box of the list: drawn like the kit's text boxes, a multi-line text control inside.
+    wxPanel* box = new wxPanel(&dialog);
+    box->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    box->SetMinSize(dialog.FromDIP(wxSize(380, 260)));
+    wxTextCtrl* text = new wxTextCtrl(box, wxID_ANY, wxJoin(*words, '\n'), wxDefaultPosition, wxDefaultSize,
+                                      wxTE_MULTILINE | wxBORDER_NONE);
+    text->SetFont(UiFont(10));
+    text->SetBackgroundColour(g.input);
+    text->SetForegroundColour(g.text);
+    text->Bind(wxEVT_SET_FOCUS, [box](wxFocusEvent& e) { box->Refresh(); e.Skip(); });
+    text->Bind(wxEVT_KILL_FOCUS, [box](wxFocusEvent& e) { box->Refresh(); e.Skip(); });
+    box->Bind(wxEVT_PAINT, [box, text](wxPaintEvent&) {
+        wxAutoBufferedPaintDC dc(box);
+        dc.SetBackground(wxBrush(g.bg));
+        dc.Clear();
+        FillInput(dc, wxRect(box->GetClientSize()), box->FromDIP(4), g.input, text->HasFocus() ? &g.accent : nullptr,
+                  box->FromDIP(2));
+    });
+    box->Bind(wxEVT_SIZE, [box, text](wxSizeEvent& e) {
+        const wxSize size = box->GetClientSize();
+        text->SetSize(box->FromDIP(10), box->FromDIP(8), size.x - box->FromDIP(20), size.y - box->FromDIP(16));
+        e.Skip();
+    });
+    sizer->Add(box, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, pad);
+
+    wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+    buttons->AddStretchSpacer();
+    buttons->Add(new FluentButton(&dialog, wxID_OK, T("Готово"), true));
+    buttons->Add(new FluentButton(&dialog, wxID_CANCEL, T("Отмена")), 0, wxLEFT, dialog.FromDIP(8));
+    sizer->Add(buttons, 0, wxEXPAND | wxALL, pad);
+    dialog.SetSizerAndFit(sizer);
+    // Esc - cancel; Enter is a new line here, Ctrl+Enter - done.
+    dialog.Bind(wxEVT_CHAR_HOOK, [&dialog](wxKeyEvent& e) {
+        if (e.GetKeyCode() == WXK_ESCAPE)
+            dialog.EndModal(wxID_CANCEL);
+        else if ((e.GetKeyCode() == WXK_RETURN || e.GetKeyCode() == WXK_NUMPAD_ENTER) && e.ControlDown())
+            dialog.EndModal(wxID_OK);
+        else
+            e.Skip();
+    });
+    dialog.CentreOnParent();
+    text->SetFocus();
+    text->SetInsertionPointEnd();
+    if (dialog.ShowModal() != wxID_OK)
+        return false;
+    wxArrayString result;
+    for (wxString w : wxSplit(text->GetValue(), '\n'))
+    {
+        w.Trim(true).Trim(false);
+        if (!w.empty() && result.Index(w) == wxNOT_FOUND)
+            result.Add(w);
+    }
+    *words = result;
+    return true;
+}
+
 // "English (United States)", "русский (Россия)": the language of a layout, in that language.
 wxString LayoutName(const wxString& hkl)
 {
@@ -338,30 +409,43 @@ void SettingsFrame::BuildTyping()
     // in the file, words with spaces between them here).
     Toggle(T("Исправлять ДВе ЗАглавные"),
            T("«ДВух» после пробела станет «Двух». PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
-             "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся и "
-             "попадёт в исключения"),
+             "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Тот же "
+             "перевод раскладки исправляет и ДВе ЗАглавные: LDe[ – Двух"),
            "two_caps", false);
-    wxString words;
-    const nlohmann::json& file = std::as_const(m_edit).Json();
-    if (auto list = file.find("two_caps_exceptions"); list != file.end() && list->is_array())
-        for (const auto& w : *list)
-            if (w.is_string())
-                words += (words.empty() ? "" : " ") + wxString::FromUTF8(w.get<std::string>());
-    TextField* exceptions = nullptr;
-    AddSettingsCard(m_page, m_column, T("Исключения для ДВух ЗАглавных"),
-                    T("Через пробел. Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники"),
-                    [&](wxWindow* card) { return exceptions = new TextField(card, words, 360); }, true);
-    exceptions->onChange = [this, exceptions] {
-        nlohmann::json list = nlohmann::json::array();
-        for (wxString w : wxSplit(exceptions->Value(), ' '))
-        {
-            w.Trim(true).Trim(false);
-            if (!w.empty())
-                list.push_back(w.utf8_string());
-        }
-        m_edit.Json()["two_caps_exceptions"] = list;
-        Changed();
+    // The exceptions: in a window of their own, one per line; the card says how many.
+    auto exceptionWords = [this] {
+        wxArrayString words;
+        const nlohmann::json& file = std::as_const(m_edit).Json();
+        if (auto list = file.find("two_caps_exceptions"); list != file.end() && list->is_array())
+            for (const auto& w : *list)
+                if (w.is_string())
+                    words.Add(wxString::FromUTF8(w.get<std::string>()));
+        return words;
     };
+    auto exceptionsText = [](const wxArrayString& words) {
+        const wxString about = T("Слова, которые так и пишутся. Слово закрывает и те, что с него начинаются: "
+                                 "ИПшник – и ИПшники. Само слово попадает сюда после третьей отмены");
+        return about + "\n" + (words.empty() ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), words.size()));
+    };
+    wxStaticText* exceptionsLabel = AddSettingsCard(
+        m_page, m_column, T("Исключения для ДВух ЗАглавных"), exceptionsText(exceptionWords()),
+        [this, exceptionWords, exceptionsText](wxWindow* card) {
+            FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
+            edit->Bind(wxEVT_BUTTON, [this, exceptionWords, exceptionsText](wxCommandEvent&) {
+                wxArrayString words = exceptionWords();
+                if (!EditWordList(this, T("Исключения для ДВух ЗАглавных"),
+                                  T("По слову в строке. Слово закрывает и те, что с него начинаются"), &words))
+                    return;
+                nlohmann::json list = nlohmann::json::array();
+                for (const wxString& w : words)
+                    list.push_back(w.utf8_string());
+                m_edit.Json()["two_caps_exceptions"] = list;
+                Changed();
+                SetCardDescription(m_twoCapsExceptions, exceptionsText(words));
+            });
+            return edit;
+        });
+    m_twoCapsExceptions = exceptionsLabel;
 
     const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
     Choice(T("Как переключать раскладку"),

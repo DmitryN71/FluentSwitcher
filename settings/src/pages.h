@@ -81,6 +81,7 @@ private:
     wxArrayString m_titles;
 
     wxStaticText* m_updateLabel = nullptr; // the description of the "Обновления" card
+    wxStaticText* m_twoCapsExceptions = nullptr; // the description of the exceptions card of ДВе ЗАглавные
     wxString m_updatePage;
 
     wxScrolledWindow* m_commandsPage = nullptr;

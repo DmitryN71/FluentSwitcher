@@ -145,14 +145,22 @@ const std::unordered_map<std::string, const char*>& English()
         { "Ничего", "Nothing" },
         { "Исправлять ДВе ЗАглавные", "Fix TWo INitial CApitals" },
         { "«ДВух» после пробела станет «Двух». PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
-          "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся и "
-          "попадёт в исключения",
+          "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Тот же "
+          "перевод раскладки исправляет и ДВе ЗАглавные: LDe[ – Двух",
           "“THis” becomes “This” after a space. PCs, IDs, GHz, eM, iPhone and the exceptions are left alone. "
-          "Fixed by mistake? Press “Fix the last word” (Shift twice) right away: the word comes back and goes "
-          "to the exceptions" },
+          "Fixed by mistake? Press “Fix the last word” (Shift twice) right away: the word comes back. A layout fix "
+          "fixes TWo INitial CApitals too: ЕРшы becomes This" },
         { "Исключения для ДВух ЗАглавных", "Exceptions for TWo INitial CApitals" },
-        { "Через пробел. Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники",
-          "With spaces between them. A word also covers the words that start with it: IPsec – and IPsecs" },
+        { "Слова, которые так и пишутся. Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. "
+          "Само слово попадает сюда после третьей отмены",
+          "Words that are written so on purpose. A word also covers the words that start with it: IPsec – and "
+          "IPsecs. A word gets here by itself the third time it is brought back" },
+        { "Пока пусто", "Empty so far" },
+        { "Слов в списке: %zu", "Words in the list: %zu" },
+        { "Изменить…", "Edit…" },
+        { "Готово", "Done" },
+        { "По слову в строке. Слово закрывает и те, что с него начинаются",
+          "One word per line. A word also covers the words that start with it" },
         { "Тихий", "Quiet" },
         { "Средний", "Medium" },
         { "Громкий", "Loud" },

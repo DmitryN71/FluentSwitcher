@@ -104,14 +104,22 @@ void StartGui() {
 			}
 
 			if (msg == WM_TwoCapsLearn) {
-				// Слово вернули сразу после исправления ДВух ЗАглавных - больше его не трогать.
+				// Слово вернули сразу после исправления ДВух ЗАглавных. Счёт - в настройках (переживает перезапуск);
+				// на третий раз слово уходит в исключения, о чём говорит уведомление у флага.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
 				const std::string utf8 = StrUtils::Convert(*word);
-				auto& list = conf_gui()->two_caps_exceptions;
-				if (std::ranges::find(list, utf8) == list.end()) {
-					list.push_back(utf8);
-					SaveApplyGuiConfig();
+				auto& counts = conf_gui()->two_caps_undo;
+				const int times = ++counts[utf8];
+				LOG_ANY(L"two caps: {} brought back {} times", *word, times);
+				if (times >= 3) {
+					counts.erase(utf8);
+					auto& list = conf_gui()->two_caps_exceptions;
+					if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
+					trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("\"{}\" will not be fixed any more"), std::make_format_args(utf8))),
+						StrUtils::Convert(std::string(LOC("It is in the exceptions of TWo INitial CApitals: Settings, Typing"))),
+						[] { show_main_wind(); });
 				}
+				SaveApplyGuiConfig();
 				return 0;
 			}
 

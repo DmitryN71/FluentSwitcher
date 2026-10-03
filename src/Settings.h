@@ -124,6 +124,8 @@ public:
 	// ДВе ЗАглавные (TwoCaps.h): исправлять после пробела; свои исключения (UTF-8).
 	bool two_caps = false;
 	std::vector<std::string> two_caps_exceptions;
+	// Сколько раз слово возвращали сразу после исправления; на третий - в исключения.
+	std::map<std::string, int> two_caps_undo;
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
 	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
 	bool useBritishFlag = false;

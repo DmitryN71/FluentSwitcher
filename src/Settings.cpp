@@ -118,6 +118,7 @@ namespace nlohmann {
 			sound_fix,
 			two_caps,
 			two_caps_exceptions,
+			two_caps_undo,
 			gui_lang,
 			ShowLangsInTrayMenu,
 			ShowReminderInTrayMenu,

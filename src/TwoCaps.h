@@ -87,4 +87,22 @@ inline Fix Analyze(const std::wstring& text, const std::vector<std::wstring>& ex
 	return fix;
 }
 
+// Весь текст: каждое слово между пробелами - по правилу (перевод раскладки: "LDe[" -> "ДВух" -> "Двух").
+// Длина та же: меняется только регистр вторых букв.
+inline std::wstring FixText(const std::wstring& text, const std::vector<std::wstring>& exceptions) {
+	std::wstring out = text;
+	size_t at = 0;
+	while (at < out.size()) {
+		while (at < out.size() && iswspace(out[at])) at++;
+		size_t end = at;
+		while (end < out.size() && !iswspace(out[end])) end++;
+		if (end > at) {
+			const Fix fix = Analyze(out.substr(at, end - at), exceptions);
+			if (!fix.tail.empty()) out.replace(at + fix.from, fix.tail.size(), fix.tail);
+		}
+		at = end;
+	}
+	return out;
+}
+
 }

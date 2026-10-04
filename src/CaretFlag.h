@@ -546,11 +546,15 @@ private:
 		return false;
 	}
 
-	// Браузер: страница Chromium (Chrome, Яндекс, Brave, Edge, Electron), его окно-рамка (адресная строка) или Firefox.
+	// Браузер: окно Chromium - страница или рамка с адресной строкой (Chrome, Brave, Edge, Electron: Chrome_WidgetWin_1;
+	// Яндекс: Chrome_Yandex_WidgetWin_1 - поэтому по образцу Chrome_*WidgetWin*) - или Firefox.
 	static bool Browser(HWND fg, HWND focus) {
-		static const std::initializer_list<const wchar_t*> classes = { L"Chrome_RenderWidgetHostHWND", L"Chrome_WidgetWin_1",
-		                                                               L"MozillaWindowClass" };
-		return focus ? IsClass(focus, classes) : IsClass(fg, classes);
+		wchar_t cls[128]{};
+		HWND w = focus ? focus : fg;
+		if (!w || !GetClassNameW(w, cls, (int)std::size(cls))) return false;
+		const std::wstring_view c = cls;
+		return c == L"MozillaWindowClass" || c == L"Chrome_RenderWidgetHostHWND" ||
+			(c.starts_with(L"Chrome_") && c.find(L"WidgetWin") != std::wstring_view::npos);
 	}
 
 	// Программы, где системная каретка есть, но не там (или её нет вовсе): сразу UI Automation.

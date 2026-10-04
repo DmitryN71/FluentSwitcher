@@ -1,11 +1,12 @@
 #pragma once
 
 // Меню у флага в стиле Windows 11 - своё окно вместо меню Windows (TrackPopupMenu). Обычное меню Windows рисует
-// сама: плотные строки, галочка, без значков, и этого не изменить. Здесь - как у меню самой Windows 11 и у окна
-// настроек: скругления, рамка и тень от Windows (DWM), строки по 36 точек со скруглённой подсветкой, значки из
-// системного шрифта (Segoe Fluent Icons, на Windows 10 - Segoe MDL2 Assets), переключатель вместо галочки, сверху -
-// название и версия. Тема - как у панели задач, размеры - по масштабу монитора; рисует Direct2D / DirectWrite.
-// Мышь, стрелки, Enter, Esc, первая буква пункта; закрывается щелчком мимо, уходом в другое окно, клавишей Win.
+// сама: плотные строки, галочка, без значков, и этого не изменить. Здесь - как у меню самой Windows 11 у часов
+// (сеть, звук) и у окна настроек: скругления, рамка и тень от Windows (DWM), строки по 30 точек со скруглённой
+// подсветкой, значки из системного шрифта (Segoe Fluent Icons, на Windows 10 - Segoe MDL2 Assets), переключатель
+// вместо галочки, сверху - название и версия. Тема - как у панели задач, размеры - по масштабу монитора; рисует
+// Direct2D / DirectWrite. Мышь, стрелки, Enter, Esc, первая буква пункта; переключатель меню не закрывает, остальное
+// закрывает; щелчок мимо, уход в другое окно, клавиша Win - тоже.
 // Не вышло (контрастная тема, нет Direct2D) - Show возвращает false, и WinTray показывает обычное меню.
 // Всё - в потоке интерфейса движка (окно значка у часов). View рисует и без окна: tools\test_menu снимает картинки.
 
@@ -31,9 +32,10 @@ public:
 		std::wstring text;
 		wchar_t icon = 0;      // знак шрифта значков, 0 - без значка
 		bool separator = false;
-		bool toggle = false;   // переключатель справа (вместо галочки)
+		bool toggle = false;   // переключатель справа (вместо галочки); щелчок по нему меню не закрывает
 		bool on = false;
 		std::function<void()> action;
+		std::function<bool()> state; // переключатель после action: включён ли на самом деле (нет - просто наоборот)
 	};
 
 	// Одно меню: пункты, тема, размеры (в DIP - 1/96 дюйма) и рисование.
@@ -49,8 +51,9 @@ public:
 		std::vector<D2D1_RECT_F> rects; // по пункту
 		D2D1_RECT_F titleRect{};
 
-		static constexpr float kPad = 4, kTitle = 30, kItem = 36, kSeparator = 9, kInset = 12, kIcon = 16, kGap = 12,
-		                       kToggleW = 40, kToggleH = 20, kToggleGap = 24, kMinWidth = 220, kRadius = 4;
+		// Как меню Windows 11 у часов (сеть, звук): строки 30, без лишней ширины.
+		static constexpr float kPad = 4, kTitle = 26, kItem = 30, kSeparator = 7, kInset = 12, kIcon = 16, kGap = 12,
+		                       kToggleW = 36, kToggleH = 18, kToggleGap = 16, kKnob = 5, kMinWidth = 160, kRadius = 4;
 
 		bool Selectable(int i) const { return i >= 0 && i < (int)items.size() && !items[i].separator; }
 
@@ -150,13 +153,13 @@ public:
 					const float h = kToggleH / 2;
 					if (it.on) {
 						rt->FillRoundedRectangle({ { tl, cy - h, tr, cy + h }, h, h }, fill(accent));
-						rt->FillEllipse(D2D1::Ellipse({ tr - h, cy }, 6, 6), fill(onAccent));
+						rt->FillEllipse(D2D1::Ellipse({ tr - h, cy }, kKnob, kKnob), fill(onAccent));
 					}
 					else {
 						const float w = pixel;
 						rt->DrawRoundedRectangle({ { tl + w / 2, cy - h + w / 2, tr - w / 2, cy + h - w / 2 }, h - w / 2, h - w / 2 },
 						                         fill(text2), w);
-						rt->FillEllipse(D2D1::Ellipse({ tl + h, cy }, 6, 6), fill(text2));
+						rt->FillEllipse(D2D1::Ellipse({ tl + h, cy }, kKnob, kKnob), fill(text2));
 					}
 				}
 			}
@@ -345,10 +348,18 @@ private:
 		}
 	}
 
-	// Пункт выбран: меню закрыть, потом действие ("Выход" завершит программу, когда окна уже нет).
+	// Пункт выбран: меню закрыть, потом действие ("Выход" завершит программу, когда окна уже нет). Переключатель -
+	// переключить и оставить меню открытым, как в быстрых настройках Windows.
 	static void Choose(int i) {
 		if (!s_view.Selectable(i)) return;
-		auto action = s_view.items[i].action;
+		auto& item = s_view.items[i];
+		if (item.toggle) {
+			if (item.action) item.action();
+			item.on = item.state ? item.state() : !item.on;
+			InvalidateRect(s_wnd, nullptr, FALSE);
+			return;
+		}
+		auto action = item.action;
 		Close();
 		if (action) action();
 	}

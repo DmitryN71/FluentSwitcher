@@ -11,6 +11,7 @@ public:struct TrayItem {
 		bool is_checkbox = false;
 		bool edit_val = false;
 		wchar_t icon = 0; // значок пункта в меню Windows 11 (знак шрифта Segoe Fluent Icons)
+		std::function<bool()> state; // флажок после callback - включён ли (меню Windows 11 не закрывается)
 	};
 private:
 
@@ -151,7 +152,7 @@ public:
 		std::vector<FluentMenu::Item> items;
 		for (auto& it : last_menu) {
 			items.push_back({ .text = StrUtils::Convert(it.name), .icon = it.icon, .separator = it.is_separator,
-			                  .toggle = it.is_checkbox, .on = it.edit_val, .action = it.callback });
+			                  .toggle = it.is_checkbox, .on = it.edit_val, .action = it.callback, .state = it.state });
 		}
 		std::wstring title = L"FluentSwitcher ";
 		for (const char* p = details::SW_VERSION; *p; ++p) title += (wchar_t)*p;

@@ -16,8 +16,12 @@
 // Браузеры (Chromium - Chrome, Яндекс, Brave, Edge, программы на Electron; Firefox) - особо: каретка у них бывает и
 // вне полей ввода. Firefox держит системную каретку в тексте страницы (флажок ездил по ней при прокрутке), Chromium
 // отдаёт через MSAA её последнее место (флажок стоял посреди страницы). Поэтому там флажок - только когда в фокусе
-// поле ввода (Editable, по UI Automation). Вся страница браузера - одно окно, так что "в этом окне каретки нет" там не
-// запоминается, а не нашли - ещё две попытки: поле могло открываться с анимацией.
+// поле ввода (Editable, по UI Automation), а каретка - внутри этого поля и внутри видимой части страницы (Inside):
+// иначе она старая (после щелчка из адресной строки Chromium ещё отдаёт её место там) или поле уехало при прокрутке
+// (у Firefox каретка такого поля сначала попадает на панели браузера, ещё внутри окна). Так же - окна-рамки Chromium
+// (адресная строка, программы на Electron). Вся страница браузера - одно окно, так что "в этом окне каретки нет" там
+// не запоминается, а не нашли - ещё две попытки: поле могло открываться с анимацией. После щелчка - ещё одна проверка
+// через 350 мс: фокус внутри Chromium переезжает не сразу.
 //
 // Окно флажка - слоистое (UpdateLayeredWindow, плавная прозрачность), не берёт фокус и щелчки, поверх всех.
 // В полноэкранных программах, при открытом меню, перетаскивании окна и Alt+Tab флажок прячется.
@@ -111,21 +115,28 @@ private:
 				Result res{ .seq = req.seq };
 				RECT rc{};
 				if (req.browser) {
-					const int editable = uia ? Editable(uia, req.pid, res.type, res.state) : -1;
+					CComPtr<IUIAutomationElement> el;
+					const int editable = uia ? Editable(uia, req.pid, res.type, res.state, el) : -1;
+					const char* how = nullptr;
 					if (editable != 1) {
 						res.how = editable == 0 ? "not a text field" : "no focus";
 					}
 					else if (req.system) {
-						res = { req.seq, true, req.systemRc, "caret", res.type, res.state };
+						rc = req.systemRc;
+						how = "caret";
 					}
 					else if (Msaa(req.focus, rc)) {
-						res = { req.seq, true, rc, "msaa", res.type, res.state };
+						how = "msaa";
 					}
-					else if (Uia(uia, req.pid, rc, true)) {
-						res = { req.seq, true, rc, "uia", res.type, res.state };
+					else if (UiaCaret(el, rc, true)) {
+						how = "uia";
 					}
 					else {
 						res.how = "text field, no caret";
+					}
+					if (how) {
+						if (Inside(uia, el, rc)) res = { req.seq, true, rc, how, res.type, res.state };
+						else res.how = "caret outside the field or the page";
 					}
 				}
 				else if (!req.uiaFirst && Msaa(req.focus, rc)) {
@@ -197,8 +208,7 @@ private:
 	// Браузер: в фокусе поле ввода? 1 - да, 0 - нет (текст страницы, ссылка, кнопка, список), -1 - фокус не в этой
 	// программе или UI Automation не ответил. Текст страницы и поля "только для чтения" - с состоянием MSAA
 	// STATE_SYSTEM_READONLY (так их отличают и программы чтения с экрана) или ValuePattern.IsReadOnly.
-	static int Editable(IUIAutomation* uia, DWORD pid, int& type, DWORD& state) {
-		CComPtr<IUIAutomationElement> el;
+	static int Editable(IUIAutomation* uia, DWORD pid, int& type, DWORD& state, CComPtr<IUIAutomationElement>& el) {
 		if (FAILED(uia->GetFocusedElement(&el)) || !el) return -1;
 		int elPid = 0;
 		if (FAILED(el->get_CurrentProcessId(&elPid)) || (DWORD)elPid != pid) return -1;
@@ -222,6 +232,31 @@ private:
 		// Остальное (поле с подсказками - ComboBox, contenteditable - группа): только с изменяемым значением.
 		// Выпадающий список (select) - ComboBox со значением "только для чтения".
 		return hasValue && !valueReadOnly ? 1 : 0;
+	}
+
+	// Браузер: каретка внутри поля в фокусе и внутри видимой части страницы (ближайший документ над полем - страница
+	// или её фрейм; его прямоугольник - то, что видно). Адресная строка в документе не лежит - только поле.
+	static bool Inside(IUIAutomation* uia, IUIAutomationElement* el, const RECT& caret) {
+		const LONG slack = 4, x = caret.left, cy = (caret.top + caret.bottom) / 2;
+		auto in = [&](const RECT& r) {
+			return r.right > r.left && x >= r.left - slack && x <= r.right + slack && cy >= r.top - slack && cy <= r.bottom + slack;
+		};
+		RECT box{};
+		if (FAILED(el->get_CurrentBoundingRectangle(&box)) || !in(box)) return false;
+		CComPtr<IUIAutomationTreeWalker> walker;
+		if (FAILED(uia->get_ControlViewWalker(&walker)) || !walker) return true;
+		CComPtr<IUIAutomationElement> cur = el;
+		for (int depth = 0; depth < 40 && cur; depth++) {
+			CONTROLTYPEID type = 0;
+			if (depth > 0 && SUCCEEDED(cur->get_CurrentControlType(&type)) && type == UIA_DocumentControlTypeId) {
+				RECT page{};
+				return FAILED(cur->get_CurrentBoundingRectangle(&page)) || in(page);
+			}
+			CComPtr<IUIAutomationElement> parent;
+			if (FAILED(walker->GetParentElement(cur, &parent))) break;
+			cur = parent;
+		}
+		return true;
 	}
 
 	// Каретка в текстовом элементе UI Automation. editable - элемент уже проверен как поле ввода (браузер): без
@@ -373,7 +408,7 @@ private:
 	RECT m_bbox{};               // видимая (непрозрачная) часть картинки
 	const char* m_lastHow = "";
 
-	enum : UINT_PTR { TimerUpdate = 1, TimerBrief = 2 };
+	enum : UINT_PTR { TimerUpdate = 1, TimerBrief = 2, TimerRecheck = 3 };
 
 	void Poke(UINT delay) {
 		SetTimer(m_wnd, TimerUpdate, delay, nullptr);
@@ -462,13 +497,15 @@ private:
 		if (self && hwnd == self->m_wnd) {
 			switch (msg) {
 			case CaretFlagDetails::WM_Poke:
-				if (lParam) self->Brief();
+				if (lParam) { // щелчок: показаться (режим "ненадолго") и проверить ещё раз чуть позже
+					self->Brief();
+					SetTimer(hwnd, TimerRecheck, 350, nullptr);
+				}
 				self->Poke((UINT)wParam);
 				return 0;
 			case WM_TIMER:
 				KillTimer(hwnd, wParam);
-				if (wParam == TimerUpdate) self->Update();
-				if (wParam == TimerBrief) self->Update();
+				if (wParam == TimerUpdate || wParam == TimerBrief || wParam == TimerRecheck) self->Update();
 				return 0;
 			case CaretFlagDetails::WM_ProbeDone:
 				self->OnProbe();
@@ -492,11 +529,11 @@ private:
 		return false;
 	}
 
-	// Браузер: страница Chromium (Chrome, Яндекс, Brave, Edge, Electron) или Firefox. Адресная строка Chromium - не
-	// страница (Chrome_WidgetWin_1), с ней - как с обычной программой.
+	// Браузер: страница Chromium (Chrome, Яндекс, Brave, Edge, Electron), его окно-рамка (адресная строка) или Firefox.
 	static bool Browser(HWND fg, HWND focus) {
-		return IsClass(focus, { L"Chrome_RenderWidgetHostHWND", L"MozillaWindowClass" }) ||
-			(!focus && IsClass(fg, { L"MozillaWindowClass" }));
+		static const std::initializer_list<const wchar_t*> classes = { L"Chrome_RenderWidgetHostHWND", L"Chrome_WidgetWin_1",
+		                                                               L"MozillaWindowClass" };
+		return focus ? IsClass(focus, classes) : IsClass(fg, classes);
 	}
 
 	// Программы, где системная каретка есть, но не там (или её нет вовсе): сразу UI Automation.

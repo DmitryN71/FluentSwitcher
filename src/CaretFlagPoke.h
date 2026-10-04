@@ -11,8 +11,9 @@ namespace CaretFlagDetails {
 	constexpr UINT WM_ProbeDone = WM_APP + 0x52;
 }
 
-inline void CaretFlagPoke(UINT delay = 40) {
+// brief - повод показаться в режиме "ненадолго" (щелчок мышью: курсор могли поставить в поле).
+inline void CaretFlagPoke(UINT delay = 40, bool brief = false) {
 	if (HWND wnd = CaretFlagDetails::g_wnd.load(std::memory_order_relaxed)) {
-		PostMessage(wnd, CaretFlagDetails::WM_Poke, delay, 0);
+		PostMessage(wnd, CaretFlagDetails::WM_Poke, delay, brief);
 	}
 }

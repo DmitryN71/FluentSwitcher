@@ -462,6 +462,7 @@ private:
 		if (self && hwnd == self->m_wnd) {
 			switch (msg) {
 			case CaretFlagDetails::WM_Poke:
+				if (lParam) self->Brief();
 				self->Poke((UINT)wParam);
 				return 0;
 			case WM_TIMER:

@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "FluentMenu.h"
+
 class WinTray {
 
 public:struct TrayItem {
@@ -8,6 +10,7 @@ public:struct TrayItem {
 		bool is_separator = false;
 		bool is_checkbox = false;
 		bool edit_val = false;
+		wchar_t icon = 0; // значок пункта в меню Windows 11 (знак шрифта Segoe Fluent Icons)
 	};
 private:
 
@@ -143,6 +146,16 @@ public:
 		last_menu = createMenu();
 		POINT cursorPos;
 		GetCursorPos(&cursorPos);
+
+		// Меню в стиле Windows 11 (FluentMenu.h); не вышло - обычное меню Windows, как раньше.
+		std::vector<FluentMenu::Item> items;
+		for (auto& it : last_menu) {
+			items.push_back({ .text = StrUtils::Convert(it.name), .icon = it.icon, .separator = it.is_separator,
+			                  .toggle = it.is_checkbox, .on = it.edit_val, .action = it.callback });
+		}
+		std::wstring title = L"FluentSwitcher ";
+		for (const char* p = details::SW_VERSION; *p; ++p) title += (wchar_t)*p;
+		if (FluentMenu::Show(std::move(title), std::move(items), cursorPos)) return;
 
 		HMENU hMenu = CreatePopupMenu();
 		for (int i = 0; auto & it : last_menu) {

@@ -99,9 +99,12 @@ public:
 			// и выбранная раскладка доставалась не тому окну - пункты ничего не делали.
 
 			// menu
-			res.push_back({ .name = LOC("Settings"), .callback = []() { show_main_wind(); } });
-			res.push_back({ .name = LOC("Enable"), .callback = []() { try_toggle_enable(); }, .is_checkbox = true, .edit_val = g_enabled.IsEnabled() });
-			res.push_back({ .name = LOC("Exit"), .callback = []() { PostQuitMessage(0); } });
+			// Значки - знаки шрифта Segoe Fluent Icons: шестерёнка, клавиатура, выход.
+			res.push_back({ .name = LOC("Settings"), .callback = []() { show_main_wind(); }, .icon = 0xE713 });
+			res.push_back({ .name = LOC("Enabled"), .callback = []() { try_toggle_enable(); }, .is_checkbox = true,
+			                .edit_val = g_enabled.IsEnabled(), .icon = 0xE765 });
+			res.push_back({ .is_separator = true });
+			res.push_back({ .name = LOC("Exit"), .callback = []() { PostQuitMessage(0); }, .icon = 0xF3B1 });
 			return res;
 			});
 	}

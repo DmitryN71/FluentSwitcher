@@ -20,9 +20,11 @@ free and open source under GPL-3.0.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment after a layout change, below or above the cursor, four
   sizes, transparency.
-- **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like. A click and
-  a double click on it do what you choose: the menu, the next layout (of the window you were typing in), on / off,
-  settings.
+- **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like, or the letters
+  EN, RU as Windows writes them, plain or in a frame, in the taskbar's text colour. A click and a double click on it
+  do what you choose: the menu, the next layout (of the window you were typing in), on / off, settings.
+- **A Windows 11 style menu by the flag**: rounded corners, icons, an "Enabled" toggle that keeps the menu open; the
+  theme follows the taskbar.
 - **Sounds**, as in Punto: a click when the layout is switched (with a hotkey of FluentSwitcher or Windows, with a
   click on the flag) and a double click when FluentSwitcher fixes text, each with a volume of its own. The sounds
   are the project's own (tools/make_sounds.py) and can be replaced with any WAV files in `sounds`; with `en.wav`,

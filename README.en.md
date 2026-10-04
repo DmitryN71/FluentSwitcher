@@ -18,8 +18,8 @@ free and open source under GPL-3.0.
   "Попытка" at once. Turned on in Typing.
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
-- **A flag at the text cursor**: always or for a moment after a layout change, below or above the cursor, four
-  sizes, transparency.
+- **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
+  a mouse click; below or above the cursor, four sizes, transparency. In browsers only in text fields.
 - **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like, or the letters
   EN, RU as Windows writes them, plain or in a frame, in the taskbar's text colour. A click and a double click on it
   do what you choose: the menu, the next layout (of the window you were typing in), on / off, settings.

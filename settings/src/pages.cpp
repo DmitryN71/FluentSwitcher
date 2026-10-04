@@ -602,6 +602,11 @@ void SettingsFrame::BuildFlags()
     for (const wxString& v : values)
         names.Add(v == "Glossy" ? T("Глянцевые") : v == "Round" ? T("Круглые")
                   : v == "Square" ? T("Квадратные") : v);
+    // Letters instead of a flag (the engine's LetterIcons.h): two, or three as Windows itself writes them.
+    values.Add("Letters");
+    names.Add(T("Буквы: EN, RU"));
+    values.Add("Letters3");
+    names.Add(T("Буквы: ENG, RUS"));
     values.Add("Application Icon");
     names.Add(T("Значок программы вместо флага"));
     values.Add("Nothing");

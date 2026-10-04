@@ -22,6 +22,15 @@ void StartGui() {
 	CaretFlag caretFlag;
 	LayoutSound layoutSound;
 
+	// Буквы вместо флага - цвета текста панели задач: сменилась её тема (светлая / тёмная) - перерисовать значок.
+	// Окна движка служебные (HWND_MESSAGE), WM_SETTINGCHANGE до них не доходит - смотрим раз в 2 с.
+	timer.CycleTimer([&, dark = FluentMenu::TaskbarDark()]() mutable {
+		const bool now = FluentMenu::TaskbarDark();
+		if (now == dark) return;
+		dark = now;
+		if (LetterIcons::Is(conf_get_unsafe()->flagsSet)) trayIcon.Update();
+	}, 2000);
+
 	// Проверка обновлений: раз в минуту смотрим, не пора ли. Пора - через день после прошлого ответа GitHub
 	// (первый раз - через минуту после запуска), после неудачи - не раньше чем через 6 часов. Запрос - в своём
 	// потоке, ответ приходит сюда как WM_UpdateResult.

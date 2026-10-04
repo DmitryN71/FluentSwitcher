@@ -54,8 +54,9 @@ public:
 		bool ok = false;
 		RECT rc{};          // каретка, физические пиксели экрана
 		const char* how = "";
-		int type = 0;       // браузер: тип элемента в фокусе (UI Automation) и его состояние (MSAA) - для журнала
+		int type = 0;       // браузер: тип элемента в фокусе (UI Automation) и его состояние (MSAA)
 		DWORD state = 0;
+		std::string detail; // браузер: что нашли - для журнала
 	};
 
 	void Start(HWND notify) {
@@ -138,6 +139,18 @@ private:
 						if (Inside(uia, el, rc)) res = { req.seq, true, rc, how, res.type, res.state };
 						else res.how = "caret outside the field or the page";
 					}
+					// Что браузер считает фокусом и где каретка - в журнал (по нему видно, почему флажок есть или нет).
+					wchar_t cls[64] = {};
+					GetClassNameW(req.focus, cls, 64);
+					RECT box{};
+					BOOL kb = FALSE;
+					if (el) {
+						el->get_CurrentBoundingRectangle(&box);
+						el->get_CurrentHasKeyboardFocus(&kb);
+					}
+					res.detail = std::format("browser {}: type {} state 0x{:x} keyboard {} field ({},{})-({},{}) caret ({},{})-({},{}) -> {}",
+						StrUtils::Convert(std::wstring(cls)), res.type, res.state, kb != FALSE, box.left, box.top, box.right,
+						box.bottom, rc.left, rc.top, rc.right, rc.bottom, res.ok ? res.how : (*res.how ? res.how : "no caret"));
 				}
 				else if (!req.uiaFirst && Msaa(req.focus, rc)) {
 					res = { req.seq, true, rc, "msaa" };
@@ -227,6 +240,11 @@ private:
 		const bool hasValue = SUCCEEDED(el->GetCurrentPatternAs(UIA_ValuePatternId, IID_PPV_ARGS(&value))) && value &&
 			SUCCEEDED(value->get_CurrentIsReadOnly(&valueReadOnly));
 		if (readOnly || (hasValue && valueReadOnly && ct != UIA_DocumentControlTypeId)) return 0;
+		// Скрыт (поле закрыли) или не в фокусе на самом деле: браузер иногда ещё отдаёт прежний элемент.
+		BOOL keyboard = FALSE;
+		el->get_CurrentHasKeyboardFocus(&keyboard);
+		if (stateKnown && (state & (STATE_SYSTEM_INVISIBLE | STATE_SYSTEM_OFFSCREEN))) return 0;
+		if (stateKnown && !keyboard && !(state & STATE_SYSTEM_FOCUSED)) return 0;
 		if (ct == UIA_EditControlTypeId) return 1;
 		if (ct == UIA_DocumentControlTypeId) return stateKnown ? 1 : 0; // страница, которую можно править (редактор)
 		// Остальное (поле с подсказками - ComboBox, contenteditable - группа): только с изменяемым значением.
@@ -397,8 +415,7 @@ private:
 	bool m_askedBrowser = false;
 	int m_retry = 0;          // браузер: сколько раз уже переспросили после неудачи
 	bool m_retrying = false;  // эта проверка - повторная
-	int m_lastType = -1;      // браузер: что было в фокусе в прошлый раз (для журнала)
-	DWORD m_lastState = 0;
+	std::string m_lastDetail; // браузер: что нашли в прошлый раз (для журнала)
 
 	bool m_visible = false;
 	HWND m_shownFg = nullptr;
@@ -635,10 +652,9 @@ private:
 		auto res = m_probe.Take();
 		if (res.seq != m_seq || GetForegroundWindow() != m_askedFg) return; // устарел
 		m_noCaretFocus = res.ok || m_askedBrowser ? nullptr : m_askedFocus;
-		if (m_askedBrowser && (res.type != m_lastType || res.state != m_lastState)) {
-			LOG_ANY("caret flag: browser focus type {} state 0x{:x}", res.type, res.state);
-			m_lastType = res.type;
-			m_lastState = res.state;
+		if (m_askedBrowser && res.detail != m_lastDetail) {
+			LOG_ANY("caret flag: {}", res.detail);
+			m_lastDetail = res.detail;
 		}
 		if (!res.ok) {
 			const char* why = *res.how ? res.how : "no caret";

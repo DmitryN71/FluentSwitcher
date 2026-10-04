@@ -1,9 +1,11 @@
 #pragma once
 
-// Буквы раскладки вместо флага: EN / RU или ENG / RUS, как пишет сама Windows у часов (ISO 639-2). Значок у часов -
-// буквы цвета текста панели задач на прозрачном фоне, как у Windows; флажок у текстового курсора - буквы на тёмной
-// плашке со светлой каймой, чтобы их было видно на любом фоне. Рисует Direct2D / DirectWrite в память (без окна),
-// отдаёт RGBA без умножения на альфу - как картинки флагов (IconManager.h). Только поток интерфейса движка.
+// Буквы раскладки вместо флага: EN, RU. Значок у часов - буквы цвета текста панели задач на прозрачном фоне, как
+// у Windows, или они же в рамке (контур скруглённого прямоугольника, как у значков Windows у часов); флажок у
+// текстового курсора - буквы на тёмной плашке со светлой каймой, чтобы их было видно на любом фоне. Рисует
+// Direct2D / DirectWrite в память (без окна), отдаёт RGBA без умножения на альфу - как картинки флагов
+// (IconManager.h). Буквы ставятся посередине по тому, где легли их точки (метрики шрифта не точны, и на мелком
+// значке промах в полточки виден). Только поток интерфейса движка.
 
 #include <windows.h>
 #include <d2d1.h>
@@ -20,19 +22,17 @@
 
 namespace LetterIcons {
 
-// Наборы в настройке flagsSet: две буквы и три.
-inline constexpr const char* kTwo = "Letters";
-inline constexpr const char* kThree = "Letters3";
+// Наборы в настройке flagsSet: буквы и буквы в рамке.
+inline constexpr const char* kPlain = "Letters";
+inline constexpr const char* kFramed = "LettersFramed";
 
-inline bool Is(const std::string& set) { return set == kTwo || set == kThree; }
+inline bool Is(const std::string& set) { return set == kPlain || set == kFramed; }
 
-// "en-US" -> "EN" (или "ENG" для трёх букв, как у Windows: код языка ISO 639-2).
-inline std::wstring Text(const std::wstring& locale, bool three) {
+enum class Style { Plain, Frame, Badge };
+
+// "en-US" -> "EN".
+inline std::wstring Text(const std::wstring& locale) {
 	std::wstring lang = locale.substr(0, locale.find(L'-'));
-	if (three) {
-		wchar_t buf[16] = {};
-		if (GetLocaleInfoEx(locale.c_str(), LOCALE_SISO639LANGNAME2, buf, 16) > 0 && buf[0]) lang = buf;
-	}
 	for (auto& c : lang) c = (wchar_t)(UINT_PTR)CharUpperW((LPWSTR)(UINT_PTR)c);
 	return lang;
 }
@@ -68,7 +68,7 @@ namespace details {
 		}();
 		return family;
 	}
-	// Высота заглавных шрифта в долях кегля: по ней буквы ставятся ровно посередине.
+	// Высота заглавных в долях кегля - для кегля; посередине буквы ставятся по их точкам.
 	inline float CapHeight(DWRITE_FONT_WEIGHT weight) {
 		ComPtr<IDWriteFontCollection> fonts;
 		ComPtr<IDWriteFontFamily> family;
@@ -87,9 +87,9 @@ namespace details {
 	}
 }
 
-// Буквы в картинке w x h. badge - на плашке (флажок у курсора), иначе на прозрачном (значок у часов) цветом текста
-// панели задач: dark - тёмная панель (буквы белые). gray - программа выключена: буквы бледные.
-inline Picture Render(const std::wstring& text, int w, int h, bool badge, bool dark, bool gray) {
+// Буквы в картинке w x h. Plain и Frame - значок у часов, цветом текста панели задач: dark - тёмная панель (белые).
+// Badge - флажок у курсора, на плашке. gray - программа выключена: всё бледное.
+inline Picture Render(const std::wstring& text, int w, int h, Style style, bool dark, bool gray) {
 	using Microsoft::WRL::ComPtr;
 	Picture pic;
 	auto& d2d = details::D2D();
@@ -108,18 +108,28 @@ inline Picture Render(const std::wstring& text, int w, int h, bool badge, bool d
 		return pic;
 	}
 	HGDIOBJ old = SelectObject(mem, bmp);
+	const auto* px = (const unsigned char*)bits;
 
-	const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
-		D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
-	ComPtr<ID2D1DCRenderTarget> rt;
-	ComPtr<ID2D1SolidColorBrush> brush;
+	// Рамка: во всю ширину, высотой в три четверти, ровно посередине (поля сверху и снизу равны); толщина - точка
+	// (на 200 % - две). Плашка у курсора - вся картинка.
+	const float stroke = style == Style::Frame ? (float)(std::max)(1, (int)std::floor(h / 16.0f + 0.25f)) : 1.0f;
+	float frameTop = 0, frameBottom = (float)h;
+	if (style == Style::Frame) {
+		int fh = (int)std::lround(h * 0.75f);
+		if ((h - fh) % 2) fh++;
+		frameTop = (h - fh) / 2.0f;
+		frameBottom = frameTop + fh;
+	}
+	const float frameH = frameBottom - frameTop;
+
+	// Кегль: заглавные не выше 62 % высоты (в рамке - её внутренней части), и буквы не шире места.
+	const DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
+	const float capShare = details::CapHeight(weight);
+	const float inner = style == Style::Plain ? (float)h : frameH - 2 * stroke;
+	const float padX = style == Style::Plain ? 0 : stroke + (std::max)(1.0f, std::round(h * 0.14f));
+	float size = inner * (style == Style::Plain ? 0.62f : 0.58f) / capShare;
 	ComPtr<IDWriteTextFormat> format;
 	ComPtr<IDWriteTextLayout> layout;
-	RECT rc{ 0, 0, w, h };
-	const DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
-	// Кегль: буквы во всю ширину (с полями на плашке), но заглавные не выше 62 % высоты.
-	const float padX = badge ? h * 0.22f : 0, capShare = details::CapHeight(weight);
-	float size = h * 0.62f / capShare;
 	auto measure = [&](float s) {
 		layout.Reset();
 		format.Reset();
@@ -137,48 +147,87 @@ inline Picture Render(const std::wstring& text, int w, int h, bool badge, bool d
 		size *= room / tw;
 		tw = measure(size);
 	}
-	if (layout && SUCCEEDED(d2d->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(mem, &rc)) &&
-		SUCCEEDED(rt->CreateSolidColorBrush(D2D1::ColorF(0xffffff), &brush))) {
-		DWRITE_LINE_METRICS line{};
-		UINT32 lines = 0;
-		layout->GetLineMetrics(&line, 1, &lines);
-		// Заглавные - посередине по высоте, строка букв - по целой точке (чётче).
-		const float cap = size * capShare;
-		const float baseline = std::round((h + cap) / 2);
-		const float x = (w - tw) / 2, y = baseline - line.baseline;
 
+	const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+		D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
+	ComPtr<ID2D1DCRenderTarget> rt;
+	ComPtr<ID2D1SolidColorBrush> brush;
+	RECT rc{ 0, 0, w, h };
+	bool ok = layout && SUCCEEDED(d2d->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(mem, &rc)) &&
+		SUCCEEDED(rt->CreateSolidColorBrush(D2D1::ColorF(0xffffff), &brush));
+	if (ok) {
 		ComPtr<IDWriteRenderingParams> params;
 		if (SUCCEEDED(dw->CreateCustomRenderingParams(1.8f, 0.5f, 0.0f, DWRITE_PIXEL_GEOMETRY_FLAT,
 		                                              DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC, &params)))
 			rt->SetTextRenderingParams(params.Get());
-		rt->BeginDraw();
-		rt->Clear(D2D1::ColorF(0, 0, 0, 0));
-		rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-		D2D1_COLOR_F ink = dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
-		if (badge) {
-			const float r = h * 0.28f;
-			brush->SetColor(D2D1::ColorF(0x202020));
-			rt->FillRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get());
-			brush->SetColor(D2D1::ColorF(0xffffff, 0.28f));
-			rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get(), 1.0f);
-			ink = D2D1::ColorF(0xffffff);
-		}
-		if (gray) ink.a = 0.45f;
-		brush->SetColor(ink);
-		rt->DrawTextLayout({ x, y }, layout.Get(), brush.Get());
-		if (SUCCEEDED(rt->EndDraw())) {
-			pic.width = w;
-			pic.height = h;
-			pic.rgba.resize((size_t)w * h * 4);
-			const auto* src = (const unsigned char*)bits;
-			for (int i = 0; i < w * h; i++) {
-				const unsigned a = src[i * 4 + 3];
-				auto un = [a](unsigned c) { return (unsigned char)(a ? (std::min)(255u, c * 255 / a) : 0); };
-				pic.rgba[i * 4 + 0] = un(src[i * 4 + 2]);
-				pic.rgba[i * 4 + 1] = un(src[i * 4 + 1]);
-				pic.rgba[i * 4 + 2] = un(src[i * 4 + 0]);
-				pic.rgba[i * 4 + 3] = (unsigned char)a;
+		DWRITE_LINE_METRICS line{};
+		UINT32 lines = 0;
+		layout->GetLineMetrics(&line, 1, &lines);
+		const float cap = size * capShare;
+		float x = (w - tw) / 2, y = std::round((h + cap) / 2) - line.baseline;
+
+		D2D1_COLOR_F ink = style == Style::Badge || dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
+		const float alpha = gray ? 0.45f : 1.0f;
+		auto draw = [&](bool shape) {
+			rt->BeginDraw();
+			rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+			rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+			if (shape && style == Style::Badge) {
+				const float r = h * 0.28f;
+				brush->SetColor(D2D1::ColorF(0x202020));
+				rt->FillRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get());
+				brush->SetColor(D2D1::ColorF(0xffffff, 0.28f));
+				rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get(), 1.0f);
 			}
+			if (shape && style == Style::Frame) {
+				const float half = stroke / 2, r = frameH * 0.3f;
+				D2D1_COLOR_F edge = ink;
+				edge.a = alpha;
+				brush->SetColor(edge);
+				rt->DrawRoundedRectangle({ { half, frameTop + half, w - half, frameBottom - half }, r - half, r - half },
+				                         brush.Get(), stroke);
+			}
+			D2D1_COLOR_F letters = ink;
+			letters.a = alpha;
+			brush->SetColor(letters);
+			rt->DrawTextLayout({ x, y }, layout.Get(), brush.Get());
+			const bool done = SUCCEEDED(rt->EndDraw());
+			GdiFlush(); // точки - в памяти картинки, прежде чем их читать
+			return done;
+		};
+		// Сначала одни буквы - где легли их точки; потом сдвиг на целые точки, чтобы они стояли посередине
+		// (не делится поровну - выше и левее на полточки), и всё начисто.
+		ok = draw(false);
+		if (ok) {
+			int top = h, bottom = -1, left = w, right = -1;
+			for (int yy = 0; yy < h; yy++) {
+				for (int xx = 0; xx < w; xx++) {
+					if (px[(yy * w + xx) * 4 + 3] > 96) {
+						top = (std::min)(top, yy);
+						bottom = (std::max)(bottom, yy);
+						left = (std::min)(left, xx);
+						right = (std::max)(right, xx);
+					}
+				}
+			}
+			if (bottom >= 0) {
+				y += (float)((h - (bottom - top + 1)) / 2 - top);
+				x += (float)((w - (right - left + 1)) / 2 - left);
+			}
+			ok = draw(true);
+		}
+	}
+	if (ok) {
+		pic.width = w;
+		pic.height = h;
+		pic.rgba.resize((size_t)w * h * 4);
+		for (int i = 0; i < w * h; i++) {
+			const unsigned a = px[i * 4 + 3];
+			auto un = [a](unsigned c) { return (unsigned char)(a ? (std::min)(255u, c * 255 / a) : 0); };
+			pic.rgba[i * 4 + 0] = un(px[i * 4 + 2]);
+			pic.rgba[i * 4 + 1] = un(px[i * 4 + 1]);
+			pic.rgba[i * 4 + 2] = un(px[i * 4 + 0]);
+			pic.rgba[i * 4 + 3] = (unsigned char)a;
 		}
 	}
 	SelectObject(mem, old);

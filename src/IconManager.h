@@ -8,9 +8,9 @@ class IconMgr {
 	using Bundle = std::vector<Images::ImageIcon>;
 	std::map<wstring, Bundle> icons;
 
-	// Буквы вместо флага (LetterIcons.h): наборы "Letters" (EN, RU) и "Letters3" (ENG, RUS).
+	// Буквы вместо флага (LetterIcons.h): наборы "Letters" (EN, RU) и "LettersFramed" (они же в рамке).
 	static bool Letters() { return LetterIcons::Is(conf_get_unsafe()->flagsSet); }
-	static bool Three() { return conf_get_unsafe()->flagsSet == LetterIcons::kThree; }
+	static bool Framed() { return conf_get_unsafe()->flagsSet == LetterIcons::kFramed; }
 	static Images::Image ToImage(LetterIcons::Picture&& pic) {
 		Images::Image img = std::make_shared<Images::details::ImageImpl>();
 		if (pic.rgba.empty()) return img;
@@ -25,11 +25,13 @@ class IconMgr {
 	// Значок у часов буквами: цвет - как текст панели задач (её тема - в ключе: сменилась - новый значок).
 	Images::ImageIcon LetterIcon(TStr locale, Vec_i2 size, bool is_gray) {
 		const bool dark = FluentMenu::TaskbarDark();
-		const auto text = LetterIcons::Text(locale, Three());
-		const auto key = std::format(L"letters|{}|{}x{}|{}|{}", text, size.x, size.y, dark, is_gray);
+		const auto text = LetterIcons::Text(locale);
+		const bool framed = Framed();
+		const auto key = std::format(L"letters|{}|{}x{}|{}|{}|{}", text, size.x, size.y, dark, is_gray, framed);
 		auto it = icons.find(key);
 		if (it != icons.end() && !it->second.empty()) return it->second.front();
-		auto icon = Images::ImageToIconConsume(ToImage(LetterIcons::Render(text, size.x, size.y, false, dark, is_gray)));
+		const auto style = framed ? LetterIcons::Style::Frame : LetterIcons::Style::Plain;
+		auto icon = Images::ImageToIconConsume(ToImage(LetterIcons::Render(text, size.x, size.y, style, dark, is_gray)));
 		icons[key] = { icon };
 		return icon;
 	}
@@ -183,10 +185,9 @@ public:
 	// Картинка флага (RGBA) для флажка у текстового курсора: ближайшего к size размера (поровну - больший).
 	// Пусто - флага нет. Не кэшируется: флажок у курсора держит свою последнюю картинку сам.
 	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false) {
-		if (Letters()) { // буквы на плашке, высотой в три четверти размера; три буквы - шире
-			const bool three = Three();
-			const int w = three ? (int)std::lround(size * 1.35) : size, h = (int)std::lround(size * 0.75);
-			return ToImage(LetterIcons::Render(LetterIcons::Text(contry_id, three), w, h, true, true, is_gray));
+		if (Letters()) { // буквы на плашке, высотой в три четверти размера
+			return ToImage(LetterIcons::Render(LetterIcons::Text(contry_id), size, (int)std::lround(size * 0.75),
+			                                   LetterIcons::Style::Badge, true, is_gray));
 		}
 		wstring local_id = contry_id;
 		StrUtils::ToLower(local_id);

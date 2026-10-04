@@ -205,7 +205,7 @@ const std::unordered_map<std::string, const char*>& English()
         // Typing
         { "Набор текста", "Typing" },
         { "Буквы: EN, RU", "Letters: EN, RU" },
-        { "Буквы: ENG, RUS", "Letters: ENG, RUS" },
+        { "Буквы в рамке: EN, RU", "Letters in a frame: EN, RU" },
         { "По пробелам и знакам препинания", "At spaces and punctuation" },
         { "Только по пробелам", "At spaces only" },
         { "По пробелам, знакам и «возможным знакам» – при исправлении нескольких слов",

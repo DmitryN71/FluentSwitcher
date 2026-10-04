@@ -13,6 +13,12 @@
 // 2 и 3 ходят в чужую программу и могут ждать её ответа, поэтому - в своём потоке (CaretProbe) с таймаутами UIA.
 // Каретку не нашли - флажка нет.
 //
+// Браузеры (Chromium - Chrome, Яндекс, Brave, Edge, программы на Electron; Firefox) - особо: каретка у них бывает и
+// вне полей ввода. Firefox держит системную каретку в тексте страницы (флажок ездил по ней при прокрутке), Chromium
+// отдаёт через MSAA её последнее место (флажок стоял посреди страницы). Поэтому там флажок - только когда в фокусе
+// поле ввода (Editable, по UI Automation). Вся страница браузера - одно окно, так что "в этом окне каретки нет" там не
+// запоминается, а не нашли - ещё две попытки: поле могло открываться с анимацией.
+//
 // Окно флажка - слоистое (UpdateLayeredWindow, плавная прозрачность), не берёт фокус и щелчки, поверх всех.
 // В полноэкранных программах, при открытом меню, перетаскивании окна и Alt+Tab флажок прячется.
 
@@ -35,12 +41,17 @@ public:
 		HWND focus = nullptr;
 		DWORD pid = 0;
 		bool uiaFirst = false;
+		bool browser = false;  // сначала проверить, что в фокусе поле ввода
+		bool system = false;   // у браузера есть системная каретка (Firefox) - вот она:
+		RECT systemRc{};
 	};
 	struct Result {
 		uint64_t seq = 0;
 		bool ok = false;
 		RECT rc{};          // каретка, физические пиксели экрана
 		const char* how = "";
+		int type = 0;       // браузер: тип элемента в фокусе (UI Automation) и его состояние (MSAA) - для журнала
+		DWORD state = 0;
 	};
 
 	void Start(HWND notify) {
@@ -99,7 +110,25 @@ private:
 				}
 				Result res{ .seq = req.seq };
 				RECT rc{};
-				if (!req.uiaFirst && Msaa(req.focus, rc)) {
+				if (req.browser) {
+					const int editable = uia ? Editable(uia, req.pid, res.type, res.state) : -1;
+					if (editable != 1) {
+						res.how = editable == 0 ? "not a text field" : "no focus";
+					}
+					else if (req.system) {
+						res = { req.seq, true, req.systemRc, "caret", res.type, res.state };
+					}
+					else if (Msaa(req.focus, rc)) {
+						res = { req.seq, true, rc, "msaa", res.type, res.state };
+					}
+					else if (Uia(uia, req.pid, rc, true)) {
+						res = { req.seq, true, rc, "uia", res.type, res.state };
+					}
+					else {
+						res.how = "text field, no caret";
+					}
+				}
+				else if (!req.uiaFirst && Msaa(req.focus, rc)) {
 					res = { req.seq, true, rc, "msaa" };
 				}
 				else if (uia && Uia(uia, req.pid, rc)) {
@@ -157,16 +186,47 @@ private:
 		return ok;
 	}
 
-	static bool Uia(IUIAutomation* uia, DWORD pid, RECT& rc) {
+	static bool Uia(IUIAutomation* uia, DWORD pid, RECT& rc, bool editable = false) {
 		CComPtr<IUIAutomationElement> el;
 		if (FAILED(uia->GetFocusedElement(&el)) || !el) return false;
 		int elPid = 0;
 		if (FAILED(el->get_CurrentProcessId(&elPid)) || (DWORD)elPid != pid) return false;
-		return UiaCaret(el, rc);
+		return UiaCaret(el, rc, editable);
 	}
 
-	// Каретка в текстовом элементе UI Automation.
-	static bool UiaCaret(IUIAutomationElement* el, RECT& rc) {
+	// Браузер: в фокусе поле ввода? 1 - да, 0 - нет (текст страницы, ссылка, кнопка, список), -1 - фокус не в этой
+	// программе или UI Automation не ответил. Текст страницы и поля "только для чтения" - с состоянием MSAA
+	// STATE_SYSTEM_READONLY (так их отличают и программы чтения с экрана) или ValuePattern.IsReadOnly.
+	static int Editable(IUIAutomation* uia, DWORD pid, int& type, DWORD& state) {
+		CComPtr<IUIAutomationElement> el;
+		if (FAILED(uia->GetFocusedElement(&el)) || !el) return -1;
+		int elPid = 0;
+		if (FAILED(el->get_CurrentProcessId(&elPid)) || (DWORD)elPid != pid) return -1;
+		CONTROLTYPEID ct = 0;
+		el->get_CurrentControlType(&ct);
+		type = ct;
+		bool readOnly = false, stateKnown = false;
+		CComPtr<IUIAutomationLegacyIAccessiblePattern> legacy;
+		if (SUCCEEDED(el->GetCurrentPatternAs(UIA_LegacyIAccessiblePatternId, IID_PPV_ARGS(&legacy))) && legacy &&
+			SUCCEEDED(legacy->get_CurrentState(&state))) {
+			stateKnown = true;
+			readOnly = (state & STATE_SYSTEM_READONLY) != 0;
+		}
+		CComPtr<IUIAutomationValuePattern> value;
+		BOOL valueReadOnly = TRUE;
+		const bool hasValue = SUCCEEDED(el->GetCurrentPatternAs(UIA_ValuePatternId, IID_PPV_ARGS(&value))) && value &&
+			SUCCEEDED(value->get_CurrentIsReadOnly(&valueReadOnly));
+		if (readOnly || (hasValue && valueReadOnly && ct != UIA_DocumentControlTypeId)) return 0;
+		if (ct == UIA_EditControlTypeId) return 1;
+		if (ct == UIA_DocumentControlTypeId) return stateKnown ? 1 : 0; // страница, которую можно править (редактор)
+		// Остальное (поле с подсказками - ComboBox, contenteditable - группа): только с изменяемым значением.
+		// Выпадающий список (select) - ComboBox со значением "только для чтения".
+		return hasValue && !valueReadOnly ? 1 : 0;
+	}
+
+	// Каретка в текстовом элементе UI Automation. editable - элемент уже проверен как поле ввода (браузер): без
+	// символов у каретки - у края поля, какого бы типа он ни был.
+	static bool UiaCaret(IUIAutomationElement* el, RECT& rc, bool editable = false) {
 		CComPtr<IUIAutomationTextRange> range;
 		CComPtr<IUIAutomationTextPattern2> tp2;
 		CComPtr<IUIAutomationTextPattern> tp;
@@ -214,7 +274,8 @@ private:
 		// Символов у каретки нет: поле пустое или программа не говорит, где они (поля адреса и темы в eM Client).
 		// Только для полей ввода: текст есть - каретка в его конце (при наборе она там); нет - у левого края.
 		CONTROLTYPEID type = 0;
-		if (FAILED(el->get_CurrentControlType(&type)) || (type != UIA_EditControlTypeId && type != UIA_DocumentControlTypeId)) {
+		if (!editable &&
+			(FAILED(el->get_CurrentControlType(&type)) || (type != UIA_EditControlTypeId && type != UIA_DocumentControlTypeId))) {
 			return false;
 		}
 		CComPtr<IUIAutomationTextRange> doc;
@@ -298,6 +359,11 @@ private:
 	// и прокрутка ходили бы в чужую программу.
 	HWND m_noCaretFocus = nullptr;
 	bool m_eventPoked = false;
+	bool m_askedBrowser = false;
+	int m_retry = 0;          // браузер: сколько раз уже переспросили после неудачи
+	bool m_retrying = false;  // эта проверка - повторная
+	int m_lastType = -1;      // браузер: что было в фокусе в прошлый раз (для журнала)
+	DWORD m_lastState = 0;
 
 	bool m_visible = false;
 	HWND m_shownFg = nullptr;
@@ -425,6 +491,13 @@ private:
 		return false;
 	}
 
+	// Браузер: страница Chromium (Chrome, Яндекс, Brave, Edge, Electron) или Firefox. Адресная строка Chromium - не
+	// страница (Chrome_WidgetWin_1), с ней - как с обычной программой.
+	static bool Browser(HWND fg, HWND focus) {
+		return IsClass(focus, { L"Chrome_RenderWidgetHostHWND", L"MozillaWindowClass" }) ||
+			(!focus && IsClass(fg, { L"MozillaWindowClass" }));
+	}
+
 	// Программы, где системная каретка есть, но не там (или её нет вовсе): сразу UI Automation.
 	static bool UiaFirst(HWND fg, HWND focus) {
 		return IsClass(fg, { L"ApplicationFrameWindow" }) ||
@@ -501,28 +574,45 @@ private:
 		if (!GetGUIThreadInfo(tid, &gti)) return Hide();
 		if (gti.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE | GUI_SYSTEMMENUMODE | GUI_INMOVESIZE)) return Hide();
 
+		if (!std::exchange(m_retrying, false)) m_retry = 0;
 		RECT caret{};
-		bool uiaFirst = UiaFirst(fg, gti.hwndFocus);
-		if (!uiaFirst && SystemCaret(gti, caret)) {
+		const bool uiaFirst = UiaFirst(fg, gti.hwndFocus);
+		const bool browser = Browser(fg, gti.hwndFocus);
+		const bool system = !uiaFirst && SystemCaret(gti, caret);
+		if (system && !browser) {
 			++m_seq; // ответ потока, если он ещё идёт, уже не нужен
 			return Place(fg, caret, "caret");
 		}
 		// Остальное - в потоке CaretProbe; пока ждём, флажок остаётся, только если окно то же.
 		HWND focus = gti.hwndFocus ? gti.hwndFocus : fg;
-		if (!eventDriven && focus == m_noCaretFocus) return Hide();
+		if (!eventDriven && !browser && focus == m_noCaretFocus) return Hide();
 		if (fg != m_shownFg) Hide();
 		m_askedFg = fg;
 		m_askedFocus = focus;
-		m_probe.Ask({ ++m_seq, focus, pid, uiaFirst });
+		m_askedBrowser = browser;
+		m_probe.Ask({ ++m_seq, focus, pid, uiaFirst, browser, system, caret });
 	}
 
 	void OnProbe() {
 		auto res = m_probe.Take();
 		if (res.seq != m_seq || GetForegroundWindow() != m_askedFg) return; // устарел
-		m_noCaretFocus = res.ok ? nullptr : m_askedFocus;
+		m_noCaretFocus = res.ok || m_askedBrowser ? nullptr : m_askedFocus;
+		if (m_askedBrowser && (res.type != m_lastType || res.state != m_lastState)) {
+			LOG_ANY("caret flag: browser focus type {} state 0x{:x}", res.type, res.state);
+			m_lastType = res.type;
+			m_lastState = res.state;
+		}
 		if (!res.ok) {
-			if (*m_lastHow) LOG_ANY("caret flag: no caret");
-			m_lastHow = "";
+			const char* why = *res.how ? res.how : "no caret";
+			if (why != m_lastHow) LOG_ANY("caret flag: {}", why);
+			m_lastHow = why;
+			// Браузер: поле могло ещё ехать на место (открывается с анимацией), а Chromium - только включать
+			// специальные возможности. Ещё две попытки.
+			if (m_askedBrowser && m_retry < 2) {
+				m_retry++;
+				m_retrying = true;
+				EventPoke(m_retry == 1 ? 200 : 600);
+			}
 			return Hide();
 		}
 		Place(m_askedFg, res.rc, res.how);

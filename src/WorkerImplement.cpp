@@ -9,9 +9,15 @@
 #include <fstream>
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
+    m_holdId = keyData.hold || keyData.held_end ? keyData.holdId : 0;
+    m_caretBase = KeyHold::caretMoves;
+    struct Release {
+        unsigned id;
+        ~Release() { KeyHold::RequestRelease(id); }
+    };
     if (keyData.held_end) {
         // Хук придержал Enter / Tab после слова: исправить и отпустить. Сама клавиша придёт потом, как обычный набор.
-        struct Release { ~Release() { KeyHold::RequestRelease(); } } release;
+        Release release{ keyData.holdId };
         if (!AutoSwitchLastWord(false)) FixTwoCaps(false);
         AutoWordEnd();
         return;
@@ -27,7 +33,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         keyData.is_caps;  // сохраним последнее известное значение. Нажатие caps по идее должно нам привести сюда.
 
     if (CHotKey::IsKnownMods(vkCode)) {
-        if (keyData.hold) KeyHold::RequestRelease(); // не бывает (держат после буквы и пробела), но не держать зря
+        if (keyData.hold) KeyHold::RequestRelease(keyData.holdId); // не бывает (держат после буквы и пробела), но не держать зря
         return;  // не очищаем текущий буфер нажатых клавиш так как они могут быть частью наших хот-кеев
     }
 
@@ -64,7 +70,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
             // capslock.
             // if (keyData.is_caps) is_shift = !is_shift;
 
-            m_cycleList.AddKeyToList(key);
+            m_cycleList.AddKeyToList(key, topWndInfo2.lay);
             break;
         }
         case KEYTYPE_COMMAND_NO_CLEAR:
@@ -83,7 +89,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
 
     if (keyData.hold) {
         // Хук придерживает нажатия после этого пробела (или буквы посреди слова): решить и отпустить, что бы ни случилось.
-        struct Release { ~Release() { KeyHold::RequestRelease(); } } release;
+        Release release{ keyData.holdId };
         if (keyData.early)
             AutoSwitchEarly();
         else if (!AutoSwitchLastWord())
@@ -191,9 +197,86 @@ bool IsConsole() {
 }
 }
 
+namespace {
+// Текст клавиш набранного [begin, end) в раскладке lay; клавиша - не один знак - пусто.
+std::wstring TailText(const CycleRevertList& list, size_t begin, size_t end, HKL lay) {
+    std::wstring text;
+    for (size_t i = begin; i < end; i++) {
+        auto c = InputSender::KeyText(list.KeyAt(i), lay, false);
+        if (c.size() != 1) return {};
+        text += c;
+    }
+    return text;
+}
+
+// Контекст слова tail[0] (AutoSwitch::ContextOf) - по слову перед ним; lay - раскладка, в которой набрано слово.
+AutoSwitch::Context ContextBefore(const CycleRevertList& list, const std::vector<CycleRevertList::TailWord>& tail,
+                                  bool fixedBefore, HKL lay) {
+    using AutoSwitch::Context;
+    if (tail.size() < 2) return fixedBefore ? Context::Same : Context::Start;
+    const auto& prev = tail[1];
+    if (prev.lay != lay) return Context::Start; // набрано в другой раскладке (сменили руками) - как с начала
+    const std::wstring text = TailText(list, prev.begin, prev.end, lay);
+    if (text.empty()) return Context::Unknown;
+    const std::wstring lang = Utils::GetNameForHKL_simple(lay);
+    return AutoSwitch::ContextOf(text, lang, [&](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); });
+}
+
+// Слово tail[0] переключается из lay в other: с какой клавиши переводить вместе с короткими словами перед ним
+// (AutoSwitch::Retro, до трёх слов, подряд); tail[0].begin - только само слово.
+size_t RetroBegin(const CycleRevertList& list, const std::vector<CycleRevertList::TailWord>& tail, bool fixedBefore,
+                  HKL lay, HKL other, const std::vector<std::wstring>& exceptions) {
+    if (tail.empty()) return list.Size();
+    const std::wstring lang = Utils::GetNameForHKL_simple(lay), otherLang = Utils::GetNameForHKL_simple(other);
+    std::vector<AutoSwitch::RetroWord> words;
+    for (size_t i = 1; i < tail.size(); i++) {
+        const auto& word = tail[i];
+        AutoSwitch::RetroWord w{ TailText(list, word.begin, word.end, lay), TailText(list, word.begin, word.end, other) };
+        bool caps = false;
+        for (size_t k = word.begin; k < word.end; k++) caps = caps || list.KeyAt(k).is_caps;
+        w.sameLayout = word.lay == lay && !caps && !w.typed.empty() && !w.there.empty();
+        w.fixedAfter = fixedBefore && i + 1 == tail.size();
+        words.push_back(w);
+    }
+    const size_t count = AutoSwitch::RetroCount(words, lang, otherLang, exceptions,
+                                                [&](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); });
+    if (count) LOG_ANY(L"autoswitch: and {} words before it", count);
+    return count ? tail[count].begin : tail[0].begin;
+}
+}
+
+void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL rest) {
+    TKeyRevert a, b;
+    for (size_t i = begin; i < middle && i < m_cycleList.Size(); i++) a.push_back(m_cycleList.KeyAt(i));
+    for (size_t i = middle; i < m_cycleList.Size(); i++) b.push_back(m_cycleList.KeyAt(i));
+    if (a.empty() && b.empty()) return;
+    const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+    TextFixed();
+    const auto stop = CaretStop();
+    InputSender::SendVkKeyPaced(VK_BACK, (int)(a.size() + b.size()), delay, stop);
+    Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
+    InputSender::SendKeysAsText(a, first, m_is_last_caps, delay, stop);
+    InputSender::SendKeysAsText(b, rest, m_is_last_caps, delay, stop);
+    if (stop()) LOG_ANY("retype stopped: the caret moved");
+    m_cycleList.SetLayFrom(begin, first);
+    m_cycleList.SetLayFrom(middle, rest);
+    m_cycleList.SetSeparateLast();
+}
+
+void WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
+    TKeyRevert list = m_cycleList.KeysFrom(begin);
+    if (list.empty()) return;
+    TextFixed();
+    IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = to,
+                            .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
+    m_cycleList.SetLayFrom(begin, to);
+    if (wordEnded) m_cycleList.SetSeparateLast();
+    AutoLayoutIsOurs();
+}
+
 bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     GETCONF;
-    if (!cfg->autoswitch || !KeyHold::fixAllowed) return false;
+    if (!cfg->autoswitch || !KeyHold::Allowed(m_holdId)) return false;
     auto keys = afterSpace ? m_cycleList.LastWordKeys() : m_cycleList.TrailingWordKeys();
     if (keys.empty()) return false;
     // record - запомнить слово и причину для журнала (не пароль).
@@ -209,6 +292,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || IsConsole())
         return no("a password, a console or an excluded program", false);
     if (m_autoWord.backspace) return no("the word was edited with Backspace");
+    if (m_autoWord.undone) return no("switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
     if (m_autoWord.lay && lay != m_autoWord.lay) return no("the layout was switched by hand");
@@ -227,6 +311,10 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); };
     };
     auto suggestions = [lang = Utils::GetNameForHKL_simple(lay)](const std::wstring& w) { return SpellCheck::Suggest(w, lang); };
+    // Слово перед этим - контекст коротких слов (AutoSwitch.h); слова перед ним - их переводят вместе с этим.
+    bool fixedBefore = false;
+    const auto tail = m_cycleList.TailWords(afterSpace, 6, &fixedBefore);
+    const auto context = ContextBefore(m_cycleList, tail, fixedBefore, lay);
     for (HKL other : cfg->layouts_info.EnabledLayouts()) {
         if (other == lay) continue;
         std::wstring there;
@@ -241,22 +329,64 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         if (there.empty()) continue;
         // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a.
         const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
+        auto shortWord = AutoSwitch::Short::No;
         if (!force) {
             const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions);
-            if (!why) why = AutoSwitch::DecideWhy(typed, there, dictionary(lay), dictionary(other), suggestions);
+            if (!why)
+                why = AutoSwitch::DecideWhy(typed, there, dictionary(lay), dictionary(other), suggestions,
+                                            ShortWords::TrustDictionary(Utils::GetNameForHKL_simple(lay)));
+            // Частое короткое слово своего языка ("шт", "руб", "ул", "gb") словарь может и не знать: "5 шт" - не "5 in".
+            if (!why && AutoSwitch::FrequentAsTyped(typed, Utils::GetNameForHKL_simple(lay)))
+                why = "a frequent short word as typed";
+            // Короткое слово, которое словарь пропускает (ns - "ты", tot - "еще", "f&" - "а?"): по частоте и соседям.
+            if (why && !AutoSwitch::Excepted(typed, there, exceptions) &&
+                (strcmp(why, "too short") == 0 || strcmp(why, "a word as typed") == 0 ||
+                 strcmp(why, "a short word with a sign after it") == 0)) {
+                shortWord = AutoSwitch::ShortWord(typed, there, Utils::GetNameForHKL_simple(lay),
+                                                  Utils::GetNameForHKL_simple(other), context, dictionary(lay));
+                if (shortWord != AutoSwitch::Short::No) {
+                    LOG_ANY(L"autoswitch: {} / {}: a short word, {}", typed, there, std::wstring(why, why + strlen(why)));
+                    why = nullptr;
+                }
+            }
             if (why) {
                 LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, std::wstring(why, why + strlen(why)));
                 m_autoNo = { typed, why };
                 continue;
             }
         }
+        // Короткие слова перед ним, набранные так же ("f" перед "vj;yj"), - вместе с ним.
+        const size_t begin = RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions);
+        const bool retro = !tail.empty() && begin < tail[0].begin;
+        // Одно короткое слово без соседа-подтверждения ждёт: его переведёт следующее слово, если переключится.
+        if (shortWord == AutoSwitch::Short::WithPartner && !retro) {
+            LOG_ANY(L"autoswitch: {} / {}: a short word alone, waits for the next word", typed, there);
+            m_autoNo = { typed, "a short word alone" };
+            continue;
+        }
         if (IsPasswordUia()) return no("a password field", false);
+        if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
+        KeyHold::Claimed claimed{ m_holdId };
         LOG_ANY(L"autoswitch: {} -> {}{}", typed, there, force ? L" (switch always)" : L"");
         m_autoNo = {};
-        RevertLastWordTo(other);
-        m_autoSwitched = { AutoSwitch::Lower(AutoSwitch::Letters(typed).core), GetTickCount64(), m_cycleList.Size(), typed,
-                           there };
-        Journal("switched", typed, there);
+        // Переводятся те же клавиши, что проверены (слово до пробела), с короткими словами перед ним.
+        const size_t total = m_cycleList.Size();
+        const size_t wordBegin = tail.empty() ? total - keys.size() - (afterSpace ? 1 : 0) : tail[0].begin;
+        const size_t wordEnd = wordBegin + keys.size(), first = retro ? begin : wordBegin;
+        auto trimmed = [](std::wstring s) {
+            while (!s.empty() && s.back() == L' ') s.pop_back();
+            return s;
+        };
+        const std::wstring from = TailText(m_cycleList, first, wordEnd, lay), to = TailText(m_cycleList, first, wordEnd, other);
+        const std::wstring retroFrom = trimmed(TailText(m_cycleList, first, wordBegin, lay)),
+                           retroTo = trimmed(TailText(m_cycleList, first, wordBegin, other));
+        SwitchTail(first, other, true);
+        m_autoSwitched = { .word = AutoSwitch::Lower(AutoSwitch::Letters(typed).core), .at = GetTickCount64(),
+                           .size = m_cycleList.Size(), .typed = from, .there = to, .wordTyped = typed, .wordThere = there,
+                           .retroTyped = retroFrom, .retroThere = retroTo, .from = lay, .to = other, .span = total - first,
+                           .retro = wordBegin - first, .pair = shortWord == AutoSwitch::Short::WithPartner,
+                           .total = m_cycleList.Total() };
+        Journal("switched", from, to);
         return true;
     }
     return false;
@@ -265,14 +395,15 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
 void WorkerImplement::AutoSwitchEarly() {
     GETCONF;
     // Посреди этого слова больше не решать: хук до конца слова пропускает буквы без задержки.
-    auto never = [](const char* why) {
-        KeyHold::earlyDone = true;
+    auto never = [this](const char* why) {
+        if (KeyHold::Allowed(m_holdId)) KeyHold::earlyDone = true; // запоздалый ответ - уже не об этом слове
         LOG_ANY("autoswitch early: not in this word, {}", why);
     };
-    if (!cfg->autoswitch || !cfg->autoswitch_early || !KeyHold::fixAllowed) return never("off or too late");
+    if (!cfg->autoswitch || !cfg->autoswitch_early || !KeyHold::Allowed(m_holdId)) return never("off or too late");
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || IsConsole())
         return never("a password, a console or an excluded program");
     if (m_autoWord.backspace) return never("the word was edited with Backspace");
+    if (m_autoWord.undone) return never("switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
     if (m_autoWord.lay && lay != m_autoWord.lay) return never("the layout was switched by hand");
@@ -286,6 +417,8 @@ void WorkerImplement::AutoSwitchEarly() {
         typed += c;
     }
     const auto exceptions = AutoSwitchExceptions();
+    bool fixedBefore = false;
+    const auto tail = m_cycleList.TailWords(false, 6, &fixedBefore);
     // После щелчка или стрелок в том же окне могли дописывать середину слова: на букву позже.
     const size_t minLetters = AutoSwitch::kEarlyMin + (m_autoWord.moved ? 1 : 0);
     const std::wstring lang = Utils::GetNameForHKL_simple(lay);
@@ -314,20 +447,28 @@ void WorkerImplement::AutoSwitchEarly() {
             continue;
         }
         if (IsPasswordUia()) return never("a password field");
+        if (!KeyHold::Claim(m_holdId)) return; // пока решали, придержку отпустили (3 с): пальцы печатают дальше
+        KeyHold::Claimed claimed{ m_holdId };
         LOG_ANY(L"autoswitch early: {} -> {}", typed, there);
         KeyHold::earlyDone = true;
-        TKeyRevert list;
-        for (auto* key : keys) list.push_back(*key);
+        // Короткие слова перед ним, набранные так же ("f" перед "vj;y"), - вместе с ним.
+        const size_t total = m_cycleList.Size(), wordBegin = tail.empty() ? total - keys.size() : tail[0].begin;
+        const size_t begin = tail.empty() ? wordBegin : RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions);
+        const std::wstring more = L"\u2026";
+        const std::wstring from = TailText(m_cycleList, begin, total, lay) + more;
+        const std::wstring to = TailText(m_cycleList, begin, total, other) + more;
+        std::wstring retroFrom = TailText(m_cycleList, begin, wordBegin, lay), retroTo = TailText(m_cycleList, begin, wordBegin, other);
+        while (!retroFrom.empty() && retroFrom.back() == L' ') retroFrom.pop_back();
+        while (!retroTo.empty() && retroTo.back() == L' ') retroTo.pop_back();
         // Как "Исправить последнее слово", но слово не кончилось: его буквы в буфере остаются одним словом (без
         // SetSeparateLast) - конец слова проверит его целиком, "Исправить последнее слово" вернёт целиком.
-        TextFixed();
-        IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = other,
-                                .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
-        AutoLayoutIsOurs();
-        const std::wstring more = L"\u2026";
-        m_autoSwitched = { AutoSwitch::Lower(AutoSwitch::Letters(typed).core), GetTickCount64(), m_cycleList.Size(),
-                           typed + more, there + more, true, m_wordEnds };
-        Journal("switched", typed + more, there + more);
+        SwitchTail(begin, other, false);
+        m_autoSwitched = { .word = AutoSwitch::Lower(AutoSwitch::Letters(typed).core), .at = GetTickCount64(),
+                           .size = m_cycleList.Size(), .typed = from, .there = to, .wordTyped = typed + more,
+                           .wordThere = there + more, .retroTyped = retroFrom, .retroThere = retroTo, .early = true,
+                           .ends = m_wordEnds, .from = lay, .to = other, .span = total - begin, .retro = wordBegin - begin,
+                           .total = m_cycleList.Total() };
+        Journal("switched", from, to);
         return;
     }
     if (!later) never("nothing to switch to");
@@ -392,17 +533,7 @@ void WorkerImplement::JournalHandFix() {
     Journal("by hand", typed, fixed, m_autoNo.typed == typed ? m_autoNo.why : "not checked");
 }
 
-void WorkerImplement::RevertLastWordTo(HKL lay) {
-    auto to_revert = m_cycleList.FillKeyToRevert(hk_RevertLastWord);
-    if (to_revert.keys.empty()) return;
-    m_cycleList.SetSeparateLast();
-    TextFixed();
-    IFS_LOG(ProcessRevert({ .keylist = std::move(to_revert.keys), .lay = lay,
-                            .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
-    AutoLayoutIsOurs();
-}
-
-bool WorkerImplement::CountAutoSwitchUndo() {
+bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
     auto last = std::exchange(m_autoSwitched, {});
     if (last.word.empty() || GetTickCount64() - last.at > 10000) return false;
     if (last.early) {
@@ -410,18 +541,42 @@ bool WorkerImplement::CountAutoSwitchUndo() {
         const bool same = m_wordEnds == last.ends ? !m_cycleList.TrailingWordKeys().empty()
                                                   : m_wordEnds == last.ends + 1 && !m_cycleList.LastWordKeys().empty();
         if (!same) return false;
+        if (m_wordEnds == last.ends) m_autoWord.undone = true; // слово ещё набирают: в нём больше не переключать
     }
-    else if (m_cycleList.Size() != last.size)
+    // После переключения ничего не набирали (Total() - и после 90 клавиш, когда Size() уже не растёт).
+    else if (m_cycleList.Size() != last.size || m_cycleList.Total() != last.total)
         return false;
+    // Переведённое - всё, что с него начинается (набранное после переключения посреди слова - тоже: Total() вырос на
+    // столько). Стёрли больше, чем набрали, - уже не то: как обычно, вернётся последнее слово.
+    const size_t keys = last.span && m_cycleList.Total() >= last.total ? last.span + (m_cycleList.Total() - last.total) : 0;
+    const bool span = keys && keys <= m_cycleList.Size() && last.retro < keys;
+    if (span && last.retro && !last.pair) {
+        // Слово переключено уверенно, а короткие перед ним - по соседству: сначала вернуть только их (ошибиться могли в
+        // них); слово остаётся, и следующее нажатие вернёт его - уже в счёт исключений.
+        LOG_ANY(L"autoswitch: {} switched back", last.retroTyped);
+        Journal("switched back", last.retroThere, last.retroTyped);
+        auto rest = last;
+        rest.at = GetTickCount64();
+        rest.typed = last.wordTyped;
+        rest.there = last.wordThere;
+        rest.retroTyped.clear();
+        rest.retroThere.clear();
+        rest.span = last.span - last.retro;
+        rest.retro = 0;
+        m_autoSwitched = rest;
+        if (undo) *undo = { .tail = keys, .retro = last.retro, .all = false, .from = last.from, .to = last.to };
+        return true;
+    }
     LOG_ANY(L"autoswitch: {} switched back", last.word);
     Journal("switched back", last.there, last.typed);
     PostMessageW(g_guiHandle, WM_AutoSwitchLearn, 0, (LPARAM)new std::wstring(last.word));
+    if (undo && span) *undo = { .tail = keys, .retro = 0, .all = true, .from = last.from, .to = last.to };
     return true;
 }
 
 void WorkerImplement::AutoWordEnd() {
     m_wordEnds++;
-    m_autoWord.backspace = m_autoWord.moved = false;
+    m_autoWord.backspace = m_autoWord.moved = m_autoWord.undone = false;
     if (!conf_get_unsafe()->autoswitch) return;
     CheckCurLay();
     m_autoWord.lay = CurLay();
@@ -429,7 +584,7 @@ void WorkerImplement::AutoWordEnd() {
 
 void WorkerImplement::FixTwoCaps(bool afterSpace) {
     GETCONF;
-    if (!cfg->two_caps || !KeyHold::fixAllowed || cfg->IsSkipProgramTop() || IsPasswordFocus()) return;
+    if (!cfg->two_caps || !KeyHold::Allowed(m_holdId) || cfg->IsSkipProgramTop() || IsPasswordFocus()) return;
     auto keys = afterSpace ? m_cycleList.LastWordKeys() : m_cycleList.TrailingWordKeys();
     if (keys.empty()) return;
     const HKL lay = CurLay();
@@ -461,17 +616,25 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
         }
     }
     const std::wstring typed = text.substr(fix.from);
+    if (!KeyHold::Claim(m_holdId)) return; // пока решали, придержку отпустили (3 с): пальцы печатают дальше
+    KeyHold::Claimed claimed{ m_holdId };
     LOG_ANY(L"two caps: {} -> {}{}", text, text.substr(0, fix.from), fix.tail);
     TextFixed();
     const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
     const std::wstring space = afterSpace ? L" " : L"";
-    InputSender::SendVkKeyPaced(VK_BACK, (int)(typed.size() + space.size()), delay); // со второй буквы (и пробел)
+    const auto stop = CaretStop();
+    InputSender::SendVkKeyPaced(VK_BACK, (int)(typed.size() + space.size()), delay, stop); // со второй буквы (и пробел)
     Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
-    InputSender::SendTextPaced(fix.tail + space, delay);
+    InputSender::SendTextPaced(fix.tail + space, delay, stop);
+    if (stop()) {
+        LOG_ANY("two caps stopped: the caret moved");
+        m_twoCaps = {};
+        return;
+    }
     keys[fix.from]->is_shift = false; // и в буфере слов вторая буква теперь строчная
     // Отмена - только после пробела: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
     if (afterSpace)
-        m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from] };
+        m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from], m_cycleList.Total() };
     else
         m_twoCaps = {};
 }
@@ -498,17 +661,22 @@ void WorkerImplement::FixTwoCapsInKeys(TKeyRevert& keys, HKL lay) {
 }
 
 bool WorkerImplement::TwoCapsUndoReady() const {
-    return !m_twoCaps.word.empty() && GetTickCount64() - m_twoCaps.at <= 10000 && m_cycleList.Size() == m_twoCaps.size;
+    return !m_twoCaps.word.empty() && GetTickCount64() - m_twoCaps.at <= 10000 && m_cycleList.Size() == m_twoCaps.size &&
+        m_cycleList.Total() == m_twoCaps.total;
 }
 
 bool WorkerImplement::UndoTwoCaps() {
     auto last = std::exchange(m_twoCaps, {});
-    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size) return false;
+    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size ||
+        m_cycleList.Total() != last.total)
+        return false;
     LOG_ANY(L"two caps: {} back, it is an exception now", last.word);
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
-    InputSender::SendVkKeyPaced(VK_BACK, (int)last.fixed.size() + 1, delay);
+    const auto stop = CaretStop();
+    InputSender::SendVkKeyPaced(VK_BACK, (int)last.fixed.size() + 1, delay, stop);
     Sleep(c_afterErase);
-    InputSender::SendTextPaced(last.typed + L" ", delay);
+    InputSender::SendTextPaced(last.typed + L" ", delay, stop);
+    if (stop()) return true; // курсор переехал: бросили, не в счёт
     last.key->is_shift = true;
     PostMessageW(g_guiHandle, WM_TwoCapsLearn, 0, (LPARAM)new std::wstring(last.word));
     return true;
@@ -642,6 +810,7 @@ void WorkerImplement::ChangeForeground(HWND hwnd) {
     LOG_ANY(L"Now foreground hwnd={}", (void*)hwnd);
     m_autoWord = {}; // другое окно: своя раскладка, свой курсор
     m_autoSwitched = {};
+    m_twoCaps = {};
     WarmUpEarly();
     DWORD procId = 0;
     DWORD threadid = GetWindowThreadProcessId(hwnd, &procId);
@@ -728,6 +897,19 @@ TStatus WorkerImplement::RunProcess(HotKeyType hk, bool after_wait) {
 }
 
 void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
+    // Нажато среди придержанных: отпустить их, когда сочетание сделано (или пропущено).
+    struct Release {
+        unsigned id;
+        ~Release() {
+            if (id) KeyHold::RequestRelease(id);
+        }
+    } release{ keyData.holdId };
+    m_holdId = keyData.holdId;
+    m_caretBase = KeyHold::caretMoves;
+    // Движок будет печатать: таймаут придержки подождёт его (до 15 с), как при автопереключении. Не вышло - её уже
+    // отпустили, сочетание делается без неё, как раньше.
+    if (keyData.holdId && !KeyHold::Claim(keyData.holdId)) LOG_ANY("hotkey hold {} already let go", keyData.holdId);
+    KeyHold::Claimed claimed{ keyData.holdId };
     auto hk = keyData.hk;
     const auto& key = keyData.hotkey;
 
@@ -910,7 +1092,26 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
             IFS_RET(SW_ERR_UNKNOWN, L"Unknown typerevert {}", (int)hk);
         }
 
-        if (hk == hk_RevertLastWord && !CountAutoSwitchUndo()) JournalHandFix();
+        if (hk == hk_RevertLastWord) {
+            AutoUndo undo;
+            if (!CountAutoSwitchUndo(&undo))
+                JournalHandFix();
+            else if (undo.tail && undo.from) {
+                // Вернуть ровно то, что переводили (а не "последнее слово" буфера - оно может делиться иначе).
+                const size_t begin = m_cycleList.Size() - undo.tail;
+                if (undo.all)
+                    SwitchTail(begin, undo.from, true);
+                else {
+                    // "а можно" - "f можно": короткие слова - назад, слово остаётся. Раскладка - та, в которую
+                    // переключили: одиночный Shift из "Shift дважды" мог её уже сменить.
+                    CheckCurLay();
+                    if (undo.to && CurLay() != undo.to) IFS_LOG(ProcessRevert({ .lay = undo.to, .flags = SW_CLIENT_SetLang }));
+                    RetypeTail(begin, begin + undo.retro, undo.from, undo.to);
+                    AutoLayoutIsOurs();
+                }
+                RETURN_SUCCESS;
+            }
+        }
         RevertText(hk);
 
         RETURN_SUCCESS;
@@ -945,9 +1146,15 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     }
 
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+    // Щелчок или другое окно, пока печатаем: бросить - остальное ушло бы в другое место.
+    const auto stop = CaretStop();
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE)) {
-        InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size(), delay);
+        InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size(), delay, stop);
         Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
+    }
+    if (stop()) {
+        LOG_ANY(L"revert stopped: the caret moved");
+        RETURN_SUCCESS;
     }
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && target != 0 && conf_get_unsafe()->two_caps && !m_is_last_caps) {
@@ -958,7 +1165,7 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
         if (conf_get_unsafe()->retype_keys || target == 0) {
             InputSender::SendKeys(ctxRevert.keylist, m_is_last_caps);
         } else {
-            InputSender::SendKeysAsText(ctxRevert.keylist, target, m_is_last_caps, delay);
+            InputSender::SendKeysAsText(ctxRevert.keylist, target, m_is_last_caps, delay, stop);
         }
     }
 

@@ -51,7 +51,7 @@ class CoreWorker {
 					}
 				}
 			}else if (msg.message == KeyHold::WM_Release) {
-				KeyHold::OnRelease();
+				KeyHold::OnRelease((unsigned)msg.wParam, msg.lParam == 1);
 			}else if(msg.message == WM_ClearWordsBuffer){
 				LOG_ANY("get clear request");
 				Worker()->PostMsg(Message_ClearWorlds{});

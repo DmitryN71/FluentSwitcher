@@ -35,7 +35,11 @@ class WorkerImplement {
         Worker()->PostMsg([](auto p) { p->TimerCheckLay(); }, 100); // и звук переключения - без заметной задержки
     }
 
-    void ClearAllWords() { m_cycleList.Clear(); }
+    void ClearAllWords() {
+        m_cycleList.Clear();
+        m_autoSwitched = {}; // набранного больше нет - и отменять нечего
+        m_twoCaps = {};      // (и указатель на клавишу в буфере больше не годен)
+    }
     // Следующая раскладка у окна, которое сейчас впереди (щелчок по флагу у часов, TrayIcon.h).
     void SwitchToNextLayout() {
         IFS_LOG(AnalizeTopWnd());
@@ -164,6 +168,7 @@ class WorkerImplement {
         ULONGLONG at = 0;
         size_t size = 0;         // набранных клавиш после исправления: другое число - уже печатали дальше
         TKeyBaseInfo* key = nullptr; // клавиша второй буквы в буфере слов
+        size_t total = 0;        // CycleRevertList::Total() после исправления (Size() после 90 клавиш не растёт)
     } m_twoCaps;
 
     // Автопереключение (AutoSwitch.h): слово перед только что набранным пробелом (afterSpace) или придержанным
@@ -183,11 +188,26 @@ class WorkerImplement {
     static void Journal(const char* what, const std::wstring& from, const std::wstring& to, const std::string& note = {});
     // В журнал: "Исправить последнее слово" вручную - слово, которое автопереключение не поймало.
     void JournalHandFix();
-    // Последнее слово - в раскладку lay, как "Исправить последнее слово" (стереть, переключить, напечатать).
-    void RevertLastWordTo(HKL lay);
     // "Исправить последнее слово" сразу после автопереключения - отмена: в счёт (на третью - в исключения). true - это
-    // была отмена.
-    bool CountAutoSwitchUndo();
+    // была отмена; undo - что вернуть (если переведённое ещё в буфере, иначе tail 0 - как обычно, последнее слово).
+    struct AutoUndo {
+        size_t tail = 0;  // клавиш с конца набранного - всё переведённое
+        size_t retro = 0; // из них сначала - короткие слова перед словом
+        bool all = false; // вернуть всё в раскладку from; иначе - только короткие слова (слово остаётся в to)
+        HKL from = 0, to = 0; // раскладка до переключения и после
+    };
+    bool CountAutoSwitchUndo(AutoUndo* undo = nullptr);
+    // Перевести набранное с клавиши begin до конца в раскладку to (стереть, переключить, напечатать). wordEnded - слово
+    // кончилось: отметка "исправлено", дальше - новое слово.
+    void SwitchTail(size_t begin, HKL to, bool wordEnded);
+    // Перепечатать набранное с клавиши begin: до middle - в раскладке first, дальше - в rest; раскладку не менять.
+    void RetypeTail(size_t begin, size_t middle, HKL first, HKL rest);
+    // Курсор переехал (щелчок, другое окно): печатающееся исправление - бросить. Под придержкой - она отнята (щелчок и
+    // смена окна отнимают её с той минуты, как она началась); без неё - с начала сообщения (KeyHold::caretMoves).
+    std::function<bool()> CaretStop() const {
+        return [id = m_holdId, base = m_caretBase] { return id ? !KeyHold::Allowed(id) : KeyHold::caretMoves != base; };
+    }
+    unsigned m_caretBase = 0; // KeyHold::caretMoves в начале сообщения
     // Курсор переехал в том же окне (щелчок, стрелки): первое слово дальше может быть дописанной серединой.
     void CaretMoved() {
         m_autoWord.moved = true;
@@ -204,15 +224,24 @@ class WorkerImplement {
         HKL lay = 0;            // раскладка на прошлой границе слова; 0 - не знаем (другое окно)
         bool backspace = false; // в слове стирали
         bool moved = false;     // курсор переезжал в том же окне
+        bool undone = false;    // переключение посреди этого слова отменили - в нём больше не переключать
     } m_autoWord;
     struct {
         std::wstring word;      // как набрано (буквенная часть, строчными)
         ULONGLONG at = 0;
         size_t size = 0;        // набранных клавиш после переключения: другое число - уже печатали дальше
-        std::wstring typed, there; // как набрано и чем стало - для журнала
+        std::wstring typed, there; // как набрано и чем стало - для журнала (с короткими словами перед ним)
+        std::wstring wordTyped, wordThere;   // ... само слово
+        std::wstring retroTyped, retroThere; // ... короткие слова перед ним
         bool early = false;     // посреди слова: его набирают дальше, отмена считается, пока это слово (ends)
         unsigned ends = 0;      // m_wordEnds при переключении
+        HKL from = 0, to = 0;   // раскладка до переключения и после
+        size_t span = 0;        // переведено клавиш с конца набранного (при переключении)
+        size_t retro = 0;       // ... из них - коротких слов перед словом
+        bool pair = false;      // само слово - короткое, переключено вместе с ними (AutoSwitch::Short::WithPartner)
+        size_t total = 0;       // CycleRevertList::Total() при переключении
     } m_autoSwitched;
+    unsigned m_holdId = 0;      // номер придержки текущего сообщения (KeyHold::Allowed)
     unsigned m_wordEnds = 0;    // границ слов (AutoWordEnd) с начала работы
     // Последнее слово, которое автопереключение проверило и не тронуло, и почему - в журнал, если его исправят вручную.
     struct {

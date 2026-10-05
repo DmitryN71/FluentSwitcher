@@ -7,6 +7,7 @@ class CycleRevertList {
 	struct TKeyHookInfo {
 		TKeyBaseInfo key;
 		bool is_last_revert = false;
+		HKL lay = 0; // раскладка, в которой клавиша сейчас на экране (автопереключение: слова перед словом)
 	};
 
 	// static const int c_maxWordRevert = 15; // https://github.com/Aegel5/SimpleSwitcher/issues/95
@@ -15,12 +16,14 @@ class CycleRevertList {
 	static const int c_lastCorrectedInf = 9999999;
 	int iLastCorrected = c_lastCorrectedInf;
 	TimePoint lastadd;
+	size_t m_total = 0; // клавиш добавлено минус стёрто, с начала работы: сколько набрано после какого-то момента
 
 public:
 	void DeleteLastSymbol() {
 		if (!m_symbolList.empty()) {
 			bool move_last = m_symbolList.back().is_last_revert;
 			m_symbolList.pop_back();
+			m_total--;
 			if (move_last && !m_symbolList.empty())
 				m_symbolList.back().is_last_revert = true;
 		}
@@ -257,7 +260,7 @@ public: void SetSeparateLast() {
 	if (!m_symbolList.empty())
 		m_symbolList.back().is_last_revert = true;
 }
-public: void AddKeyToList(const TKeyBaseInfo& key) {
+public: void AddKeyToList(const TKeyBaseInfo& key, HKL lay = 0) {
 	ClearGenerated();
 
 	lastadd.SetToNow();
@@ -266,7 +269,64 @@ public: void AddKeyToList(const TKeyBaseInfo& key) {
 		m_symbolList.pop_front();
 	}
 
-	m_symbolList.push_back({.key = key});
+	m_symbolList.push_back({ .key = key, .lay = lay });
+	m_total++;
 }
+
+// ----- Слова в конце набранного - автопереключению (AutoSwitch.h): контекст слова и короткие слова перед ним -----
+public: struct TailWord {
+	size_t begin = 0, end = 0; // клавиши [begin, end)
+	HKL lay = 0;               // раскладка всех его клавиш; 0 - разные или неизвестна
+};
+// Слова с конца набранного, через пробелы (по одному между словами): [0] - последнее (перед пробелом в самом конце, если
+// afterSpace), дальше - слова перед ним; не больше max. Останавливается на исправленном слове (отметка SetSeparateLast
+// на пробеле после него или в нём): оно уже в нужной раскладке - тогда fixedBefore.
+public: std::vector<TailWord> TailWords(bool afterSpace, size_t max, bool* fixedBefore = nullptr) const {
+	std::vector<TailWord> words;
+	if (fixedBefore) *fixedBefore = false;
+	int i = (int)m_symbolList.size() - 1;
+	if (afterSpace) {
+		if (i < 0 || m_symbolList[i].key.type != KEYTYPE_SPACE) return words;
+		i--;
+	}
+	while (i >= 0 && words.size() < max) {
+		const int end = i + 1;
+		bool marked = false;
+		while (i >= 0 && m_symbolList[i].key.type != KEYTYPE_SPACE) {
+			marked = marked || m_symbolList[i].is_last_revert;
+			i--;
+		}
+		const int begin = i + 1;
+		if (begin == end) break; // два пробела подряд или начало набранного
+		if (!words.empty() && marked) {
+			if (fixedBefore) *fixedBefore = true;
+			break;
+		}
+		TailWord word{ (size_t)begin, (size_t)end, m_symbolList[begin].lay };
+		for (int k = begin; k < end; k++)
+			if (m_symbolList[k].lay != word.lay) word.lay = 0;
+		words.push_back(word);
+		if (i < 0) break;
+		if (m_symbolList[i].key.vk_code != VK_SPACE) break; // Tab - другое поле или ячейка
+		if (m_symbolList[i].is_last_revert) { // пробел после слова перед ним: то исправляли
+			if (fixedBefore) *fixedBefore = true;
+			break;
+		}
+		i--;
+	}
+	return words;
+}
+public: const TKeyBaseInfo& KeyAt(size_t i) const { return m_symbolList[i].key; }
+// Клавиши с begin до конца набранного.
+public: TKeyRevert KeysFrom(size_t begin) const {
+	TKeyRevert keys;
+	for (size_t i = begin; i < m_symbolList.size(); i++) keys.push_back(m_symbolList[i].key);
+	return keys;
+}
+// Клавиши с begin до конца перепечатаны в раскладке lay.
+public: void SetLayFrom(size_t begin, HKL lay) {
+	for (size_t i = begin; i < m_symbolList.size(); i++) m_symbolList[i].lay = lay;
+}
+public: size_t Total() const { return m_total; }
 
 };

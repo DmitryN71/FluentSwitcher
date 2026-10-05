@@ -208,15 +208,16 @@ const std::unordered_map<std::string, const char*>& English()
         { "Слово не в той раскладке исправляется само после пробела, Enter или Tab: ghbdtn – «привет»",
           "A word in the wrong layout is fixed by itself after a space, Enter or Tab: ghbdtn - \"привет\"" },
         { "Переключает, когда набранного нет в словаре Windows своего языка, а те же клавиши в другой раскладке – "
-          "слово.\nНе трогает: одну букву, слова с цифрами, аббревиатуры, адреса и почту, опечатки в английских "
-          "словах, слово после ручной смены раскладки или Backspace, пароли, консоль.\nИсправилось зря – сразу "
-          "нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на третий раз попадёт в «Не "
-          "переключать»",
+          "слово. Короткие слова решает по соседям: f vj;yj – «а можно», ns ult – «ты где», а plan B и «5 шт» не "
+          "трогает.\nНе трогает: слова с цифрами, аббревиатуры, адреса и почту, опечатки в английских словах, слово "
+          "после ручной смены раскладки или Backspace, пароли, консоль.\nИсправилось зря – сразу нажмите «Исправить "
+          "последнее слово» (Shift дважды): слово вернётся, а на третий раз попадёт в «Не переключать»",
           "Switches when the word typed is not in the Windows dictionary of its language while the same keys in the "
-          "other layout are a word.\nLeaves alone: one letter, words with digits, abbreviations, addresses and mail, "
-          "typos in English words, a word after the layout was switched by hand or after Backspace, passwords, the "
-          "console.\nFixed by mistake - press \"Fix the last word\" (Shift twice) at once: the word comes back, and "
-          "the third time it goes to \"Never switch\"" },
+          "other layout are a word. Short words go by their neighbours: f vj;yj - \"а можно\", ns ult - \"ты где\", "
+          "while plan B and \"5 шт\" are left alone.\nLeaves alone: words with digits, abbreviations, addresses and "
+          "mail, typos in English words, a word after the layout was switched by hand or after Backspace, passwords, "
+          "the console.\nFixed by mistake - press \"Fix the last word\" (Shift twice) at once: the word comes back, "
+          "and the third time it goes to \"Never switch\"" },
         { "Не ждать конца слова", "Do not wait for the end of the word" },
         { "Переключать с четвёртой буквы: njkm станет «толь», штеу – inte",
           "Switch from the fourth letter: njkm becomes \"толь\", штеу - inte" },

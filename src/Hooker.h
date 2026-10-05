@@ -66,6 +66,8 @@ private: inline static HookerKeyboard hookerKeyb;
 
 
 	static void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime) {
+		KeyHold::current = 0;   // другое окно: исправлять придержанное нельзя,
+		KeyHold::caretMoves++; // а печатающееся исправление ушло бы туда
 		Worker()->PostMsg(Message_ChangeForeg{ hwnd });
 	}
 
@@ -81,6 +83,12 @@ private: inline static HookerKeyboard hookerKeyb;
 			else {
 				hookerKeyb.last_mouse_click_time.SetToNow();
 				KeyHold::ResetWord(); // курсор мог переехать: слово уже не то
+				// Щелчок, пока движок решает: курсор уже в другом месте - исправлять придержанное слово нельзя (стёрлось бы
+				// не то); нажатия всё равно уйдут, когда движок ответит.
+				if (wParam != WM_MOUSEWHEEL && wParam != WM_MOUSEHWHEEL) {
+					KeyHold::current = 0;
+					KeyHold::caretMoves++; // и печатающееся исправление - бросить
+				}
 				Worker()->PostMsg(Message_ClearWorlds{ .click = wParam != WM_MOUSEWHEEL && wParam != WM_MOUSEHWHEEL });
 				// Щелчок или прокрутка двигают каретку. Отпустили левую - курсор могли поставить в поле: в режиме
 				// "ненадолго" флажок показывается и от этого (браузеры о фокусе внутри страницы Windows не сообщают).

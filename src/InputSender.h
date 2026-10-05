@@ -139,8 +139,9 @@ public:
 		return std::wstring(buf, n);
 	}
 
-	// delay_ms > 0: по одной клавише, с паузой после каждой (см. retype_delay_ms).
-	static void SendKeysAsText(const TKeyRevert& sendData, HKL lay, bool is_now_caps, int delay_ms = 0) {
+	// delay_ms > 0: по одной клавише, с паузой после каждой (см. retype_delay_ms); stop() - бросить (курсор переехал).
+	static void SendKeysAsText(const TKeyRevert& sendData, HKL lay, bool is_now_caps, int delay_ms = 0,
+	                           const std::function<bool()>& stop = nullptr) {
 
 		InputSender inputSender;
 
@@ -155,36 +156,41 @@ public:
 				inputSender.AddUnicodePress(c);
 			}
 			if (delay_ms > 0) {
+				if (stop && stop()) return;
 				inputSender.Send();
 				inputSender.Clear();
 				Sleep(delay_ms);
 			}
 		}
 
+		if (stop && stop()) return;
 		inputSender.Send();
 	}
 
 	// Готовые символы (KEYEVENTF_UNICODE); delay_ms > 0 - по одному, с паузой после каждого.
-	static void SendTextPaced(const std::wstring& text, int delay_ms) {
+	static void SendTextPaced(const std::wstring& text, int delay_ms, const std::function<bool()>& stop = nullptr) {
 		InputSender inputSender;
 		for (wchar_t c : text) {
 			inputSender.AddUnicodePress(c);
 			if (delay_ms > 0) {
+				if (stop && stop()) return;
 				inputSender.Send();
 				inputSender.Clear();
 				Sleep(delay_ms);
 			}
 		}
+		if (stop && stop()) return;
 		inputSender.Send();
 	}
 
 	// count нажатий клавиши; delay_ms > 0 - по одному, с паузой после каждого.
-	static void SendVkKeyPaced(TKeyCode vk, int count, int delay_ms) {
+	static void SendVkKeyPaced(TKeyCode vk, int count, int delay_ms, const std::function<bool()>& stop = nullptr) {
 		if (delay_ms <= 0) {
-			SendVkKey(vk, count);
+			if (!(stop && stop())) SendVkKey(vk, count);
 			return;
 		}
 		for (int i = 0; i < count; i++) {
+			if (stop && stop()) return;
 			SendVkKey(vk);
 			Sleep(delay_ms);
 		}

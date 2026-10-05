@@ -48,8 +48,12 @@ inline Language& For(const std::wstring& language) {
 		// Другой язык (этот не поддерживается - Windows подставит свой) или не установлено - нет.
 		const std::wstring resolved = generator.ResolvedLanguage().c_str();
 		if (!generator.LanguageAvailableButNotInstalled() && resolved.size() >= 2 && language.size() >= 2 &&
-		    _wcsnicmp(resolved.c_str(), language.c_str(), 2) == 0)
+		    _wcsnicmp(resolved.c_str(), language.c_str(), 2) == 0) {
 			l.generator = generator;
+			// Первый ответ - сотни миллисекунд (загружаются данные языка): спросить заранее, не дожидаясь ответа, чтобы
+			// первое слово не ждало его (Known ждёт 300 мс, потом - "не знаем").
+			generator.GetCandidatesAsync(L"a", 1);
+		}
 	}
 	catch (...) {
 	}

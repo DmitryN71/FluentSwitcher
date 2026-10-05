@@ -8,6 +8,7 @@ struct Message_KeyType {
 	bool hold = false; // пробел, после которого хук придерживает нажатия: решить про ДВе ЗАглавные и отпустить
 	bool held_end = false; // Enter / Tab, придержанный хуком до исправления слова: только исправить (сама клавиша придёт потом)
 	bool early = false; // буква посреди слова (с hold): решить про автопереключение, не дожидаясь конца слова, и отпустить
+	unsigned holdId = 0; // номер придержки (hold, held_end): исправлять, только пока она держится (KeyHold::Allowed)
 };
 
 struct Message_Hotkey {
@@ -15,6 +16,7 @@ struct Message_Hotkey {
 	HotKeyType hk = hk_NULL;
 	ULONGLONG delayed_from = 0;
 	vector<TKeyCode> cur_keys_down; // все текущие нажатые.
+	unsigned holdId = 0; // нажато, пока шли придержанные: придержка держится, пока сочетание не сделано (KeyHold.h)
 	bool IsEmpty() const { return hk == hk_NULL; }
 };
 

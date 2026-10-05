@@ -25,7 +25,9 @@
 
 #include "TwoCaps.h"
 #include "WinDictionary.h"
+#include "ShortWords.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -46,6 +48,50 @@ inline Part Letters(const std::wstring& text) {
 	for (wchar_t c : part.core)
 		if (!TwoCaps::IsLetter(c)) part.inner = true;
 	return part;
+}
+
+// Знаки внутри буквенной части - только дефисы, и между ними буквы ("кто-то", "во-первых", "e-mail").
+inline bool OnlyHyphens(const std::wstring& core) {
+	if (core.empty()) return false;
+	bool hyphen = false;
+	for (size_t i = 0; i < core.size(); i++) {
+		if (TwoCaps::IsLetter(core[i])) continue;
+		if (core[i] != L'-' || i == 0 || core[i - 1] == L'-') return false;
+		hyphen = true;
+	}
+	return hyphen;
+}
+
+// Все части слова через дефис - от двух букв: однобуквенную часть словарь пропустит как букву ("`-Verb" - "ё-Муки").
+inline bool LongParts(const std::wstring& core) {
+	size_t run = 0;
+	for (size_t i = 0; i <= core.size(); i++) {
+		if (i == core.size() || core[i] == L'-') {
+			if (run < 2) return false;
+			run = 0;
+		}
+		else
+			run++;
+	}
+	return true;
+}
+
+// Все части слова через дефис - не длиннее трёх букв ("bp-pf").
+inline bool ShortParts(const std::wstring& core) {
+	size_t run = 0;
+	for (wchar_t c : core) {
+		run = c == L'-' ? 0 : run + 1;
+		if (run > 3) return false;
+	}
+	return true;
+}
+
+// Слово через дефис в другой раскладке, и дефисы - те же клавиши ("Dj-gthds[" - "Во-первых,"): одно слово.
+inline bool SameHyphens(const std::wstring& typed, const std::wstring& there, const Part& a) {
+	if (!OnlyHyphens(a.core) || !LongParts(a.core)) return false;
+	for (size_t i = a.begin; i < a.end && i < typed.size(); i++)
+		if (there[i] == L'-' && typed[i] != L'-') return false;
+	return true;
 }
 
 inline std::wstring Lower(std::wstring s) {
@@ -98,7 +144,7 @@ inline bool Forced(const std::wstring& typed, const std::wstring& there, const s
 inline const char* Skip(const std::wstring& typed, const std::wstring& there, size_t minLetters,
                         const std::vector<std::wstring>& exceptions) {
 	const Part t = Letters(typed), a = Letters(there);
-	if (a.core.empty() || a.inner) return "not one word in the other layout";
+	if (a.core.empty() || (a.inner && !SameHyphens(typed, there, a))) return "not one word in the other layout";
 	if (a.core.size() < minLetters) return "too short";
 	if (a.core.size() > 30) return "too long";
 	for (wchar_t c : typed)
@@ -107,6 +153,7 @@ inline const char* Skip(const std::wstring& typed, const std::wstring& there, si
 	if (script == TwoCaps::Script::Other) return "not letters";
 	bool vowel = false;
 	for (wchar_t c : a.core) {
+		if (c == L'-') continue; // дефис слова через дефис (SameHyphens)
 		if (TwoCaps::ScriptOf(c) != script) return "mixed letters";
 		vowel = vowel || IsVowel(c);
 	}
@@ -168,18 +215,26 @@ inline bool LooksLikeTypo(const std::wstring& word, const std::vector<std::wstri
 // "it"), нет словаря - не переключаем. Там - слово.
 // suggestTyped - подсказки словаря языка набранного (только когда всё остальное за переключение).
 // DecideWhy - почему не переключать (для журнала: что пропущено и почему); nullptr - переключать.
+// shortTrusted - словарю языка набранного можно верить в коротких словах (ShortWords::TrustDictionary): "Bp-pf" ("Из-за")
+// английский словарь принимает по частям (bp, pf - сокращения), и это не в счёт.
 inline const char* DecideWhy(const std::wstring& typed, const std::wstring& there, auto&& spellTyped,
-                             auto&& spellThere, auto&& suggestTyped) {
+                             auto&& spellThere, auto&& suggestTyped, bool shortTrusted = true) {
 	const Part t = Letters(typed), a = Letters(there);
-	if (!t.inner && !(t.core.size() <= 1 && a.core.size() > t.core.size())) {
+	// Знак внутри набранного - не слово; дефис - может быть и словом ("well-known"): спросить словарь.
+	const bool innerSign = t.inner && !OnlyHyphens(t.core);
+	// Знак в начале, который там буква (",elm" - "будь", "<jktt" - "Более"): так слова не начинаются - не слово (хотя
+	// "elm" без запятой - слово) и не опечатка.
+	const bool signFirst = a.begin < t.begin;
+	if (!innerSign && !signFirst && !(t.core.size() <= 1 && a.core.size() > t.core.size())) {
 		const auto asTyped = spellTyped(t.core);
 		if (asTyped == SpellCheck::Result::Unknown) return "no dictionary of the typed language";
-		if (asTyped == SpellCheck::Result::Word) return "a word as typed";
+		if (asTyped == SpellCheck::Result::Word && !(OnlyHyphens(t.core) && !shortTrusted && ShortParts(t.core)))
+			return "a word as typed";
 	}
 	const auto inOther = spellThere(a.core);
 	if (inOther == SpellCheck::Result::Unknown) return "no dictionary of the other layout";
 	if (inOther == SpellCheck::Result::NotWord) return "not a word in the other layout";
-	if (!t.inner && LooksLikeTypo(t.core, suggestTyped(t.core))) return "looks like a typo";
+	if (!innerSign && !signFirst && LooksLikeTypo(t.core, suggestTyped(t.core))) return "looks like a typo";
 	return nullptr;
 }
 inline bool Decide(const std::wstring& typed, const std::wstring& there, auto&& spellTyped, auto&& spellThere,
@@ -257,13 +312,191 @@ inline EarlyVerdict DecideEarly(const std::wstring& typed, const std::wstring& t
 	if (a.core.size() < minLetters) return { Early::NotYet, "too short" };
 	if (!vowel) return { Early::NotYet, "no vowels yet" }; // "ыек" - str..., но и "кгы" - не слово
 	if (ExceptedEarly(typed, there, exceptions)) return { Early::NotYet, "exception" };
-	// Буквой раньше и сейчас.
+	// Буквой раньше и сейчас. Знак в начале, который там буква (",elm" - "будь"), - решит конец слова: посреди слова
+	// кавычка и скобка - обычное начало ("\"cre" - не "Эску", "<htt" - не "Брее").
 	for (size_t n : { typed.size() - 1, typed.size() }) {
 		const Part tn = Letters(typed.substr(0, n));
 		if (!tn.core.empty() && knownTyped(tn.core)) return { Early::NotYet, "a word or its beginning as typed" };
 		if (!knownThere(there.substr(0, n))) return { Early::NotYet, "not a beginning of a word in the other layout" };
 	}
 	return { Early::Switch, nullptr };
+}
+
+// ----- Короткие слова: по частоте и соседям -----
+// Словари Windows считают словом любую букву (f, b, ф, ш) и многие сокращения из двух-трёх букв (ns, vs, pf, bp, tot,
+// ult; ин, ща, иге), поэтому "а", "и", "в", "ты", "мы", "за", "из", "ещё", "где", набранные в английской раскладке, и
+// "a", "I", "by", "of", "but", набранные в русской, правило выше не переключает. Здесь решают частота (ShortWords.h:
+// частые слова из одной-трёх букв) и соседи:
+//   - контекст - слово перед этим в том же куске текста (через пробел, в той же раскладке; щелчок, стрелки, Enter,
+//     другое окно начинают новый кусок): Start - его нет (или набрано в другой раскладке), Same - это слово языка
+//     раскладки или его переключили в эту раскладку, Unknown - набрано в этой раскладке, но не слово;
+//   - одно короткое слово само не переключается никогда: одна буква - переменные b, c, x, "plan B"; две-три - ns, bp,
+//     ye бывают и английскими (переменная, "nice shot", фамилия). Нужно подтверждение - соседи;
+//   - когда слово переключается, до трёх коротких слов перед ним, набранных в той же раскладке и оставленных,
+//     переводятся вместе с ним (Retro): "f vj;yj" - "а можно", "dj dhtvz" - "во время"; частое там слово - если там оно
+//     не реже ("of" перед русским словом остаётся: of чаще, чем "ща"). Не переводится слово после числа ("50 шт" -
+//     единица), после слова своего языка ("type C", "plan B") и после ручной смены раскладки ("TV" в русском тексте);
+//   - две-три буквы, которые словарь пропускает (ShortWord: там частое слово, набранное - нет, контекст не Same),
+//     переключаются, если перед ними такое же короткое слово, которое переводится вместе с ними: "ns ult" - "ты где",
+//     "f ns" - "а ты"; одно - ждёт следующего слова;
+//   - знак после короткого слова, какой в английском за буквой не ставят, а в русской раскладке это "?", ":", ";"
+//     (SignEvidence): "f&" - "а?", "ns&" - "ты?" - переключает сразу, и одну букву.
+// Слова - только через пробел: Tab переводит в другое поле или ячейку (CycleRevertList::TailWords).
+// Частота набранного (Weight): русскому словарю в коротких словах можно верить - слово, которое он знает ("учу", "ща",
+// "шт"), - настоящее, даже если его нет в списке; английскому нельзя (ShortWords::TrustDictionary).
+// Проверено фразами целиком (tools/test_autoswitch.cmd --sentences, 06.10.2026): 700 фраз чатов, писем и кода (написаны
+// для проверки) и 2 100 предложений романа (отрывок; в проект не входит). Набранное правильно короткими словами не
+// тронуто ни разу; набранное целиком не в той раскладке выходит правильным: русские чаты и письма 99,6-100 %, английские
+// 87 % (I'm, it's - со знаком внутри), роман 96 % (остальное - выдуманные слова и имена, которых нет в словаре).
+enum class Context { Start, Same, Unknown };
+
+// Насколько обычно набранное короткое слово lower (строчными; original - как набрано) в языке lang: 0 - не обычное.
+inline int Weight(const std::wstring& lower, const std::wstring& original, const std::wstring& lang, auto&& spell) {
+	if (lower.empty()) return 0;
+	if (lower.size() == 1) return ShortWords::OneLetter(lower, lang) ? 3 : 0;
+	int band = ShortWords::Band(lower, lang);
+	if (band < 2 && ShortWords::TrustDictionary(lang) && !ShortWords::NotWord(lower, lang) &&
+	    spell(original) == SpellCheck::Result::Word)
+		band = 2;
+	return band;
+}
+
+// Контекст по слову перед этим (как набрано; lang - язык его раскладки, spell - словарь этого языка).
+inline Context ContextOf(const std::wstring& prev, const std::wstring& lang, auto&& spell) {
+	const Part p = Letters(prev);
+	if (p.core.empty()) {
+		// Число перед словом ("5 шт", "512 kb"): дальше - единица или сокращение того же языка.
+		for (wchar_t c : prev)
+			if (iswdigit(c)) return Context::Same;
+		return Context::Unknown; // знаки
+	}
+	const std::wstring l = Lower(p.core);
+	if (l.size() == 1) return ShortWords::OneLetter(l, lang) ? Context::Same : Context::Unknown;
+	if (ShortWords::Neutral(l, lang)) return Context::Unknown; // ok, lol латиницей пишут и среди русских слов
+	// Две-три буквы, а словарь берёт любые сокращения (ns, ult): слово своего языка - только из списка частых.
+	if (l.size() <= 3 && !ShortWords::TrustDictionary(lang))
+		return ShortWords::Frequent(l, lang) ? Context::Same : Context::Unknown;
+	return ShortWords::Frequent(l, lang) || spell(p.core) == SpellCheck::Result::Word ? Context::Same : Context::Unknown;
+}
+
+// Знак после короткого слова, какой в английском за буквой не ставят, а в русской раскладке это вопрос или двоеточие
+// ("f&" - "а?", "x`&" - "чё?", "lf^" - "да:"), и точка "/" после двух-трёх букв там ("lf/" - "да."): сам по себе знак,
+// что набрано не в той раскладке. Один, сразу после букв обоих прочтений ("&&" - уже C++).
+inline bool SignEvidence(const std::wstring& typed, const Part& t, const Part& a) {
+	const size_t from = (std::max)(t.end, a.end);
+	if (a.core.empty() || from + 1 != typed.size()) return false;
+	const wchar_t c = typed[from];
+	return c == L'&' || c == L'^' || (c == L'/' && a.core.size() >= 2);
+}
+
+enum class Short {
+	No,
+	WithPartner, // переключить, если перед ним короткое слово, которое переводится вместе с ним (RetroCount)
+	Now,         // переключить сразу: знак после него (SignEvidence)
+};
+
+// Короткое слово, которое словарь пропускает: две-три буквы там (сокращение: ns - "ты", tot - "еще"; или знак, который
+// там буква: "yb[" - "них", "b[" - "их") или одна буква со знаком ("f&" - "а?").
+inline Short ShortWord(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLang,
+                       const std::wstring& otherLang, Context context, auto&& spellTyped) {
+	const Part t = Letters(typed), a = Letters(there);
+	if (t.inner || a.inner || a.core.empty() || a.core.size() > 3 || t.core.size() > a.core.size()) return Short::No;
+	for (wchar_t c : typed)
+		if (iswdigit(c)) return Short::No;
+	if (t.core.size() > 1 && AllUpper(t.core)) return Short::No;
+	const std::wstring tl = Lower(t.core), al = Lower(a.core);
+	const bool sign = SignEvidence(typed, t, a);
+	// Одна буква - только строчная, со знаком и не после слова своего языка ("const B& b" - C++).
+	if (al.size() == 1)
+		return sign && context != Context::Same && tl.size() == 1 && !TwoCaps::IsUpper(t.core[0]) &&
+				ShortWords::OneLetter(al, otherLang) && !ShortWords::OneLetter(tl, typedLang)
+			? Short::Now
+			: Short::No;
+	// Буква там - из клавиши после набранных букв, и это не знак после слова ("to`" - "ещё", но "it." - не "шею"): набрано
+	// не то слово, какое видно ("to").
+	const bool letterAfter = a.end > t.end && typed.find_first_not_of(L".,;:!?'\")", t.end) < a.end;
+	if (!ShortWords::Frequent(al, otherLang) || (!letterAfter && Weight(tl, t.core, typedLang, spellTyped) != 0))
+		return Short::No;
+	if (sign) return Short::Now;
+	return context == Context::Same ? Short::No : Short::WithPartner;
+}
+
+// Частое короткое слово своего языка ("шт", "руб", "ул", "gb"): правило конца слова его не трогает, даже если словарь
+// его не знает, а там - слово ("5 шт" - не "5 in").
+inline bool FrequentAsTyped(const std::wstring& typed, const std::wstring& lang) {
+	const Part t = Letters(typed);
+	return !t.inner && t.core.size() >= 2 && t.core.size() <= 3 && ShortWords::Frequent(Lower(t.core), lang);
+}
+
+// Слово перед переключённым, набранное в той же раскладке и оставленное: перевести вместе с ним? Одна буква - если там
+// однобуквенное слово, а набранное - нет ("f" - "а"); две-три - если там частое слово или слово словаря, а набранное не
+// частое; знак, который там буква (";t" - "же"), - если там частое слово.
+inline bool Retro(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLang,
+                  const std::wstring& otherLang, auto&& spellTyped) {
+	const Part t = Letters(typed), a = Letters(there);
+	// Буква в букву: буква, ставшая там знаком ("руб" - "he,"), - не то слово.
+	if (t.inner || a.inner || a.core.empty() || a.core.size() > 3 || t.core.size() > a.core.size()) return false;
+	for (wchar_t c : typed)
+		if (iswdigit(c)) return false;
+	if (t.core.size() > 1 && AllUpper(t.core)) return false;
+	const std::wstring tl = Lower(t.core), al = Lower(a.core);
+	if (al.size() == 1 && tl.size() == 1)
+		return ShortWords::OneLetter(al, otherLang) && !ShortWords::OneLetter(tl, typedLang);
+	// Слово, которое знает словарь, которому можно верить ("ща", "шт", "рук"), - своё.
+	if (tl.size() >= 2 && ShortWords::TrustDictionary(typedLang) && !ShortWords::NotWord(tl, typedLang) &&
+	    spellTyped(t.core) == SpellCheck::Result::Word)
+		return false;
+	const int typedWeight = tl.size() == 1 ? (ShortWords::OneLetter(tl, typedLang) ? 3 : 0) : ShortWords::Band(tl, typedLang);
+	const int thereWeight = al.size() == 1 ? (ShortWords::OneLetter(al, otherLang) ? 3 : 0) : ShortWords::Band(al, otherLang);
+	return thereWeight > 0 && thereWeight >= typedWeight;
+}
+
+// Перед словом, которое переключается, - короткие слова, переводятся вместе с ним (Retro); words - слова перед ним, с
+// ближнего: что о каждом известно. Сколько перевести (подряд, с ближнего).
+struct RetroWord {
+	std::wstring typed, there; // как набрано и те же клавиши там
+	bool sameLayout = true;    // набрано в той же раскладке, что и переключаемое слово
+	bool fixedAfter = false;   // ... а это - последнее известное, и перед ним исправленное слово
+};
+inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring& typedLang, const std::wstring& otherLang,
+                         const std::vector<std::wstring>& exceptions, auto&& spellTyped) {
+	auto hasDigit = [](const std::wstring& s) {
+		for (wchar_t c : s)
+			if (iswdigit(c)) return true;
+		return false;
+	};
+	auto candidate = [&](const RetroWord& w) {
+		return w.sameLayout && !Letters(w.typed).core.empty() && !Excepted(w.typed, w.there, exceptions) &&
+			Retro(w.typed, w.there, typedLang, otherLang, spellTyped);
+	};
+	size_t count = 0;
+	for (size_t i = 0; i < words.size() && i < 5; i++) {
+		const RetroWord& w = words[i];
+		if (!w.sameLayout) break;
+		const Part p = Letters(w.typed);
+		if (p.core.empty()) {
+			// Без букв - число, тире: там то же самое ("d 10 vbyen" - "в 10 минут") - пропустить; знаки, которые там
+			// другие (":)" - "Ж)", "15^00" - "15:00"), - нет.
+			if (w.typed != w.there) break;
+			continue;
+		}
+		if (hasDigit(w.typed) || !candidate(w)) break;
+		// Слово перед ним: число - это единица ("50 шт", "64 kb"); набрано в другой раскладке - его набрали так нарочно
+		// ("TV"); перед одной буквой - слово своего языка, само не переводимое: и буква того языка ("type C", "plan B").
+		if (i + 1 < words.size()) {
+			const RetroWord& before = words[i + 1];
+			if (!before.sameLayout) break;
+			const Part b = Letters(before.typed);
+			if (b.core.empty() && hasDigit(before.typed)) break;
+			if (p.core.size() == 1 && !b.core.empty() && !candidate(before) &&
+			    ContextOf(before.typed, typedLang, spellTyped) == Context::Same)
+				break;
+		}
+		else if (w.fixedAfter && p.core.size() == 1)
+			break;
+		count = i + 1;
+	}
+	return count;
 }
 
 }

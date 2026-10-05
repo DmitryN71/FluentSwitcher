@@ -58,7 +58,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 		if (replayed) {
 			KeyHold::OnReplayed();
 		}
-		else if (KeyHold::active) {
+		else if (KeyHold::Busy()) {
 			KeyHold::Hold(*k);
 			held_event = true;
 			return;
@@ -294,6 +294,13 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				}
 
 				LOG_ANY("post {} {}. has_double {}", msg_hotkey.hotkey.ToString(), (int)msg_hotkey.hk, double_exists);
+				// Нажато среди придержанных (последней в порции): клавиши после него ждут, пока движок его не сделает,
+				// иначе "Исправить последнее слово" стёрло бы уже набранные за ним буквы. Кроме отложенного одиночного
+				// (ждёт, не будет ли второго нажатия): второе нажатие не должно ждать за ним.
+				if (replayed && delay == 0 && KeyHold::CanStart()) {
+					LOG_ANY("hold: keys wait for the hotkey");
+					msg_hotkey.holdId = KeyHold::Start();
+				}
 				msg_hotkey.cur_keys_down = curKeys.AllKeys(); // todo curKey_no_disabled?
 				if (need_disable_event)
 					Utils::RemoveFirst(msg_hotkey.cur_keys_down, vkCode); // удалим то что запретили, так как поднимать их не нужно.
@@ -314,36 +321,37 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// дожидаясь конца слова: early). Отправленное заново после придержки - тоже, если оно последнее из
 			// отправленных (придержка уже кончилась).
 			bool hold = false, early = false;
+			unsigned holdId = 0;
 			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
 				const auto end = KeyHold::EndWord();
-				const bool check = !KeyHold::active && curk.Size() == 1 && g_enabled.IsEnabled() &&
+				const bool check = KeyHold::CanStart() && curk.Size() == 1 && g_enabled.IsEnabled() &&
 					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch)) && KeyHold::CanHold();
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
 					// поле), поэтому ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе
 					// с придержанными.
 					LOG_ANY("hold: Enter / Tab waits for the word check");
-					KeyHold::Start();
-					KeyHold::Hold(*k);
+					const unsigned id = KeyHold::Start();
+					KeyHold::Hold(*k, true);
 					held_event = true;
-					Worker()->PostMsg(Message_KeyType{ .vkCode = vkCode, .cur_hotKey = curk, .held_end = true });
+					Worker()->PostMsg(Message_KeyType{ .vkCode = vkCode, .cur_hotKey = curk, .held_end = true, .holdId = id });
 					return;
 				}
 				hold = check;
 				if (hold) {
 					LOG_ANY("hold: keys wait for the word check");
-					KeyHold::Start();
+					holdId = KeyHold::Start();
 				}
 			}
 			else {
 				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,
 					curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN));
 				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
-					!KeyHold::active && KeyHold::EarlyPoint() && KeyHold::CanHold();
+					KeyHold::CanStart() && KeyHold::EarlyPoint() && KeyHold::CanHold();
 				hold = early;
 				if (hold) {
 					LOG_ANY("hold: keys wait for the check in the middle of the word");
-					KeyHold::Start();
+					holdId = KeyHold::Start();
 				}
 			}
 			Worker()->PostMsg(Message_KeyType{
@@ -353,12 +361,14 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				.is_caps = iscaps == 1,
 				.hold = hold,
 				.early = early,
+				.holdId = holdId,
 				});
 		}
 
 	};
 
 	process();
+	KeyHold::AfterKey(); // порция отпущенного вернулась, а на её последней клавише придержка не началась - следующую
 
 	if (held_event) {
 		return 1; // придержано: уйдёт, когда движок исправит слово

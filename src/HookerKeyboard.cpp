@@ -310,11 +310,13 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 			) {
 			// Конец слова, которое может быть "ДВух" или набрано не в той раскладке (автопереключение): следующие
-			// нажатия придерживаются, пока движок решает.
-			bool hold = false;
+			// нажатия придерживаются, пока движок решает. Так же - буква посреди слова (автопереключение, не
+			// дожидаясь конца слова: early). Отправленное заново после придержки - тоже, если оно последнее из
+			// отправленных (придержка уже кончилась).
+			bool hold = false, early = false;
 			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
 				const auto end = KeyHold::EndWord();
-				const bool check = !replayed && curk.Size() == 1 && g_enabled.IsEnabled() &&
+				const bool check = !KeyHold::active && curk.Size() == 1 && g_enabled.IsEnabled() &&
 					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch)) && KeyHold::CanHold();
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
@@ -334,8 +336,15 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				}
 			}
 			else {
-				KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,
+				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,
 					curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN));
+				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
+					!KeyHold::active && KeyHold::EarlyPoint() && KeyHold::CanHold();
+				hold = early;
+				if (hold) {
+					LOG_ANY("hold: keys wait for the check in the middle of the word");
+					KeyHold::Start();
+				}
 			}
 			Worker()->PostMsg(Message_KeyType{
 				.vkCode = vkCode,
@@ -343,6 +352,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				.cur_hotKey = curk, // без учета disabled, но не критично
 				.is_caps = iscaps == 1,
 				.hold = hold,
+				.early = early,
 				});
 		}
 

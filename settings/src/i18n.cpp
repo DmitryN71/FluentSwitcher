@@ -217,6 +217,19 @@ const std::unordered_map<std::string, const char*>& English()
           "typos in English words, a word after the layout was switched by hand or after Backspace, passwords, the "
           "console.\nFixed by mistake - press \"Fix the last word\" (Shift twice) at once: the word comes back, and "
           "the third time it goes to \"Never switch\"" },
+        { "Не ждать конца слова", "Do not wait for the end of the word" },
+        { "Переключать с четвёртой буквы: njkm станет «толь», штеу – inte",
+          "Switch from the fourth letter: njkm becomes \"толь\", штеу - inte" },
+        { "Переключает посреди слова, когда так не начинается ни одно слово своего языка, а те же клавиши в другой "
+          "раскладке – начало слова. Начала слов Windows знает по предсказанию текста, как подсказки сенсорной "
+          "клавиатуры: частые слова и те, что набирали на этом компьютере. В конце слова оно проверяется ещё раз "
+          "по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
+          "третий раз его начало попадёт в «Не переключать»",
+          "Switches in the middle of a word when no word of its language begins like that while the same keys in the "
+          "other layout are the beginning of a word. Windows knows the beginnings of words from its text prediction, "
+          "as the touch keyboard suggestions: frequent words and those typed on this computer. At the end of the word "
+          "it is checked once more by the dictionary.\nSwitched by mistake - press \"Fix the last word\" (Shift "
+          "twice): the word comes back, and the third time its beginning goes to \"Never switch\"" },
         { "Не переключать", "Never switch" },
         { "Например, cv или см – в любой раскладке", "For example cv or см - in either layout" },
         { "Слово попадает сюда и само – после третьей отмены автопереключения",

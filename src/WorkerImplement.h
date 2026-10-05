@@ -169,11 +169,18 @@ class WorkerImplement {
     // Автопереключение (AutoSwitch.h): слово перед только что набранным пробелом (afterSpace) или придержанным
     // Enter / Tab набрано не в той раскладке - перевести, как "Исправить последнее слово". true - перевели.
     bool AutoSwitchLastWord(bool afterSpace = true);
+    // Посреди слова (с четвёртой буквы; хук придерживает нажатия после неё): переключить уже сейчас, если набранное -
+    // не начало слова своего языка, а в другой раскладке - начало (AutoSwitch::DecideEarly). Слово продолжается.
+    void AutoSwitchEarly();
+    // Предсказание текста (WordStart.h) для включённых раскладок - загрузить заранее, а не на букве, пока держатся
+    // нажатия.
+    void WarmUpEarly();
     // Исключения автопереключения и список "Переключать всегда" из настроек.
     static std::vector<std::wstring> AutoSwitchExceptions();
     static std::vector<std::wstring> AutoSwitchForced();
-    // Журнал автопереключения (log\autoswitch.log, если включён): what - что случилось, from -> to.
-    static void Journal(const char* what, const std::wstring& from, const std::wstring& to);
+    // Журнал автопереключения (log\autoswitch.log, если включён): what - что случилось, from -> to; note - в скобках
+    // после (почему не переключилось само).
+    static void Journal(const char* what, const std::wstring& from, const std::wstring& to, const std::string& note = {});
     // В журнал: "Исправить последнее слово" вручную - слово, которое автопереключение не поймало.
     void JournalHandFix();
     // Последнее слово - в раскладку lay, как "Исправить последнее слово" (стереть, переключить, напечатать).
@@ -182,7 +189,10 @@ class WorkerImplement {
     // была отмена.
     bool CountAutoSwitchUndo();
     // Курсор переехал в том же окне (щелчок, стрелки): первое слово дальше может быть дописанной серединой.
-    void CaretMoved() { m_autoWord.moved = true; }
+    void CaretMoved() {
+        m_autoWord.moved = true;
+        if (m_autoSwitched.early) m_autoSwitched = {}; // слово, переключённое посреди, осталось позади
+    }
     // Граница слова (пробел, Enter, Tab): приметы слова сначала, раскладка - как сейчас.
     void AutoWordEnd();
     // Раскладку только что сменил сам FluentSwitcher (перевод слова, выделенного): это не ручная смена.
@@ -200,7 +210,15 @@ class WorkerImplement {
         ULONGLONG at = 0;
         size_t size = 0;        // набранных клавиш после переключения: другое число - уже печатали дальше
         std::wstring typed, there; // как набрано и чем стало - для журнала
+        bool early = false;     // посреди слова: его набирают дальше, отмена считается, пока это слово (ends)
+        unsigned ends = 0;      // m_wordEnds при переключении
     } m_autoSwitched;
+    unsigned m_wordEnds = 0;    // границ слов (AutoWordEnd) с начала работы
+    // Последнее слово, которое автопереключение проверило и не тронуло, и почему - в журнал, если его исправят вручную.
+    struct {
+        std::wstring typed;
+        std::string why;
+    } m_autoNo;
 
     TStatus FixCtrlAlt(CHotKey key);
 

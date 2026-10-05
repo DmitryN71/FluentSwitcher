@@ -13,6 +13,11 @@
 // грубо смотрит на регистр букв (Track, EndWord), а точно решает движок по символам. Автопереключению годится
 // любое слово из двух букв и больше без цифр и команд: проверка в движке - доли миллисекунды, и если менять нечего,
 // придержанного обычно нет вовсе (следующая клавиша приходит позже).
+//
+// Посреди слова (автопереключение, не дожидаясь конца слова) - так же: с четвёртой по восьмую букву хук пропускает
+// букву, а следующие нажатия придерживает, пока движок решает, не переключить ли уже сейчас (EarlyPoint; проверка -
+// несколько миллисекунд). Движок решил, что посреди этого слова больше нечего (переключил или не его случай), - earlyDone, и до
+// конца слова буквы идут без задержки.
 #pragma once
 
 #include <vector>
@@ -111,6 +116,7 @@ inline void OnReplayed() {
 // ----- регистр букв текущего слова, как его видит хук -----
 inline std::vector<bool> word; // true - заглавная
 inline bool broken = false;    // в слове цифра, CapsLock, сочетание - не наш случай
+inline std::atomic<bool> earlyDone = false; // рабочий поток: посреди этого слова решать больше нечего
 
 inline bool IsLetterKey(UINT vk) {
 	return (vk >= 'A' && vk <= 'Z') || (vk >= VK_OEM_1 && vk <= VK_OEM_3) || (vk >= VK_OEM_4 && vk <= VK_OEM_8) ||
@@ -120,33 +126,41 @@ inline bool IsLetterKey(UINT vk) {
 inline void ResetWord() {
 	word.clear();
 	broken = false;
+	earlyDone = false;
 }
 
-// Нажатие, которое движок получает как набор (не пробел).
-inline void Track(UINT vk, bool shift, bool caps, bool command) {
-	if (CHotKey::IsKnownMods(vk)) return; // сам Shift (Ctrl...) - не буква и не помеха
+// Нажатие, которое движок получает как набор (не пробел). true - в слово добавилась буква.
+inline bool Track(UINT vk, bool shift, bool caps, bool command) {
+	if (CHotKey::IsKnownMods(vk)) return false; // сам Shift (Ctrl...) - не буква и не помеха
 	if (command || caps) {
 		word.clear();
 		broken = true;
-		return;
+		return false;
 	}
 	if (vk == VK_BACK) {
 		if (!word.empty()) word.pop_back();
-		return;
+		return false;
 	}
 	if (IsLetterKey(vk)) {
 		word.push_back(shift);
-		return;
+		return true;
 	}
 	if (vk >= '0' && vk <= '9') {
 		if (!shift) broken = true; // цифра; с Shift - знак ( «"!), он по краям слова не мешает
-		return;
+		return false;
 	}
 	if (vk == VK_RETURN || vk == VK_TAB || vk == VK_ESCAPE || (vk >= VK_PRIOR && vk <= VK_DOWN) || vk == VK_DELETE) {
 		ResetWord(); // новая строка, другое место
-		return;
+		return false;
 	}
 	broken = true;
+	return false;
+}
+
+// Буква, после которой движок может переключить посреди слова (AutoSwitch::DecideEarly): с четвёртой по восьмую
+// (AutoSwitch::kEarlyMin, kEarlyMax), пока он не сказал, что в этом слове больше нечего.
+inline bool EarlyPoint() {
+	return !broken && !earlyDone && word.size() >= 4 && word.size() <= 8;
 }
 
 // Конец слова (пробел, Enter, Tab): каким оно было. Слово на этом кончается.

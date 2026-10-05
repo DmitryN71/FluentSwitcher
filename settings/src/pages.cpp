@@ -472,9 +472,9 @@ void SettingsFrame::BuildTyping()
         Changed();
     };
 
-    // The automatic layout switch (the engine's AutoSwitch.h): autoswitch; the words never switched,
-    // autoswitch_exceptions, and always switched, autoswitch_force; the journal, autoswitch_journal. Short texts on the
-    // cards, the details in their tooltips.
+    // The automatic layout switch (the engine's AutoSwitch.h): autoswitch, and in the middle of a word, autoswitch_early;
+    // the words never switched, autoswitch_exceptions, and always switched, autoswitch_force; the journal,
+    // autoswitch_journal. Short texts on the cards, the details in their tooltips.
     CardTip(Toggle(WithTip(T("Автопереключение раскладки")),
                    T("Слово не в той раскладке исправляется само после пробела, Enter или Tab: ghbdtn – «привет»"),
                    "autoswitch", false),
@@ -483,6 +483,13 @@ void SettingsFrame::BuildTyping()
               "словах, слово после ручной смены раскладки или Backspace, пароли, консоль.\nИсправилось зря – сразу "
               "нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на третий раз попадёт в «Не "
               "переключать»"));
+    CardTip(Toggle(WithTip(T("Не ждать конца слова")), T("Переключать с четвёртой буквы: njkm станет «толь», штеу – inte"),
+                   "autoswitch_early", true),
+            T("Переключает посреди слова, когда так не начинается ни одно слово своего языка, а те же клавиши в другой "
+              "раскладке – начало слова. Начала слов Windows знает по предсказанию текста, как подсказки сенсорной "
+              "клавиатуры: частые слова и те, что набирали на этом компьютере. В конце слова оно проверяется ещё раз "
+              "по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
+              "третий раз его начало попадёт в «Не переключать»"));
     WordListCard("autoswitch_exceptions", T("Не переключать"), T("Например, cv или см – в любой раскладке"),
                  T("Слово попадает сюда и само – после третьей отмены автопереключения"),
                  T("По слову в строке, в любой раскладке"), &SettingsFrame::m_autoSwitchExceptions);

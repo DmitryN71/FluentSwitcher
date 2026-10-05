@@ -120,6 +120,7 @@ namespace nlohmann {
 			two_caps_exceptions,
 			two_caps_undo,
 			autoswitch,
+			autoswitch_early,
 			autoswitch_exceptions,
 			autoswitch_undo,
 			autoswitch_force,

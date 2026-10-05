@@ -2,6 +2,7 @@
 #include "ParseSnippet.h"
 #include "LayoutConvert.h"
 #include "AutoSwitch.h"
+#include "WordStart.h"
 
 #include <atlbase.h>
 #include <UIAutomation.h>
@@ -26,6 +27,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         keyData.is_caps;  // сохраним последнее известное значение. Нажатие caps по идее должно нам привести сюда.
 
     if (CHotKey::IsKnownMods(vkCode)) {
+        if (keyData.hold) KeyHold::RequestRelease(); // не бывает (держат после буквы и пробела), но не держать зря
         return;  // не очищаем текущий буфер нажатых клавиш так как они могут быть частью наших хот-кеев
     }
 
@@ -80,9 +82,12 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     }
 
     if (keyData.hold) {
-        // Хук придерживает нажатия после этого пробела: решить и отпустить, что бы ни случилось.
+        // Хук придерживает нажатия после этого пробела (или буквы посреди слова): решить и отпустить, что бы ни случилось.
         struct Release { ~Release() { KeyHold::RequestRelease(); } } release;
-        if (!AutoSwitchLastWord()) FixTwoCaps();
+        if (keyData.early)
+            AutoSwitchEarly();
+        else if (!AutoSwitchLastWord())
+            FixTwoCaps();
     }
     if (key.type == KEYTYPE_SPACE) AutoWordEnd();
 }
@@ -191,11 +196,18 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (!cfg->autoswitch || !KeyHold::fixAllowed) return false;
     auto keys = afterSpace ? m_cycleList.LastWordKeys() : m_cycleList.TrailingWordKeys();
     if (keys.empty()) return false;
-    auto no = [](const char* why) {
+    // record - запомнить слово и причину для журнала (не пароль).
+    auto no = [this, &keys](const char* why, bool record = true) {
         LOG_ANY("autoswitch: no, {}", why);
+        if (record) {
+            std::wstring text;
+            for (auto* key : keys) text += InputSender::KeyText(*key, CurLay(), false);
+            m_autoNo = { text, why };
+        }
         return false;
     };
-    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || IsConsole()) return no("a password, a console or an excluded program");
+    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || IsConsole())
+        return no("a password, a console or an excluded program", false);
     if (m_autoWord.backspace) return no("the word was edited with Backspace");
     CheckCurLay();
     const HKL lay = CurLay();
@@ -230,14 +242,17 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a.
         const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
         if (!force) {
-            if (const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions)) {
+            const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions);
+            if (!why) why = AutoSwitch::DecideWhy(typed, there, dictionary(lay), dictionary(other), suggestions);
+            if (why) {
                 LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, std::wstring(why, why + strlen(why)));
+                m_autoNo = { typed, why };
                 continue;
             }
-            if (!AutoSwitch::Decide(typed, there, dictionary(lay), dictionary(other), suggestions)) continue;
         }
-        if (IsPasswordUia()) return no("a password field");
+        if (IsPasswordUia()) return no("a password field", false);
         LOG_ANY(L"autoswitch: {} -> {}{}", typed, there, force ? L" (switch always)" : L"");
+        m_autoNo = {};
         RevertLastWordTo(other);
         m_autoSwitched = { AutoSwitch::Lower(AutoSwitch::Letters(typed).core), GetTickCount64(), m_cycleList.Size(), typed,
                            there };
@@ -245,6 +260,83 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         return true;
     }
     return false;
+}
+
+void WorkerImplement::AutoSwitchEarly() {
+    GETCONF;
+    // Посреди этого слова больше не решать: хук до конца слова пропускает буквы без задержки.
+    auto never = [](const char* why) {
+        KeyHold::earlyDone = true;
+        LOG_ANY("autoswitch early: not in this word, {}", why);
+    };
+    if (!cfg->autoswitch || !cfg->autoswitch_early || !KeyHold::fixAllowed) return never("off or too late");
+    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || IsConsole())
+        return never("a password, a console or an excluded program");
+    if (m_autoWord.backspace) return never("the word was edited with Backspace");
+    CheckCurLay();
+    const HKL lay = CurLay();
+    if (m_autoWord.lay && lay != m_autoWord.lay) return never("the layout was switched by hand");
+    auto keys = m_cycleList.TrailingWordKeys();
+    if (keys.empty()) return;
+    std::wstring typed;
+    for (auto* key : keys) {
+        if (key->is_caps) return never("CapsLock");
+        auto c = InputSender::KeyText(*key, lay, false);
+        if (c.size() != 1) return never("a key that is not one letter");
+        typed += c;
+    }
+    const auto exceptions = AutoSwitchExceptions();
+    // После щелчка или стрелок в том же окне могли дописывать середину слова: на букву позже.
+    const size_t minLetters = AutoSwitch::kEarlyMin + (m_autoWord.moved ? 1 : 0);
+    const std::wstring lang = Utils::GetNameForHKL_simple(lay);
+    bool later = false;
+    for (HKL other : cfg->layouts_info.EnabledLayouts()) {
+        if (other == lay) continue;
+        std::wstring there;
+        for (auto* key : keys) {
+            auto c = InputSender::KeyText(*key, other, false);
+            if (c.size() != 1) {
+                there.clear();
+                break;
+            }
+            there += c;
+        }
+        if (there.empty()) continue;
+        const std::wstring otherLang = Utils::GetNameForHKL_simple(other);
+        const auto verdict = AutoSwitch::DecideEarly(
+            typed, there, minLetters, exceptions, [&](const std::wstring& w) { return WordStart::Typed(w, lang); },
+            [&](const std::wstring& w) { return WordStart::There(w, otherLang); });
+        if (verdict.what != AutoSwitch::Early::Switch) {
+            later = later || verdict.what == AutoSwitch::Early::NotYet;
+            LOG_ANY(L"autoswitch early: {} / {}: {}, {}", typed, there,
+                    verdict.what == AutoSwitch::Early::NotYet ? L"not yet" : L"no",
+                    std::wstring(verdict.why, verdict.why + strlen(verdict.why)));
+            continue;
+        }
+        if (IsPasswordUia()) return never("a password field");
+        LOG_ANY(L"autoswitch early: {} -> {}", typed, there);
+        KeyHold::earlyDone = true;
+        TKeyRevert list;
+        for (auto* key : keys) list.push_back(*key);
+        // Как "Исправить последнее слово", но слово не кончилось: его буквы в буфере остаются одним словом (без
+        // SetSeparateLast) - конец слова проверит его целиком, "Исправить последнее слово" вернёт целиком.
+        TextFixed();
+        IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = other,
+                                .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
+        AutoLayoutIsOurs();
+        const std::wstring more = L"\u2026";
+        m_autoSwitched = { AutoSwitch::Lower(AutoSwitch::Letters(typed).core), GetTickCount64(), m_cycleList.Size(),
+                           typed + more, there + more, true, m_wordEnds };
+        Journal("switched", typed + more, there + more);
+        return;
+    }
+    if (!later) never("nothing to switch to");
+}
+
+void WorkerImplement::WarmUpEarly() {
+    GETCONF;
+    if (!cfg->autoswitch || !cfg->autoswitch_early) return;
+    for (HKL l : cfg->layouts_info.EnabledLayouts()) WordStart::Available(Utils::GetNameForHKL_simple(l));
 }
 
 std::vector<std::wstring> WorkerImplement::AutoSwitchExceptions() {
@@ -259,7 +351,8 @@ std::vector<std::wstring> WorkerImplement::AutoSwitchForced() {
     return words;
 }
 
-void WorkerImplement::Journal(const char* what, const std::wstring& from, const std::wstring& to) {
+void WorkerImplement::Journal(const char* what, const std::wstring& from, const std::wstring& to,
+                              const std::string& note) {
     GETCONF;
     if (!cfg->autoswitch || !cfg->autoswitch_journal) return;
     namespace fs = std::filesystem;
@@ -272,9 +365,10 @@ void WorkerImplement::Journal(const char* what, const std::wstring& from, const 
     SYSTEMTIME st{};
     GetLocalTime(&st);
     const std::wstring label = StrUtils::Convert(std::string(LOC(what)));
-    const std::wstring line = std::format(L"{:02}.{:02}.{:04} {:02}:{:02}:{:02}  {:<10} {} \u2192 {}  ({})\r\n", st.wDay,
+    const std::wstring after = note.empty() ? L"" : L"  [" + StrUtils::Convert(note) + L"]";
+    const std::wstring line = std::format(L"{:02}.{:02}.{:04} {:02}:{:02}:{:02}  {:<10} {} \u2192 {}  ({}){}\r\n", st.wDay,
                                           st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond, label, from, to,
-                                          ForegroundProgram());
+                                          ForegroundProgram(), after);
     const std::string utf8 = StrUtils::Convert(line);
     std::ofstream out(file, std::ios::binary | std::ios::app);
     out.write(utf8.data(), (std::streamsize)utf8.size());
@@ -283,6 +377,7 @@ void WorkerImplement::Journal(const char* what, const std::wstring& from, const 
 void WorkerImplement::JournalHandFix() {
     GETCONF;
     if (!cfg->autoswitch || !cfg->autoswitch_journal) return;
+    if (IsPasswordFocus() || IsPasswordUia()) return; // пароль, исправленный вручную, - не в журнал
     auto keys = m_cycleList.LastWordKeys();
     if (keys.empty()) keys = m_cycleList.TrailingWordKeys();
     const HKL lay = CurLay(), next = cfg->layouts_info.NextEnabledLayout(lay);
@@ -292,7 +387,9 @@ void WorkerImplement::JournalHandFix() {
         typed += InputSender::KeyText(*key, lay, false);
         fixed += InputSender::KeyText(*key, next, false);
     }
-    Journal("by hand", typed, fixed);
+    // Почему автопереключение его не тронуло: проверяло это слово - его причина; нет - до проверки не дошло (быстрый
+    // набор во время другой проверки, окно от администратора, отключено).
+    Journal("by hand", typed, fixed, m_autoNo.typed == typed ? m_autoNo.why : "not checked");
 }
 
 void WorkerImplement::RevertLastWordTo(HKL lay) {
@@ -307,7 +404,15 @@ void WorkerImplement::RevertLastWordTo(HKL lay) {
 
 bool WorkerImplement::CountAutoSwitchUndo() {
     auto last = std::exchange(m_autoSwitched, {});
-    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size) return false;
+    if (last.word.empty() || GetTickCount64() - last.at > 10000) return false;
+    if (last.early) {
+        // Посреди слова: исправляют то же слово - его ещё набирают или только что кончили пробелом.
+        const bool same = m_wordEnds == last.ends ? !m_cycleList.TrailingWordKeys().empty()
+                                                  : m_wordEnds == last.ends + 1 && !m_cycleList.LastWordKeys().empty();
+        if (!same) return false;
+    }
+    else if (m_cycleList.Size() != last.size)
+        return false;
     LOG_ANY(L"autoswitch: {} switched back", last.word);
     Journal("switched back", last.there, last.typed);
     PostMessageW(g_guiHandle, WM_AutoSwitchLearn, 0, (LPARAM)new std::wstring(last.word));
@@ -315,6 +420,7 @@ bool WorkerImplement::CountAutoSwitchUndo() {
 }
 
 void WorkerImplement::AutoWordEnd() {
+    m_wordEnds++;
     m_autoWord.backspace = m_autoWord.moved = false;
     if (!conf_get_unsafe()->autoswitch) return;
     CheckCurLay();
@@ -536,6 +642,7 @@ void WorkerImplement::ChangeForeground(HWND hwnd) {
     LOG_ANY(L"Now foreground hwnd={}", (void*)hwnd);
     m_autoWord = {}; // другое окно: своя раскладка, свой курсор
     m_autoSwitched = {};
+    WarmUpEarly();
     DWORD procId = 0;
     DWORD threadid = GetWindowThreadProcessId(hwnd, &procId);
     if (threadid != m_dwIdThreadForeground && procId != m_dwIdProcoreground) {

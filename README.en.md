@@ -12,6 +12,10 @@ free and open source under GPL-3.0.
 
 - **Fixes the last word** typed in the wrong layout: erases it, types it in the other layout and switches to it.
 - **Fixes the selected text** in any app.
+- **Automatic layout switch** (turned on in Typing): a word typed in the wrong layout is fixed by itself after a
+  space, Enter or Tab - by the Windows dictionaries, as in LangBar++. One letter, words with digits, abbreviations,
+  a word after the layout was switched by hand or after Backspace, passwords and the console are left alone; fixed
+  by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab. PCs, IDs, GHz, eM, iPhone are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives

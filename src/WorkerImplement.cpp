@@ -1,12 +1,17 @@
 ﻿#include "WorkerImplement.h"
 #include "ParseSnippet.h"
 #include "LayoutConvert.h"
+#include "AutoSwitch.h"
+
+#include <atlbase.h>
+#include <UIAutomation.h>
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     if (keyData.held_end) {
         // Хук придержал Enter / Tab после слова: исправить и отпустить. Сама клавиша придёт потом, как обычный набор.
         struct Release { ~Release() { KeyHold::RequestRelease(); } } release;
-        FixTwoCaps(false);
+        if (!AutoSwitchLastWord(false)) FixTwoCaps(false);
+        AutoWordEnd();
         return;
     }
     TKeyCode vkCode = keyData.vkCode;
@@ -46,6 +51,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     switch (key.type) {
         case KEYTYPE_BACKSPACE: {
             m_cycleList.DeleteLastSymbol();
+            m_autoWord.backspace = true;
             break;
         }
         default: {
@@ -63,6 +69,11 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         case KEYTYPE_NONE:
         case KEYTYPE_COMMAND_CLEAR: {
             ClearAllWords();
+            // Enter, Esc - конец слова; стрелки, Home, End, Delete, сочетания - курсор мог переехать.
+            if (Utils::is_in(vkCode, VK_RETURN, VK_ESCAPE))
+                AutoWordEnd();
+            else
+                CaretMoved();
             break;
         }
     }
@@ -70,8 +81,9 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     if (keyData.hold) {
         // Хук придерживает нажатия после этого пробела: решить и отпустить, что бы ни случилось.
         struct Release { ~Release() { KeyHold::RequestRelease(); } } release;
-        FixTwoCaps();
+        if (!AutoSwitchLastWord()) FixTwoCaps();
     }
+    if (key.type == KEYTYPE_SPACE) AutoWordEnd();
 }
 
 // TStatus ClipHasTextFormating(bool& fres)
@@ -133,6 +145,119 @@ bool IsPasswordFocus() {
     _wcslwr_s(cls);
     return wcsstr(cls, L"edit") && (GetWindowLongW(gti.hwndFocus, GWL_STYLE) & ES_PASSWORD);
 }
+
+// Поле пароля там, где оно не окно Edit (браузеры, программы на Electron, WinUI): UI Automation, IsPassword у
+// элемента в фокусе. Спрашиваем, только когда уже решили переключать, - это поход в чужую программу.
+bool IsPasswordUia() {
+    static CComPtr<IUIAutomation> uia = [] {
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED); // уже (словари) - не страшно
+        CComPtr<IUIAutomation> u;
+        if (FAILED(u.CoCreateInstance(CLSID_CUIAutomation8))) u.CoCreateInstance(CLSID_CUIAutomation);
+        CComPtr<IUIAutomation2> u2;
+        if (u && SUCCEEDED(u->QueryInterface(IID_PPV_ARGS(&u2))) && u2) {
+            u2->put_ConnectionTimeout(500); // зависшая программа держит не дольше полсекунды
+            u2->put_TransactionTimeout(500);
+        }
+        return u;
+    }();
+    CComPtr<IUIAutomationElement> el;
+    BOOL password = FALSE;
+    return uia && SUCCEEDED(uia->GetFocusedElement(&el)) && el && SUCCEEDED(el->get_CurrentIsPassword(&password)) &&
+        password;
+}
+
+// Консоль (командная строка, Windows Terminal, ConEmu, mintty): там команды и пути, а не слова.
+bool IsConsole() {
+    wchar_t cls[64] = {};
+    GetClassNameW(GetForegroundWindow(), cls, 64);
+    for (const wchar_t* name : { L"ConsoleWindowClass", L"CASCADIA_HOSTING_WINDOW_CLASS", L"VirtualConsoleClass", L"mintty" })
+        if (wcscmp(cls, name) == 0) return true;
+    return false;
+}
+}
+
+bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
+    GETCONF;
+    if (!cfg->autoswitch || !KeyHold::fixAllowed) return false;
+    auto keys = afterSpace ? m_cycleList.LastWordKeys() : m_cycleList.TrailingWordKeys();
+    if (keys.empty()) return false;
+    auto no = [](const char* why) {
+        LOG_ANY("autoswitch: no, {}", why);
+        return false;
+    };
+    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || IsConsole()) return no("a password, a console or an excluded program");
+    if (m_autoWord.backspace) return no("the word was edited with Backspace");
+    CheckCurLay();
+    const HKL lay = CurLay();
+    if (m_autoWord.lay && lay != m_autoWord.lay) return no("the layout was switched by hand");
+    std::wstring typed;
+    for (auto* key : keys) {
+        if (key->is_caps) return no("CapsLock");
+        auto c = InputSender::KeyText(*key, lay, false);
+        if (c.size() != 1) return no("a key that is not one letter");
+        typed += c;
+    }
+    const auto exceptions = AutoSwitchExceptions();
+    // После щелчка или стрелок в том же окне могли дописывать середину слова: короткие куски не трогаем.
+    const size_t minLetters = m_autoWord.moved ? 4 : 2;
+    auto dictionary = [](HKL l) {
+        return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); };
+    };
+    auto suggestions = [lang = Utils::GetNameForHKL_simple(lay)](const std::wstring& w) { return SpellCheck::Suggest(w, lang); };
+    for (HKL other : cfg->layouts_info.EnabledLayouts()) {
+        if (other == lay) continue;
+        std::wstring there;
+        for (auto* key : keys) {
+            auto c = InputSender::KeyText(*key, other, false);
+            if (c.size() != 1) {
+                there.clear();
+                break;
+            }
+            there += c;
+        }
+        if (there.empty()) continue;
+        if (const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions)) {
+            LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, std::wstring(why, why + strlen(why)));
+            continue;
+        }
+        if (!AutoSwitch::Decide(typed, there, dictionary(lay), dictionary(other), suggestions)) continue;
+        if (IsPasswordUia()) return no("a password field");
+        LOG_ANY(L"autoswitch: {} -> {}", typed, there);
+        RevertLastWordTo(other);
+        m_autoSwitched = { AutoSwitch::Lower(AutoSwitch::Letters(typed).core), GetTickCount64(), m_cycleList.Size() };
+        return true;
+    }
+    return false;
+}
+
+std::vector<std::wstring> WorkerImplement::AutoSwitchExceptions() {
+    std::vector<std::wstring> words;
+    for (const auto& e : conf_get_unsafe()->autoswitch_exceptions) words.push_back(StrUtils::Convert(e));
+    return words;
+}
+
+void WorkerImplement::RevertLastWordTo(HKL lay) {
+    auto to_revert = m_cycleList.FillKeyToRevert(hk_RevertLastWord);
+    if (to_revert.keys.empty()) return;
+    m_cycleList.SetSeparateLast();
+    TextFixed();
+    IFS_LOG(ProcessRevert({ .keylist = std::move(to_revert.keys), .lay = lay,
+                            .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
+    AutoLayoutIsOurs();
+}
+
+void WorkerImplement::CountAutoSwitchUndo() {
+    auto last = std::exchange(m_autoSwitched, {});
+    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size) return;
+    LOG_ANY(L"autoswitch: {} switched back", last.word);
+    PostMessageW(g_guiHandle, WM_AutoSwitchLearn, 0, (LPARAM)new std::wstring(last.word));
+}
+
+void WorkerImplement::AutoWordEnd() {
+    m_autoWord.backspace = m_autoWord.moved = false;
+    if (!conf_get_unsafe()->autoswitch) return;
+    CheckCurLay();
+    m_autoWord.lay = CurLay();
 }
 
 void WorkerImplement::FixTwoCaps(bool afterSpace) {
@@ -269,6 +394,7 @@ TStatus WorkerImplement::GetClipStringCallback() {
                 RequestWaitClip(CLRMY_hk_INSERT);
                 m_clipWorker.setString(converted);
                 IFS_LOG(ProcessRevert({ .lay = to, .flags = SW_CLIENT_SetLang | SW_CLIENT_NO_WAIT_LANG | SW_CLIENT_CTRLV }));
+                AutoLayoutIsOurs();
                 pasted = true;
             }
         } else if (data.length() > 100) {
@@ -347,6 +473,8 @@ void WorkerImplement::CliboardChanged() {
 
 void WorkerImplement::ChangeForeground(HWND hwnd) {
     LOG_ANY(L"Now foreground hwnd={}", (void*)hwnd);
+    m_autoWord = {}; // другое окно: своя раскладка, свой курсор
+    m_autoSwitched = {};
     DWORD procId = 0;
     DWORD threadid = GetWindowThreadProcessId(hwnd, &procId);
     if (threadid != m_dwIdThreadForeground && procId != m_dwIdProcoreground) {
@@ -614,6 +742,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
             IFS_RET(SW_ERR_UNKNOWN, L"Unknown typerevert {}", (int)hk);
         }
 
+        if (hk == hk_RevertLastWord) CountAutoSwitchUndo();
         RevertText(hk);
 
         RETURN_SUCCESS;

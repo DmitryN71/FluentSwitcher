@@ -81,7 +81,7 @@ private: inline static HookerKeyboard hookerKeyb;
 			else {
 				hookerKeyb.last_mouse_click_time.SetToNow();
 				KeyHold::ResetWord(); // курсор мог переехать: слово уже не то
-				Worker()->PostMsg(Message_ClearWorlds{});
+				Worker()->PostMsg(Message_ClearWorlds{ .click = wParam != WM_MOUSEWHEEL && wParam != WM_MOUSEHWHEEL });
 				// Щелчок или прокрутка двигают каретку. Отпустили левую - курсор могли поставить в поле: в режиме
 				// "ненадолго" флажок показывается и от этого (браузеры о фокусе внутри страницы Windows не сообщают).
 				CaretFlagPoke(80, wParam == WM_LBUTTONUP);

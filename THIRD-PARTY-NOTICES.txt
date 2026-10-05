@@ -4,6 +4,7 @@ FluentSwitcher - third-party notices
 FluentSwitcher includes the following parts of others. Each keeps its own licence.
 
   - SimpleSwitcher (Aegel5, https://github.com/Aegel5/SimpleSwitcher)
+  - LangBar++ (Krot66, https://github.com/Krot66/LangBarXX) - ideas and rules, rewritten
   - wxWidgets 3.3 (https://www.wxwidgets.org)
   - zlib (in wxWidgets) (https://zlib.net)
   - libpng (in wxWidgets) (http://www.libpng.org)
@@ -24,6 +25,19 @@ Aegel5, https://github.com/Aegel5/SimpleSwitcher
 
 FluentSwitcher is a modified version of SimpleSwitcher. Both are licensed under the GNU General Public
 License, version 3: see LICENSE next to this file.
+
+
+------------------------------------------------------------------------------
+LangBar++ (LangBarXX)
+Krot66, https://github.com/Krot66/LangBarXX
+------------------------------------------------------------------------------
+
+No code of LangBar++ (an AutoHotkey script) is included. Two of its ideas are rewritten in C++: converting
+selected text as a whole, by the layout of the whole line, and the rule of the automatic layout switch - a
+word that is not a word of its language while the same keys in the other layout are one, with its
+exceptions (single letters, words with digits, abbreviations, a word after the layout was switched by hand,
+after a mouse click or after Backspace). LangBar++ is licensed under the GNU Lesser General Public License,
+version 3, which allows its use in FluentSwitcher under the GNU General Public License, version 3.
 
 
 ------------------------------------------------------------------------------

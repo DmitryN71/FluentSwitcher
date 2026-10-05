@@ -95,5 +95,7 @@
   "You have the latest version": "У вас последняя версия",
   "Could not reach GitHub": "Не удалось связаться с GitHub",
   "\"{}\" will not be fixed any more": "«{}» больше не исправляется",
-  "It is in the exceptions of TWo INitial CApitals: Settings, Typing": "Слово – в исключениях ДВух ЗАглавных: Настройки, Набор текста"
+  "It is in the exceptions of TWo INitial CApitals: Settings, Typing": "Слово – в исключениях ДВух ЗАглавных: Настройки, Набор текста",
+  "\"{}\" will not be switched any more": "«{}» больше не переключается",
+  "It is in the exceptions of the layout auto switch: Settings, Typing": "Слово – в исключениях автопереключения: Настройки, Набор текста"
 }

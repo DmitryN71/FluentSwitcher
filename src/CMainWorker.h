@@ -21,7 +21,9 @@ struct Message_ChangeForeg {
 	HWND hwnd = 0;
 };
 
-struct Message_ClearWorlds {};
+struct Message_ClearWorlds {
+	bool click = false; // щелчок мышью: курсор мог переехать в середину текста (автопереключение, AutoSwitch.h)
+};
 struct Message_Quit {};
 
 class WorkerImplement;

@@ -132,6 +132,26 @@ void StartGui() {
 				return 0;
 			}
 
+			if (msg == WM_AutoSwitchLearn) {
+				// Слово вернули сразу после автопереключения. Как у ДВух ЗАглавных: счёт - в настройках, на третий
+				// раз слово уходит в исключения автопереключения, о чём говорит уведомление у флага.
+				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
+				const std::string utf8 = StrUtils::Convert(*word);
+				auto& counts = conf_gui()->autoswitch_undo;
+				const int times = ++counts[utf8];
+				LOG_ANY(L"autoswitch: {} switched back {} times", *word, times);
+				if (times >= 3) {
+					counts.erase(utf8);
+					auto& list = conf_gui()->autoswitch_exceptions;
+					if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
+					trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("\"{}\" will not be switched any more"), std::make_format_args(utf8))),
+						StrUtils::Convert(std::string(LOC("It is in the exceptions of the layout auto switch: Settings, Typing"))),
+						[] { show_main_wind(); });
+				}
+				SaveApplyGuiConfig();
+				return 0;
+			}
+
 			if (msg == WM_TextFixed) {
 				layoutSound.OnFix();
 				return 0;

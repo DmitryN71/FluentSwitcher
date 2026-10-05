@@ -376,6 +376,39 @@ void SettingsFrame::BuildGeneral()
     FinishPage();
 }
 
+void SettingsFrame::WordListCard(const char* key, const wxString& title, const wxString& about,
+                                 const wxString& editAbout, wxStaticText* SettingsFrame::*label)
+{
+    auto words = [this, key] {
+        wxArrayString list;
+        const nlohmann::json& file = std::as_const(m_edit).Json();
+        if (auto it = file.find(key); it != file.end() && it->is_array())
+            for (const auto& w : *it)
+                if (w.is_string())
+                    list.Add(wxString::FromUTF8(w.get<std::string>()));
+        return list;
+    };
+    auto text = [about](const wxArrayString& list) {
+        return about + "\n" + (list.empty() ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), list.size()));
+    };
+    this->*label = AddSettingsCard(
+        m_page, m_column, title, text(words()), [this, key, title, editAbout, label, words, text](wxWindow* card) {
+            FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
+            edit->Bind(wxEVT_BUTTON, [this, key, title, editAbout, label, words, text](wxCommandEvent&) {
+                wxArrayString list = words();
+                if (!EditWordList(this, title, editAbout, &list))
+                    return;
+                nlohmann::json json = nlohmann::json::array();
+                for (const wxString& w : list)
+                    json.push_back(w.utf8_string());
+                m_edit.Json()[key] = json;
+                Changed();
+                SetCardDescription(this->*label, text(list));
+            });
+            return edit;
+        });
+}
+
 void SettingsFrame::BuildTyping()
 {
     Section(kIconTyping, T("Набор текста"));
@@ -405,47 +438,30 @@ void SettingsFrame::BuildTyping()
         Changed();
     };
 
-    // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions (an array
-    // in the file, words with spaces between them here).
+    // The automatic layout switch (the engine's AutoSwitch.h): autoswitch, and the words never switched,
+    // autoswitch_exceptions.
+    Toggle(T("Автопереключение раскладки"),
+           T("Слово, набранное не в той раскладке, исправляется само после пробела, Enter или Tab: если его нет в словаре "
+             "своего языка, а в другой раскладке это слово (словари Windows), – ghbdtn станет «привет». Не трогаются одна "
+             "буква, слова с цифрами, аббревиатуры, слово после ручной смены раскладки или Backspace, пароли, консоль. "
+             "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся"),
+           "autoswitch", false);
+    WordListCard("autoswitch_exceptions", T("Исключения автопереключения"),
+                 T("Слова, которые не переключаются, – в любой раскладке: cv или см. Само слово попадает сюда после "
+                   "третьей отмены"),
+                 T("По слову в строке, в любой раскладке"), &SettingsFrame::m_autoSwitchExceptions);
+
+    // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
     Toggle(T("Исправлять ДВе ЗАглавные"),
            T("«ДВух» станет «Двух» после пробела, Enter или Tab. PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
              "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Тот же "
              "перевод раскладки исправляет и ДВе ЗАглавные: LDe[ – Двух"),
            "two_caps", false);
     // The exceptions: in a window of their own, one per line; the card says how many.
-    auto exceptionWords = [this] {
-        wxArrayString words;
-        const nlohmann::json& file = std::as_const(m_edit).Json();
-        if (auto list = file.find("two_caps_exceptions"); list != file.end() && list->is_array())
-            for (const auto& w : *list)
-                if (w.is_string())
-                    words.Add(wxString::FromUTF8(w.get<std::string>()));
-        return words;
-    };
-    auto exceptionsText = [](const wxArrayString& words) {
-        const wxString about = T("Слова, которые так и пишутся. Слово закрывает и те, что с него начинаются: "
-                                 "ИПшник – и ИПшники. Само слово попадает сюда после третьей отмены");
-        return about + "\n" + (words.empty() ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), words.size()));
-    };
-    wxStaticText* exceptionsLabel = AddSettingsCard(
-        m_page, m_column, T("Исключения для ДВух ЗАглавных"), exceptionsText(exceptionWords()),
-        [this, exceptionWords, exceptionsText](wxWindow* card) {
-            FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
-            edit->Bind(wxEVT_BUTTON, [this, exceptionWords, exceptionsText](wxCommandEvent&) {
-                wxArrayString words = exceptionWords();
-                if (!EditWordList(this, T("Исключения для ДВух ЗАглавных"),
-                                  T("По слову в строке. Слово закрывает и те, что с него начинаются"), &words))
-                    return;
-                nlohmann::json list = nlohmann::json::array();
-                for (const wxString& w : words)
-                    list.push_back(w.utf8_string());
-                m_edit.Json()["two_caps_exceptions"] = list;
-                Changed();
-                SetCardDescription(m_twoCapsExceptions, exceptionsText(words));
-            });
-            return edit;
-        });
-    m_twoCapsExceptions = exceptionsLabel;
+    WordListCard("two_caps_exceptions", T("Исключения для ДВух ЗАглавных"),
+                 T("Слова, которые так и пишутся. Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само "
+                   "слово попадает сюда после третьей отмены"),
+                 T("По слову в строке. Слово закрывает и те, что с него начинаются"), &SettingsFrame::m_twoCapsExceptions);
 
     const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
     Choice(T("Как переключать раскладку"),

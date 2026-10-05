@@ -204,6 +204,21 @@ const std::unordered_map<std::string, const char*>& English()
 
         // Typing
         { "Набор текста", "Typing" },
+        { "Автопереключение раскладки", "Switch the layout automatically" },
+        { "Слово, набранное не в той раскладке, исправляется само после пробела, Enter или Tab: если его нет в словаре "
+          "своего языка, а в другой раскладке это слово (словари Windows), – ghbdtn станет «привет». Не трогаются одна "
+          "буква, слова с цифрами, аббревиатуры, слово после ручной смены раскладки или Backspace, пароли, консоль. "
+          "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся",
+          "A word typed in the wrong layout is fixed by itself after a space, Enter or Tab: when it is not in the "
+          "dictionary of its language but the same keys in the other layout are a word (Windows dictionaries), - "
+          "ghbdtn becomes \"привет\". One letter, words with digits, abbreviations, a word after a layout switched by "
+          "hand or after Backspace, passwords and the console are left alone. Fixed by mistake - press \"Fix the last "
+          "word\" (Shift twice) at once and the word comes back" },
+        { "Исключения автопереключения", "Exceptions of the automatic switch" },
+        { "Слова, которые не переключаются, – в любой раскладке: cv или см. Само слово попадает сюда после "
+          "третьей отмены",
+          "Words never switched, in either layout: cv or см. A word gets here by itself after the third undo" },
+        { "По слову в строке, в любой раскладке", "One word per line, in either layout" },
         { "Буквы: EN, RU", "Letters: EN, RU" },
         { "Буквы в рамке: EN, RU", "Letters in a frame: EN, RU" },
         { "По пробелам и знакам препинания", "At spaces and punctuation" },

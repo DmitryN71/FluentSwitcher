@@ -9,13 +9,14 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 namespace SpellCheck {
 
 enum class Result { Unknown, Word, NotWord };
 
-// word - как есть (регистр не важен), language - "ru-RU", "en-US".
-inline Result Check(std::wstring word, const std::wstring& language) {
+// Словарь языка ("ru-RU", "en-US"), один на язык; нет - пусто.
+inline ISpellChecker* Checker(const std::wstring& language) {
 	using Microsoft::WRL::ComPtr;
 	static ComPtr<ISpellCheckerFactory> factory;
 	static std::map<std::wstring, ComPtr<ISpellChecker>> checkers;
@@ -26,7 +27,7 @@ inline Result Check(std::wstring word, const std::wstring& language) {
 		if (FAILED(CoCreateInstance(__uuidof(SpellCheckerFactory), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))))
 			factory.Reset();
 	}
-	if (!factory || word.empty()) return Result::Unknown;
+	if (!factory) return nullptr;
 	auto it = checkers.find(language);
 	if (it == checkers.end()) {
 		ComPtr<ISpellChecker> checker;
@@ -35,12 +36,43 @@ inline Result Check(std::wstring word, const std::wstring& language) {
 			factory->CreateSpellChecker(language.c_str(), &checker);
 		it = checkers.emplace(language, checker).first;
 	}
-	if (!it->second) return Result::Unknown;
-	for (auto& c : word) c = (wchar_t)(UINT_PTR)CharLowerW((LPWSTR)(UINT_PTR)c);
+	return it->second.Get();
+}
+
+// word - как есть (регистр не важен: проверяется строчными; keepCase - как набрано), language - "ru-RU", "en-US".
+inline Result Check(std::wstring word, const std::wstring& language, bool keepCase = false) {
+	using Microsoft::WRL::ComPtr;
+	ISpellChecker* checker = Checker(language);
+	if (!checker || word.empty()) return Result::Unknown;
+	if (!keepCase)
+		for (auto& c : word) c = (wchar_t)(UINT_PTR)CharLowerW((LPWSTR)(UINT_PTR)c);
 	ComPtr<IEnumSpellingError> errors;
-	if (FAILED(it->second->Check(word.c_str(), &errors)) || !errors) return Result::Unknown;
+	if (FAILED(checker->Check(word.c_str(), &errors)) || !errors) return Result::Unknown;
 	ComPtr<ISpellingError> error;
 	return errors->Next(&error) == S_OK ? Result::NotWord : Result::Word;
+}
+
+// Что словарь предлагает вместо слова с ошибкой (первые max).
+inline std::vector<std::wstring> Suggest(const std::wstring& word, const std::wstring& language, size_t max = 10) {
+	using Microsoft::WRL::ComPtr;
+	std::vector<std::wstring> out;
+	ISpellChecker* checker = Checker(language);
+	ComPtr<IEnumString> list;
+	if (!checker || word.empty() || FAILED(checker->Suggest(word.c_str(), &list)) || !list) return out;
+	LPOLESTR s = nullptr;
+	while (out.size() < max && list->Next(1, &s, nullptr) == S_OK) {
+		out.emplace_back(s);
+		CoTaskMemFree(s);
+	}
+	return out;
+}
+
+// Слово как набрано или строчными: имена собственные ("Москва") словарь знает только с заглавной, а "Ghbdtn" надо
+// проверить и как "ghbdtn" (автопереключение, AutoSwitch.h).
+inline Result CheckAnyCase(const std::wstring& word, const std::wstring& language) {
+	const Result asTyped = Check(word, language, true);
+	if (asTyped != Result::NotWord) return asTyped;
+	return Check(word, language);
 }
 
 // Слово набрано не в той раскладке: `typed` - не слово языка `language`, а `other` (те же клавиши в другой раскладке) -

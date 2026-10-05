@@ -25,6 +25,7 @@ void CMainWorker::WorkerInt()
 			}
 			else if constexpr (std::is_same_v<T, Message_ClearWorlds>) {
 				workerImpl.ClearAllWords();
+				if (arg.click) workerImpl.CaretMoved();
 			}
 			else if constexpr (std::is_same_v<T, Message_Func>) {
 				arg(&workerImpl);

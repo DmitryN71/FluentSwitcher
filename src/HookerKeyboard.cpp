@@ -309,26 +309,29 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			&& !key_up_exists
 
 			) {
-			// Пробел после слова, которое может быть "ДВух": следующие нажатия придерживаются, пока движок решает.
+			// Конец слова, которое может быть "ДВух" или набрано не в той раскладке (автопереключение): следующие
+			// нажатия придерживаются, пока движок решает.
 			bool hold = false;
-			if (vkCode == VK_SPACE) {
-				hold = KeyHold::CandidateAtSpace() && !replayed && curk.Size() == 1 && cfg->two_caps &&
-					g_enabled.IsEnabled() && KeyHold::CanHold();
+			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
+				const auto end = KeyHold::EndWord();
+				const bool check = !replayed && curk.Size() == 1 && g_enabled.IsEnabled() &&
+					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch)) && KeyHold::CanHold();
+				if (check && vkCode != VK_SPACE) {
+					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
+					// поле), поэтому ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе
+					// с придержанными.
+					LOG_ANY("hold: Enter / Tab waits for the word check");
+					KeyHold::Start();
+					KeyHold::Hold(*k);
+					held_event = true;
+					Worker()->PostMsg(Message_KeyType{ .vkCode = vkCode, .cur_hotKey = curk, .held_end = true });
+					return;
+				}
+				hold = check;
 				if (hold) {
-					LOG_ANY("hold: keys wait for the two caps check");
+					LOG_ANY("hold: keys wait for the word check");
 					KeyHold::Start();
 				}
-			}
-			else if ((vkCode == VK_RETURN || vkCode == VK_TAB) && KeyHold::CandidateAtSpace() && !replayed &&
-				curk.Size() == 1 && cfg->two_caps && g_enabled.IsEnabled() && KeyHold::CanHold()) {
-				// Enter или Tab сразу после "ДВух": они действуют сразу (сообщение уходит, курсор в другое поле), поэтому
-				// ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе с придержанными.
-				LOG_ANY("hold: Enter / Tab waits for the two caps check");
-				KeyHold::Start();
-				KeyHold::Hold(*k);
-				held_event = true;
-				Worker()->PostMsg(Message_KeyType{ .vkCode = vkCode, .cur_hotKey = curk, .held_end = true });
-				return;
 			}
 			else {
 				KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,

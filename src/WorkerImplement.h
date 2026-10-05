@@ -110,6 +110,7 @@ class WorkerImplement {
         data.flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | (no_backs ? 0 : SW_CLIENT_BACKSPACE);
         data.lay = isNeedLangChange ? nextLng : 0;
         IFS_LOG(ProcessRevert(std::move(data)));
+        AutoLayoutIsOurs();
     }
 
     void ChangeForeground(HWND hwnd);
@@ -164,6 +165,35 @@ class WorkerImplement {
         size_t size = 0;         // набранных клавиш после исправления: другое число - уже печатали дальше
         TKeyBaseInfo* key = nullptr; // клавиша второй буквы в буфере слов
     } m_twoCaps;
+
+    // Автопереключение (AutoSwitch.h): слово перед только что набранным пробелом (afterSpace) или придержанным
+    // Enter / Tab набрано не в той раскладке - перевести, как "Исправить последнее слово". true - перевели.
+    bool AutoSwitchLastWord(bool afterSpace = true);
+    // Исключения автопереключения из настроек.
+    static std::vector<std::wstring> AutoSwitchExceptions();
+    // Последнее слово - в раскладку lay, как "Исправить последнее слово" (стереть, переключить, напечатать).
+    void RevertLastWordTo(HKL lay);
+    // "Исправить последнее слово" сразу после автопереключения - отмена: в счёт (на третью - в исключения).
+    void CountAutoSwitchUndo();
+    // Курсор переехал в том же окне (щелчок, стрелки): первое слово дальше может быть дописанной серединой.
+    void CaretMoved() { m_autoWord.moved = true; }
+    // Граница слова (пробел, Enter, Tab): приметы слова сначала, раскладка - как сейчас.
+    void AutoWordEnd();
+    // Раскладку только что сменил сам FluentSwitcher (перевод слова, выделенного): это не ручная смена.
+    void AutoLayoutIsOurs() {
+        CheckCurLay();
+        m_autoWord.lay = CurLay();
+    }
+    struct {
+        HKL lay = 0;            // раскладка на прошлой границе слова; 0 - не знаем (другое окно)
+        bool backspace = false; // в слове стирали
+        bool moved = false;     // курсор переезжал в том же окне
+    } m_autoWord;
+    struct {
+        std::wstring word;      // как набрано (буквенная часть, строчными)
+        ULONGLONG at = 0;
+        size_t size = 0;        // набранных клавиш после переключения: другое число - уже печатали дальше
+    } m_autoSwitched;
 
     TStatus FixCtrlAlt(CHotKey key);
 

@@ -152,12 +152,12 @@ inline void Track(UINT vk, bool shift, bool caps, bool command) {
 // Конец слова (пробел, Enter, Tab): каким оно было. Слово на этом кончается.
 struct WordEnd {
 	bool twoCaps = false; // могло подойти под ДВе ЗАглавные (две заглавные, потом строчные)
-	bool letters = false; // две буквы и больше, без цифр и команд - его проверит автопереключение
+	bool letters = false; // буквы без цифр и команд - его проверит автопереключение (и одну: список "Переключать всегда")
 };
 inline WordEnd EndWord() {
 	WordEnd end;
 	end.twoCaps = !broken && word.size() >= 4 && word[0] && word[1] && !word[2] && !word[3];
-	end.letters = !broken && word.size() >= 2;
+	end.letters = !broken && !word.empty();
 	ResetWord();
 	return end;
 }

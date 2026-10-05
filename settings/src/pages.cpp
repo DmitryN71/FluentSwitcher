@@ -10,6 +10,7 @@
 #include <wx/dir.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
+#include <wx/tooltip.h>
 #include <wx/utils.h>
 
 #include "../../src/Update.h" // after wxWidgets: Windows headers of its own
@@ -176,6 +177,9 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     SetIcon(wxICON(aaaa));
     SetBackgroundColour(g.bg);
     ApplyDwm(this, false, &g.bg);
+    // The details of a card are in its tooltip (CardTip): wrapped, and up long enough to read.
+    wxToolTip::SetMaxWidth(FromDIP(440));
+    wxToolTip::SetAutoPop(30000);
 
     m_nav = new SectionNav(this);
     m_title = FluentText(this, wxString(), 20, g.text, true);
@@ -376,13 +380,40 @@ void SettingsFrame::BuildGeneral()
     FinishPage();
 }
 
-void SettingsFrame::WordListCard(const char* key, const wxString& title, const wxString& about,
-                                 const wxString& editAbout, wxStaticText* SettingsFrame::*label)
+// The details of a card as its tooltip: over the card and everything on it (a tooltip of a window is not shown over
+// its children). `inCard` - anything on the card: its control or its description.
+static void CardTip(wxWindow* inCard, const wxString& tip)
 {
-    auto words = [this, key] {
+    wxWindow* card = inCard;
+    while (card && !dynamic_cast<Card*>(card))
+        card = card->GetParent();
+    if (!card)
+        return;
+    std::function<void(wxWindow*)> set = [&](wxWindow* w) {
+        w->SetToolTip(tip);
+        for (wxWindow* child : w->GetChildren())
+            set(child);
+    };
+    set(card);
+}
+
+// A title that has details in its tooltip: with the "i" in a circle after it.
+static wxString WithTip(const wxString& title)
+{
+    return title + wxString::FromUTF8(" \u24D8");
+}
+
+void SettingsFrame::WordListCard(const char* key, const wxString& title, const wxString& about, const wxString& tip,
+                                 const wxString& editAbout, wxStaticText* SettingsFrame::*label,
+                                 const wxArrayString& defaults)
+{
+    auto words = [this, key, defaults] {
         wxArrayString list;
         const nlohmann::json& file = std::as_const(m_edit).Json();
-        if (auto it = file.find(key); it != file.end() && it->is_array())
+        auto it = file.find(key);
+        if (it == file.end())
+            return defaults;
+        if (it->is_array())
             for (const auto& w : *it)
                 if (w.is_string())
                     list.Add(wxString::FromUTF8(w.get<std::string>()));
@@ -392,7 +423,8 @@ void SettingsFrame::WordListCard(const char* key, const wxString& title, const w
         return about + "\n" + (list.empty() ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), list.size()));
     };
     this->*label = AddSettingsCard(
-        m_page, m_column, title, text(words()), [this, key, title, editAbout, label, words, text](wxWindow* card) {
+        m_page, m_column, tip.empty() ? title : WithTip(title), text(words()),
+        [this, key, title, editAbout, label, words, text](wxWindow* card) {
             FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
             edit->Bind(wxEVT_BUTTON, [this, key, title, editAbout, label, words, text](wxCommandEvent&) {
                 wxArrayString list = words();
@@ -407,6 +439,8 @@ void SettingsFrame::WordListCard(const char* key, const wxString& title, const w
             });
             return edit;
         });
+    if (!tip.empty())
+        CardTip(this->*label, tip);
 }
 
 void SettingsFrame::BuildTyping()
@@ -438,29 +472,65 @@ void SettingsFrame::BuildTyping()
         Changed();
     };
 
-    // The automatic layout switch (the engine's AutoSwitch.h): autoswitch, and the words never switched,
-    // autoswitch_exceptions.
-    Toggle(T("Автопереключение раскладки"),
-           T("Слово, набранное не в той раскладке, исправляется само после пробела, Enter или Tab: если его нет в словаре "
-             "своего языка, а в другой раскладке это слово (словари Windows), – ghbdtn станет «привет». Не трогаются одна "
-             "буква, слова с цифрами, аббревиатуры, слово после ручной смены раскладки или Backspace, пароли, консоль. "
-             "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся"),
-           "autoswitch", false);
-    WordListCard("autoswitch_exceptions", T("Исключения автопереключения"),
-                 T("Слова, которые не переключаются, – в любой раскладке: cv или см. Само слово попадает сюда после "
-                   "третьей отмены"),
+    // The automatic layout switch (the engine's AutoSwitch.h): autoswitch; the words never switched,
+    // autoswitch_exceptions, and always switched, autoswitch_force; the journal, autoswitch_journal. Short texts on the
+    // cards, the details in their tooltips.
+    CardTip(Toggle(WithTip(T("Автопереключение раскладки")),
+                   T("Слово не в той раскладке исправляется само после пробела, Enter или Tab: ghbdtn – «привет»"),
+                   "autoswitch", false),
+            T("Переключает, когда набранного нет в словаре Windows своего языка, а те же клавиши в другой раскладке – "
+              "слово.\nНе трогает: одну букву, слова с цифрами, аббревиатуры, адреса и почту, опечатки в английских "
+              "словах, слово после ручной смены раскладки или Backspace, пароли, консоль.\nИсправилось зря – сразу "
+              "нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на третий раз попадёт в «Не "
+              "переключать»"));
+    WordListCard("autoswitch_exceptions", T("Не переключать"), T("Например, cv или см – в любой раскладке"),
+                 T("Слово попадает сюда и само – после третьей отмены автопереключения"),
                  T("По слову в строке, в любой раскладке"), &SettingsFrame::m_autoSwitchExceptions);
+    WordListCard("autoswitch_force", T("Переключать всегда"),
+                 T("Даже если словарь их не знает или это одна буква: the, a"),
+                 T("Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "
+                   "другом виде (еру) переключало бы правильно набранное"),
+                 T("По слову в строке – в том виде, какой нужен: the, a"), &SettingsFrame::m_autoSwitchForce,
+                 { wxString("the"), wxString("a") }); // as autoswitch_force in the engine's Settings.h
+    // The journal: on / off and "Открыть" (the file, in the folder of the debug log) on one card.
+    {
+        ToggleSwitch* journal = nullptr;
+        wxStaticText* about = AddSettingsCard(
+            m_page, m_column, WithTip(T("Журнал автопереключения")),
+            T("Что переключилось само, что вернули и что исправили вручную"), [&](wxWindow* card) {
+                wxPanel* box = new wxPanel(card);
+                wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+                FluentButton* open = new FluentButton(box, wxID_ANY, T("Открыть"));
+                open->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                    const wxString file = m_folder + "\\log\\autoswitch.log";
+                    if (!wxFileExists(file))
+                        return SetStatus(T("Журнала ещё нет: включите его и подождите первого переключения"), true);
+                    OpenAsUser(file.ToStdWstring());
+                });
+                journal = new ToggleSwitch(box, m_edit.GetBool("autoswitch_journal", false));
+                row->Add(open, 0, wxALIGN_CENTER_VERTICAL);
+                row->Add(journal, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, box->FromDIP(12));
+                box->SetSizer(row);
+                return box;
+            });
+        journal->onChange = [this, journal] {
+            m_edit.SetBool("autoswitch_journal", journal->IsOn());
+            Changed();
+        };
+        CardTip(about, T("Файл autoswitch.log в папке log рядом с программой: по нему видно, где автопереключение "
+                         "ошибается и что пропускает. Пароли туда не попадают – в их полях оно не работает"));
+    }
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
-    Toggle(T("Исправлять ДВе ЗАглавные"),
-           T("«ДВух» станет «Двух» после пробела, Enter или Tab. PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. "
-             "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Тот же "
-             "перевод раскладки исправляет и ДВе ЗАглавные: LDe[ – Двух"),
-           "two_caps", false);
+    CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух» после пробела, Enter или Tab"),
+                   "two_caps", false),
+            T("PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. Исправилось зря – сразу нажмите «Исправить "
+              "последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – "
+              "Двух"));
     // The exceptions: in a window of their own, one per line; the card says how many.
-    WordListCard("two_caps_exceptions", T("Исключения для ДВух ЗАглавных"),
-                 T("Слова, которые так и пишутся. Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само "
-                   "слово попадает сюда после третьей отмены"),
+    WordListCard("two_caps_exceptions", T("Исключения для ДВух ЗАглавных"), T("Слова, которые так и пишутся: VMware, IPsec"),
+                 T("Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само слово попадает сюда после "
+                   "третьей отмены"),
                  T("По слову в строке. Слово закрывает и те, что с него начинаются"), &SettingsFrame::m_twoCapsExceptions);
 
     const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);

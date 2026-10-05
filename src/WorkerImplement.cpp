@@ -5,6 +5,7 @@
 
 #include <atlbase.h>
 #include <UIAutomation.h>
+#include <fstream>
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     if (keyData.held_end) {
@@ -166,6 +167,15 @@ bool IsPasswordUia() {
         password;
 }
 
+// Программа впереди: имя файла (для журнала автопереключения).
+std::wstring ForegroundProgram() {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+    std::wstring path, name;
+    if (!pid || Utils::GetProcLowerNameByPid(pid, path, name) != SW_ERR_SUCCESS) return L"?";
+    return name;
+}
+
 // Консоль (командная строка, Windows Terminal, ConEmu, mintty): там команды и пути, а не слова.
 bool IsConsole() {
     wchar_t cls[64] = {};
@@ -198,6 +208,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         typed += c;
     }
     const auto exceptions = AutoSwitchExceptions();
+    const auto forced = AutoSwitchForced();
     // После щелчка или стрелок в том же окне могли дописывать середину слова: короткие куски не трогаем.
     const size_t minLetters = m_autoWord.moved ? 4 : 2;
     auto dictionary = [](HKL l) {
@@ -216,15 +227,21 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
             there += c;
         }
         if (there.empty()) continue;
-        if (const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions)) {
-            LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, std::wstring(why, why + strlen(why)));
-            continue;
+        // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a.
+        const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
+        if (!force) {
+            if (const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions)) {
+                LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, std::wstring(why, why + strlen(why)));
+                continue;
+            }
+            if (!AutoSwitch::Decide(typed, there, dictionary(lay), dictionary(other), suggestions)) continue;
         }
-        if (!AutoSwitch::Decide(typed, there, dictionary(lay), dictionary(other), suggestions)) continue;
         if (IsPasswordUia()) return no("a password field");
-        LOG_ANY(L"autoswitch: {} -> {}", typed, there);
+        LOG_ANY(L"autoswitch: {} -> {}{}", typed, there, force ? L" (switch always)" : L"");
         RevertLastWordTo(other);
-        m_autoSwitched = { AutoSwitch::Lower(AutoSwitch::Letters(typed).core), GetTickCount64(), m_cycleList.Size() };
+        m_autoSwitched = { AutoSwitch::Lower(AutoSwitch::Letters(typed).core), GetTickCount64(), m_cycleList.Size(), typed,
+                           there };
+        Journal("switched", typed, there);
         return true;
     }
     return false;
@@ -234,6 +251,48 @@ std::vector<std::wstring> WorkerImplement::AutoSwitchExceptions() {
     std::vector<std::wstring> words;
     for (const auto& e : conf_get_unsafe()->autoswitch_exceptions) words.push_back(StrUtils::Convert(e));
     return words;
+}
+
+std::vector<std::wstring> WorkerImplement::AutoSwitchForced() {
+    std::vector<std::wstring> words;
+    for (const auto& e : conf_get_unsafe()->autoswitch_force) words.push_back(StrUtils::Convert(e));
+    return words;
+}
+
+void WorkerImplement::Journal(const char* what, const std::wstring& from, const std::wstring& to) {
+    GETCONF;
+    if (!cfg->autoswitch || !cfg->autoswitch_journal) return;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dir = PathUtils::GetPath_folder_noLower2() / L"log";
+    fs::create_directories(dir, ec);
+    const fs::path file = dir / L"autoswitch.log";
+    if (fs::exists(file, ec) && fs::file_size(file, ec) > 1024 * 1024) // больше мегабайта - в старый, начать заново
+        fs::rename(file, dir / L"autoswitch.old.log", ec);
+    SYSTEMTIME st{};
+    GetLocalTime(&st);
+    const std::wstring label = StrUtils::Convert(std::string(LOC(what)));
+    const std::wstring line = std::format(L"{:02}.{:02}.{:04} {:02}:{:02}:{:02}  {:<10} {} \u2192 {}  ({})\r\n", st.wDay,
+                                          st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond, label, from, to,
+                                          ForegroundProgram());
+    const std::string utf8 = StrUtils::Convert(line);
+    std::ofstream out(file, std::ios::binary | std::ios::app);
+    out.write(utf8.data(), (std::streamsize)utf8.size());
+}
+
+void WorkerImplement::JournalHandFix() {
+    GETCONF;
+    if (!cfg->autoswitch || !cfg->autoswitch_journal) return;
+    auto keys = m_cycleList.LastWordKeys();
+    if (keys.empty()) keys = m_cycleList.TrailingWordKeys();
+    const HKL lay = CurLay(), next = cfg->layouts_info.NextEnabledLayout(lay);
+    if (keys.empty() || !lay || !next) return;
+    std::wstring typed, fixed;
+    for (auto* key : keys) {
+        typed += InputSender::KeyText(*key, lay, false);
+        fixed += InputSender::KeyText(*key, next, false);
+    }
+    Journal("by hand", typed, fixed);
 }
 
 void WorkerImplement::RevertLastWordTo(HKL lay) {
@@ -246,11 +305,13 @@ void WorkerImplement::RevertLastWordTo(HKL lay) {
     AutoLayoutIsOurs();
 }
 
-void WorkerImplement::CountAutoSwitchUndo() {
+bool WorkerImplement::CountAutoSwitchUndo() {
     auto last = std::exchange(m_autoSwitched, {});
-    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size) return;
+    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size) return false;
     LOG_ANY(L"autoswitch: {} switched back", last.word);
+    Journal("switched back", last.there, last.typed);
     PostMessageW(g_guiHandle, WM_AutoSwitchLearn, 0, (LPARAM)new std::wstring(last.word));
+    return true;
 }
 
 void WorkerImplement::AutoWordEnd() {
@@ -742,7 +803,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
             IFS_RET(SW_ERR_UNKNOWN, L"Unknown typerevert {}", (int)hk);
         }
 
-        if (hk == hk_RevertLastWord) CountAutoSwitchUndo();
+        if (hk == hk_RevertLastWord && !CountAutoSwitchUndo()) JournalHandFix();
         RevertText(hk);
 
         RETURN_SUCCESS;

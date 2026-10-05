@@ -31,11 +31,13 @@ private:
     wxWindow* Toggle(const wxString& title, const wxString& description, const char* key, bool def);
     wxWindow* Choice(const wxString& title, const wxString& description, const wxArrayString& items, int selection,
                      std::function<void(int)> picked, bool below = false);
-    // A card with a list of words (the exceptions of ДВе ЗАглавные, of the automatic switch): how many there are,
-    // "Изменить…" opens the list in a window of its own. key - the array in the file; label - the member that keeps
-    // the card's description (it changes after the list is edited).
-    void WordListCard(const char* key, const wxString& title, const wxString& about, const wxString& editAbout,
-                      wxStaticText* SettingsFrame::*label);
+    // A card with a list of words (the exceptions of ДВе ЗАглавные, the lists of the automatic switch): how many there
+    // are, "Изменить…" opens the list in a window of its own. key - the array in the file; tip - the details, shown
+    // when the mouse is over the card; label - the member that keeps the card's description (it changes after the
+    // list is edited); defaults - the list while the file has none (the engine's own defaults, Settings.h).
+    void WordListCard(const char* key, const wxString& title, const wxString& about, const wxString& tip,
+                      const wxString& editAbout, wxStaticText* SettingsFrame::*label,
+                      const wxArrayString& defaults = wxArrayString());
 
     void BuildGeneral();
     void BuildTyping();
@@ -87,7 +89,8 @@ private:
 
     wxStaticText* m_updateLabel = nullptr; // the description of the "Обновления" card
     wxStaticText* m_twoCapsExceptions = nullptr; // the description of the exceptions card of ДВе ЗАглавные
-    wxStaticText* m_autoSwitchExceptions = nullptr; // the same of the automatic layout switch
+    wxStaticText* m_autoSwitchExceptions = nullptr; // the same of the automatic layout switch: never switched
+    wxStaticText* m_autoSwitchForce = nullptr;      // ... and switched always
     wxString m_updatePage;
 
     wxScrolledWindow* m_commandsPage = nullptr;

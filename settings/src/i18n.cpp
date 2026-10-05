@@ -205,20 +205,52 @@ const std::unordered_map<std::string, const char*>& English()
         // Typing
         { "Набор текста", "Typing" },
         { "Автопереключение раскладки", "Switch the layout automatically" },
-        { "Слово, набранное не в той раскладке, исправляется само после пробела, Enter или Tab: если его нет в словаре "
-          "своего языка, а в другой раскладке это слово (словари Windows), – ghbdtn станет «привет». Не трогаются одна "
-          "буква, слова с цифрами, аббревиатуры, слово после ручной смены раскладки или Backspace, пароли, консоль. "
-          "Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся",
-          "A word typed in the wrong layout is fixed by itself after a space, Enter or Tab: when it is not in the "
-          "dictionary of its language but the same keys in the other layout are a word (Windows dictionaries), - "
-          "ghbdtn becomes \"привет\". One letter, words with digits, abbreviations, a word after a layout switched by "
-          "hand or after Backspace, passwords and the console are left alone. Fixed by mistake - press \"Fix the last "
-          "word\" (Shift twice) at once and the word comes back" },
-        { "Исключения автопереключения", "Exceptions of the automatic switch" },
-        { "Слова, которые не переключаются, – в любой раскладке: cv или см. Само слово попадает сюда после "
-          "третьей отмены",
-          "Words never switched, in either layout: cv or см. A word gets here by itself after the third undo" },
+        { "Слово не в той раскладке исправляется само после пробела, Enter или Tab: ghbdtn – «привет»",
+          "A word in the wrong layout is fixed by itself after a space, Enter or Tab: ghbdtn - \"привет\"" },
+        { "Переключает, когда набранного нет в словаре Windows своего языка, а те же клавиши в другой раскладке – "
+          "слово.\nНе трогает: одну букву, слова с цифрами, аббревиатуры, адреса и почту, опечатки в английских "
+          "словах, слово после ручной смены раскладки или Backspace, пароли, консоль.\nИсправилось зря – сразу "
+          "нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на третий раз попадёт в «Не "
+          "переключать»",
+          "Switches when the word typed is not in the Windows dictionary of its language while the same keys in the "
+          "other layout are a word.\nLeaves alone: one letter, words with digits, abbreviations, addresses and mail, "
+          "typos in English words, a word after the layout was switched by hand or after Backspace, passwords, the "
+          "console.\nFixed by mistake - press \"Fix the last word\" (Shift twice) at once: the word comes back, and "
+          "the third time it goes to \"Never switch\"" },
+        { "Не переключать", "Never switch" },
+        { "Например, cv или см – в любой раскладке", "For example cv or см - in either layout" },
+        { "Слово попадает сюда и само – после третьей отмены автопереключения",
+          "A word also gets here by itself, after the automatic switch is undone the third time" },
         { "По слову в строке, в любой раскладке", "One word per line, in either layout" },
+        { "Переключать всегда", "Always switch" },
+        { "Даже если словарь их не знает или это одна буква: the, a",
+          "Even when the dictionary does not know them or it is one letter: the, a" },
+        { "Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "
+          "другом виде (еру) переключало бы правильно набранное",
+          "Write the word as it should be: the - and \"еру\" typed becomes the, a - and \"ф\" becomes a. A word in "
+          "the other form (еру) would switch what is typed right" },
+        { "По слову в строке – в том виде, какой нужен: the, a", "One word per line, as it should be: the, a" },
+        { "Журнал автопереключения", "Journal of the automatic switch" },
+        { "Что переключилось само, что вернули и что исправили вручную",
+          "What switched by itself, what was switched back and what was fixed by hand" },
+        { "Открыть", "Open" },
+        { "Журнала ещё нет: включите его и подождите первого переключения",
+          "No journal yet: turn it on and wait for the first switch" },
+        { "Файл autoswitch.log в папке log рядом с программой: по нему видно, где автопереключение "
+          "ошибается и что пропускает. Пароли туда не попадают – в их полях оно не работает",
+          "The file autoswitch.log in the log folder next to the program: it shows where the automatic switch is "
+          "wrong and what it misses. Passwords do not get there - it does not work in their fields" },
+        { "«ДВух» станет «Двух» после пробела, Enter или Tab", "\"THis\" becomes \"This\" after a space, Enter or Tab" },
+        { "PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. Исправилось зря – сразу нажмите «Исправить "
+          "последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – "
+          "Двух",
+          "PCs, IDs, GHz, eM, iPhone and the exceptions are left alone. Fixed by mistake? Press \"Fix the last word\" "
+          "(Shift twice) right away: the word comes back. A layout fix fixes TWo INitial CApitals too: EРшы becomes This" },
+        { "Слова, которые так и пишутся: VMware, IPsec", "Words that are written so: VMware, IPsec" },
+        { "Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само слово попадает сюда после "
+          "третьей отмены",
+          "A word also covers the words that start with it: IPsec - and IPsecs. A word gets here by itself the third "
+          "time it is brought back" },
         { "Буквы: EN, RU", "Letters: EN, RU" },
         { "Буквы в рамке: EN, RU", "Letters in a frame: EN, RU" },
         { "По пробелам и знакам препинания", "At spaces and punctuation" },

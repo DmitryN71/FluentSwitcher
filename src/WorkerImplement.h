@@ -169,12 +169,18 @@ class WorkerImplement {
     // Автопереключение (AutoSwitch.h): слово перед только что набранным пробелом (afterSpace) или придержанным
     // Enter / Tab набрано не в той раскладке - перевести, как "Исправить последнее слово". true - перевели.
     bool AutoSwitchLastWord(bool afterSpace = true);
-    // Исключения автопереключения из настроек.
+    // Исключения автопереключения и список "Переключать всегда" из настроек.
     static std::vector<std::wstring> AutoSwitchExceptions();
+    static std::vector<std::wstring> AutoSwitchForced();
+    // Журнал автопереключения (log\autoswitch.log, если включён): what - что случилось, from -> to.
+    static void Journal(const char* what, const std::wstring& from, const std::wstring& to);
+    // В журнал: "Исправить последнее слово" вручную - слово, которое автопереключение не поймало.
+    void JournalHandFix();
     // Последнее слово - в раскладку lay, как "Исправить последнее слово" (стереть, переключить, напечатать).
     void RevertLastWordTo(HKL lay);
-    // "Исправить последнее слово" сразу после автопереключения - отмена: в счёт (на третью - в исключения).
-    void CountAutoSwitchUndo();
+    // "Исправить последнее слово" сразу после автопереключения - отмена: в счёт (на третью - в исключения). true - это
+    // была отмена.
+    bool CountAutoSwitchUndo();
     // Курсор переехал в том же окне (щелчок, стрелки): первое слово дальше может быть дописанной серединой.
     void CaretMoved() { m_autoWord.moved = true; }
     // Граница слова (пробел, Enter, Tab): приметы слова сначала, раскладка - как сейчас.
@@ -193,6 +199,7 @@ class WorkerImplement {
         std::wstring word;      // как набрано (буквенная часть, строчными)
         ULONGLONG at = 0;
         size_t size = 0;        // набранных клавиш после переключения: другое число - уже печатали дальше
+        std::wstring typed, there; // как набрано и чем стало - для журнала
     } m_autoSwitched;
 
     TStatus FixCtrlAlt(CHotKey key);

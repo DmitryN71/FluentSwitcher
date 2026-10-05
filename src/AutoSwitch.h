@@ -12,6 +12,8 @@
 //   - знак после настоящего слова - просто знак: "it." - не "шею", хотя точка там, где в русской раскладке "ю"; и
 //     после короткого незнакомого: "En." - не "Утю" (буква там только из знака на конце - не меньше трёх букв).
 //   - слово после ручной смены раскладки, после Backspace, в поле пароля, в консоли - не трогает движок.
+//   - слова из списка "Переключать всегда" (autoswitch_force, в нужном виде: the, a) переключаются и без словаря, и
+//     одной буквой: "еру" (для словаря - русское слово) станет the, "ф" - a.
 // Знаки по краям ("vs/" -> "мы.", "[jxe" -> "хочу") не мешают: проверяется буквенная часть, а перепечатываются
 // все клавиши слова.
 // Проверено на текстах проекта и README LangBar++ (tools/test_autoswitch.cmd, 04.10.2026): из 15 тысяч слов, набранных
@@ -67,6 +69,29 @@ inline bool IsVowel(wchar_t c) {
 	}
 }
 
+// Слово из исключений - в любой из двух форм (cv или см).
+inline bool Excepted(const std::wstring& typed, const std::wstring& there, const std::vector<std::wstring>& exceptions) {
+	const auto tl = Lower(Letters(typed).core), al = Lower(Letters(there).core);
+	for (const auto& e : exceptions) {
+		const auto el = Lower(Letters(e).core);
+		if (!el.empty() && (el == tl || el == al)) return true;
+	}
+	return false;
+}
+
+// Слово из списка "Переключать всегда" (в том виде, какой нужен: the, a): там - оно, а набрано не оно (набранное
+// правильно не трогаем).
+inline bool Forced(const std::wstring& typed, const std::wstring& there, const std::vector<std::wstring>& forced) {
+	const Part t = Letters(typed), a = Letters(there);
+	if (a.core.empty() || a.inner) return false;
+	const auto tl = Lower(t.core), al = Lower(a.core);
+	for (const auto& f : forced) {
+		const auto fl = Lower(Letters(f).core);
+		if (!fl.empty() && fl == al && fl != tl) return true;
+	}
+	return false;
+}
+
 // Почему слово не трогаем; nullptr - можно спрашивать словари. typed - как набрано, there - те же клавиши в другой
 // раскладке; minLetters - 2, после щелчка или стрелок в том же окне 4.
 inline const char* Skip(const std::wstring& typed, const std::wstring& there, size_t minLetters,
@@ -97,11 +122,7 @@ inline const char* Skip(const std::wstring& typed, const std::wstring& there, si
 	// Буквы там добавились только из знаков на конце набранного: это точка или запятая после слова, а не буква.
 	if (!t.inner && !t.core.empty() && a.begin >= t.begin && a.end > t.end && t.core.size() < 3)
 		return "a short word with a sign after it";
-	const auto tl = Lower(t.core), al = Lower(a.core);
-	for (const auto& e : exceptions) {
-		const auto el = Lower(e);
-		if (!el.empty() && (el == tl || el == al)) return "exception";
-	}
+	if (Excepted(typed, there, exceptions)) return "exception";
 	return nullptr;
 }
 

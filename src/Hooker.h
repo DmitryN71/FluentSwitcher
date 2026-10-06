@@ -7,6 +7,7 @@ class Hooker {
 	CAutoHHOOK hHookKeyGlobal;
 	CAutoHHOOK hHookMouseGlobal;
 	CAutoHWINEVENTHOOK hHookEventGlobal;
+	CAutoHWINEVENTHOOK hHookEventFocus;
 	CAutoHWINEVENTHOOK hHookEventGlobalSwitchDesk;
 
 public:
@@ -85,7 +86,16 @@ private: inline static HookerKeyboard hookerKeyb;
 	static void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime) {
 		KeyHold::current = 0;   // другое окно: исправлять придержанное нельзя,
 		KeyHold::caretMoves++; // а печатающееся исправление ушло бы туда
+		KeyHold::ResetWord();  // и слово там начинается заново
 		Worker()->PostMsg(Message_ChangeForeg{ hwnd });
+	}
+
+	// Фокус перешёл в другое поле (в том же окне или в новом): слово там начинается заново. Сочетание, которым туда
+	// попали (Ctrl+Shift+R - ответ на письмо, Ctrl+L, Ctrl+F), - не часть нового слова: иначе KeyHold::Track считал
+	// его испорченным (сочетание внутри слова) и не проверял до пробела (Дмитрий 06.10: eM Client, ответ по
+	// Ctrl+Shift+R - первое слово не переключалось, по кнопке "Ответить" - переключалось: щелчок слово сбрасывает).
+	static void CALLBACK FocusProc(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD) {
+		KeyHold::ResetWord();
 	}
 
 	static LRESULT CALLBACK LowLevelMouseProc(
@@ -134,6 +144,10 @@ public:
 			hHookMouseGlobal = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
 			IFW_RET(hHookMouseGlobal.IsValid());
 		}
+
+		hHookEventFocus = SetWinEventHook(EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, NULL, FocusProc, 0, 0,
+			WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+		IFW_LOG(hHookEventFocus.IsValid());
 
 		hHookEventGlobal = SetWinEventHook(
 			EVENT_SYSTEM_FOREGROUND,

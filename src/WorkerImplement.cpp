@@ -263,6 +263,18 @@ void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL res
     m_cycleList.SetSeparateLast();
 }
 
+bool WorkerImplement::ByHandAfterOurs(const std::wstring& typed, bool partial) const {
+    if (!m_autoWord.lay || topWndInfo2.lay == m_autoWord.lay || !m_lastAutoSwitch ||
+        GetTickCount64() - m_lastAutoSwitch >= 30000 || m_lastSwitchedTyped.empty())
+        return false;
+    const std::wstring now = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
+    if (now.empty()) return false;
+    if (now == m_lastSwitchedTyped) return true;
+    // Переключённое посреди слова - его начало: набирают дальше; посреди слова сейчас - набрано начало того.
+    return (m_lastSwitchedEarly && now.starts_with(m_lastSwitchedTyped)) ||
+        (partial && m_lastSwitchedTyped.starts_with(now));
+}
+
 // Слова перепечатываемого с двумя заглавными в начале ("ЕРу еуые" - "THe test", "ЕРуку" - "THere": Shift отпустили
 // поздно) - по правилу "ДВух ЗАглавных": вторая буква строчная (так же FixText при "Исправить последнее слово";
 // автопереключение переводит слово раньше, чем его увидело бы правило). Слово из трёх букв под правило не подходит
@@ -332,7 +344,6 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (m_autoWord.undone) return no("switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
-    if (ByHandAfterOurs()) return no("the layout was switched by hand right after a switch");
     std::wstring typed;
     for (auto* key : keys) {
         if (key->is_caps) return no("CapsLock");
@@ -340,6 +351,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         if (c.size() != 1) return no("a key that is not one letter");
         typed += c;
     }
+    if (ByHandAfterOurs(typed, false)) return no("typed again after the layout was switched back by hand");
     const auto exceptions = AutoSwitchExceptions();
     const auto forced = AutoSwitchForced();
     // После щелчка или стрелок в том же окне могли дописывать середину слова: короткие куски не трогаем.
@@ -426,6 +438,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
                            .retro = wordBegin - first, .pair = shortWord == AutoSwitch::Short::WithPartner,
                            .total = m_cycleList.Total() };
         m_lastAutoSwitch = GetTickCount64();
+        m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
+        m_lastSwitchedEarly = false;
         Journal("switched", from, to);
         return true;
     }
@@ -446,7 +460,6 @@ void WorkerImplement::AutoSwitchEarly() {
     if (m_autoWord.undone) return never("switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
-    if (ByHandAfterOurs()) return never("the layout was switched by hand right after a switch");
     auto keys = m_cycleList.TrailingWordKeys();
     if (keys.empty()) return;
     std::wstring typed;
@@ -456,6 +469,7 @@ void WorkerImplement::AutoSwitchEarly() {
         if (c.size() != 1) return never("a key that is not one letter");
         typed += c;
     }
+    if (ByHandAfterOurs(typed, true)) return never("typed again after the layout was switched back by hand");
     const auto exceptions = AutoSwitchExceptions();
     const auto forced = AutoSwitchForced();
     bool fixedBefore = false;
@@ -520,6 +534,8 @@ void WorkerImplement::AutoSwitchEarly() {
                            .ends = m_wordEnds, .from = lay, .to = other, .span = total - begin, .retro = wordBegin - begin,
                            .total = m_cycleList.Total() };
         m_lastAutoSwitch = GetTickCount64();
+        m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
+        m_lastSwitchedEarly = true;
         Journal("switched", from, to);
         return;
     }

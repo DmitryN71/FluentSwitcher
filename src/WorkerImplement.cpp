@@ -17,9 +17,21 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         ~Release() { KeyHold::RequestRelease(id); }
     };
     if (keyData.held_end) {
-        // Хук придержал Enter / Tab после слова: исправить и отпустить. Сама клавиша придёт потом, как обычный набор.
+        // Хук придержал Enter / Tab после слова (и Shift+Enter, Ctrl+Enter): исправить и отпустить. Сама клавиша придёт
+        // потом, как обычный набор. Модификатор, отпущенный на время исправления (LiftHeldMods), - нажать снова до того:
+        // придержанный Enter уйдёт с ним, а отпускание его пальцем придёт за ним (хук держит и его).
         Release release{ keyData.holdId };
+        m_heldMods.clear();
+        for (TKeyCode k : keyData.cur_hotKey)
+            if (CHotKey::IsKnownMods(k)) m_heldMods.push_back(k);
         if (!AutoSwitchLastWord(false)) FixTwoCaps(false);
+        if (m_heldModsUp) {
+            InputSender sender;
+            for (TKeyCode k : m_heldMods) sender.Add(k, KEY_STATE_DOWN);
+            sender.Send();
+        }
+        m_heldMods.clear();
+        m_heldModsUp = false;
         AutoWordEnd();
         return;
     }
@@ -271,6 +283,7 @@ void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL res
     if (a.empty() && b.empty()) return;
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
     TextFixed();
+    LiftHeldMods();
     const auto stop = CaretStop();
     InputSender::SendVkKeyPaced(VK_BACK, (int)(a.size() + b.size()), delay, stop);
     Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
@@ -335,6 +348,7 @@ void WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     if (list.empty()) return;
     TwoCapsInKeys(list, to);
     TextFixed();
+    LiftHeldMods();
     IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = to,
                             .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
     m_cycleList.SetLayFrom(begin, to);
@@ -720,6 +734,7 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
     KeyHold::Claimed claimed{ m_holdId };
     LOG_ANY(L"two caps: {} -> {}{}", text, text.substr(0, fix.from), fix.tail);
     TextFixed();
+    LiftHeldMods();
     const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
     const std::wstring space = afterSpace ? L" " : L"";
     const auto stop = CaretStop();

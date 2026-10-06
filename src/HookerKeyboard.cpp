@@ -324,7 +324,11 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			unsigned holdId = 0;
 			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
 				const auto end = KeyHold::EndWord();
-				const bool check = KeyHold::CanStart() && curk.Size() == 1 && g_enabled.IsEnabled() &&
+				// Shift+Enter (новая строка в мессенджерах) и Ctrl+Enter (отправить) - тоже конец слова, как Enter;
+				// модификатор движок на время исправления отпускает и нажимает снова (WorkerImplement::LiftHeldMods).
+				const bool modEnter = vkCode == VK_RETURN && curk.Size() == 2 &&
+					(curk.HasMod(VK_SHIFT) || curk.HasMod(VK_CONTROL));
+				const bool check = KeyHold::CanStart() && (curk.Size() == 1 || modEnter) && g_enabled.IsEnabled() &&
 					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch)) && KeyHold::CanHold();
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое

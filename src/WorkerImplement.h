@@ -150,6 +150,16 @@ class WorkerImplement {
     // Исправление текста начинается: звук исправления, а смена раскладки из-за него - без звука переключения.
     static void TextFixed() { PostMessage(g_guiHandle, WM_TextFixed, 0, 0); }
 
+    // Слово кончилось Shift+Enter или Ctrl+Enter (held_end): модификатор ещё нажат. Перед тем как стирать и печатать -
+    // отпустить его (Ctrl+Backspace стёр бы слово целиком); снова его нажимает ProcessKeyMsg. Не исправляем - не трогаем.
+    std::vector<TKeyCode> m_heldMods;
+    bool m_heldModsUp = false;
+    void LiftHeldMods() {
+        if (m_heldMods.empty() || m_heldModsUp) return;
+        UpAllKeys(m_heldMods);
+        m_heldModsUp = true;
+    }
+
     // ДВе ЗАглавные (TwoCaps.h): слово перед только что набранным пробелом; хук держит нажатия, пока решаем.
     // afterSpace: слово кончилось набранным пробелом (его тоже стереть и напечатать); иначе - придержанным Enter / Tab.
     void FixTwoCaps(bool afterSpace = true);

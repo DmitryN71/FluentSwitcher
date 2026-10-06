@@ -3,6 +3,7 @@
 #include "LayoutConvert.h"
 #include "AutoSwitch.h"
 #include "WordStart.h"
+#include "FieldText.h"
 
 #include <atlbase.h>
 #include <UIAutomation.h>
@@ -158,9 +159,7 @@ bool IsPasswordFocus() {
     return wcsstr(cls, L"edit") && (GetWindowLongW(gti.hwndFocus, GWL_STYLE) & ES_PASSWORD);
 }
 
-// Поле пароля там, где оно не окно Edit (браузеры, программы на Electron, WinUI): UI Automation, IsPassword у
-// элемента в фокусе. Спрашиваем, только когда уже решили переключать, - это поход в чужую программу.
-bool IsPasswordUia() {
+IUIAutomation* Uia() {
     static CComPtr<IUIAutomation> uia = [] {
         CoInitializeEx(nullptr, COINIT_MULTITHREADED); // уже (словари) - не страшно
         CComPtr<IUIAutomation> u;
@@ -172,10 +171,30 @@ bool IsPasswordUia() {
         }
         return u;
     }();
+    return uia;
+}
+
+// Поле пароля там, где оно не окно Edit (браузеры, программы на Electron, WinUI): UI Automation, IsPassword у
+// элемента в фокусе. Спрашиваем, только когда уже решили переключать, - это поход в чужую программу.
+bool IsPasswordUia() {
+    IUIAutomation* uia = Uia();
     CComPtr<IUIAutomationElement> el;
     BOOL password = FALSE;
     return uia && SUCCEEDED(uia->GetFocusedElement(&el)) && el && SUCCEEDED(el->get_CurrentIsPassword(&password)) &&
         password;
+}
+
+// После щелчка или стрелок в том же окне: перед набранным словом в поле в фокусе не буква - слово набрано с начала
+// (AutoSwitch::StartedAfterBoundary: 1 - да, 0 - нет, -1 - не узнать).
+int StartedAfterBoundary(const std::wstring& typed) {
+    IUIAutomation* uia = Uia();
+    CComPtr<IUIAutomationElement> el;
+    std::wstring before;
+    bool atStart = false;
+    if (!uia || FAILED(uia->GetFocusedElement(&el)) || !el ||
+        !FieldText::BeforeCaret(el, (int)typed.size() + 8, before, atStart))
+        return -1;
+    return AutoSwitch::StartedAfterBoundary(before, typed, atStart);
 }
 
 // Программа впереди: имя файла (для журнала автопереключения).
@@ -354,8 +373,21 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (ByHandAfterOurs(typed, false)) return no("typed again after the layout was switched back by hand");
     const auto exceptions = AutoSwitchExceptions();
     const auto forced = AutoSwitchForced();
-    // После щелчка или стрелок в том же окне могли дописывать середину слова: короткие куски не трогаем.
-    const size_t minLetters = m_autoWord.moved ? 4 : 2;
+    // После щелчка или стрелок в том же окне могли дописывать середину слова: короткие куски (там меньше четырёх букв) не
+    // трогаем - если только перед словом в поле не пробел, начало строки или знак (Дмитрий 06.10: щёлкнул в поле ответа,
+    // набрал "nj - "Это" ждало соседа). Поле спрашиваем раз за слово и только о коротком.
+    int boundary = -2;
+    auto minLetters = [&](const std::wstring& there) -> size_t {
+        if (!m_autoWord.moved) return 2;
+        const size_t n = AutoSwitch::Letters(there).core.size();
+        if (n < 2 || n >= 4) return 4;
+        if (boundary == -2) {
+            boundary = StartedAfterBoundary(typed);
+            LOG_ANY(L"autoswitch: {} after a click or arrows, before it in the field: {}", typed,
+                    boundary == 1 ? L"not a letter" : boundary == 0 ? L"a letter" : L"unknown");
+        }
+        return boundary == 1 ? 2 : 4;
+    };
     auto dictionary = [](HKL l) {
         return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); };
     };
@@ -382,7 +414,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
         if (!force) {
-            const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions);
+            const char* why = AutoSwitch::Skip(typed, there, minLetters(there), exceptions);
             if (!why)
                 why = AutoSwitch::DecideWhy(typed, there, dictionary(lay), dictionary(other), suggestions(lay),
                                             suggestions(other), ShortWords::TrustDictionary(Utils::GetNameForHKL_simple(lay)));

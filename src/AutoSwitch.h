@@ -6,7 +6,8 @@
 //   - не трогаются: одна буква; слова с цифрами; аббревиатуры (все буквы заглавные - набранные или в другой
 //     раскладке); слово без гласных в другой раскладке (сокращение: "ru" - не "кг"); три одинаковых знака в начале; в
 //     другой раскладке не одно слово (знак внутри - адрес, почта, путь); свои исключения (в любой из двух форм: cv или
-//     см); после щелчка или стрелок в том же окне - слова короче четырёх букв (могли дописывать середину слова).
+//     см); после щелчка или стрелок в том же окне - слова короче четырёх букв (могли дописывать середину слова), если
+//     поле не говорит, что перед словом не буква (StartedAfterBoundary).
 //   - опечатка - не другая раскладка: "helo" (в русской раскладке "руды") - словарь знает "hello", на одну букву
 //     иначе (слова латиницей от четырёх букв); буквы, ставшие там знаками, какими слова не начинаются и не кончаются
 //     ("бувы" - ",eds", "дувх" - "led[");
@@ -142,7 +143,7 @@ inline bool Forced(const std::wstring& typed, const std::wstring& there, const s
 }
 
 // Почему слово не трогаем; nullptr - можно спрашивать словари. typed - как набрано, there - те же клавиши в другой
-// раскладке; minLetters - 2, после щелчка или стрелок в том же окне 4.
+// раскладке; minLetters - 2, после щелчка или стрелок в том же окне 4 (перед словом в поле не буква - 2).
 inline const char* Skip(const std::wstring& typed, const std::wstring& there, size_t minLetters,
                         const std::vector<std::wstring>& exceptions) {
 	const Part t = Letters(typed), a = Letters(there);
@@ -174,6 +175,26 @@ inline const char* Skip(const std::wstring& typed, const std::wstring& there, si
 		return "a short word with a sign after it";
 	if (Excepted(typed, there, exceptions)) return "exception";
 	return nullptr;
+}
+
+// После щелчка или стрелок в том же окне: слово набрано с начала, а не дописано к середине другого? before - текст поля
+// перед кареткой (UI Automation, несколько знаков с запасом), atStart - это весь текст поля до каретки. 1 - перед словом
+// не буква и не цифра (пробел, начало строки или поля, знак), 0 - буква или цифра (дописывали середину слова), -1 - не
+// узнать: поле кончается не набранным (программа ещё не показала его). Пробел или Enter после слова может уже быть в
+// поле - пробелы в конце не в счёт; заглавную в начале предложения программа может поставить сама (eM Client), а знак
+// заменить (" - «): буквы сравниваются без регистра, знак - любой не буквой.
+inline int StartedAfterBoundary(const std::wstring& before, const std::wstring& typed, bool atStart) {
+	auto wordChar = [](wchar_t c) { return TwoCaps::IsLetter(c) || iswdigit(c); };
+	size_t e = before.size();
+	while (e > 0 && (iswspace(before[e - 1]) || before[e - 1] == L'\xA0')) e--;
+	if (typed.empty() || e < typed.size()) return -1;
+	const size_t b = e - typed.size();
+	for (size_t i = 0; i < typed.size(); i++) {
+		const wchar_t t = typed[i], s = before[b + i];
+		if (wordChar(t) ? TwoCaps::ToLower(s) != TwoCaps::ToLower(t) : wordChar(s)) return -1;
+	}
+	if (b == 0) return atStart ? 1 : -1;
+	return wordChar(before[b - 1]) ? 0 : 1;
 }
 
 // Расстояние между словами не больше одной правки: буква лишняя, пропущена, другая или две соседние переставлены.

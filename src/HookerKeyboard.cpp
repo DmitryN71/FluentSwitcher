@@ -58,7 +58,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 		if (replayed) {
 			KeyHold::OnReplayed();
 		}
-		else if (KeyHold::Busy()) {
+		else if (KeyHold::Busy() && !KeyHold::InPlace(*k)) {
 			KeyHold::Hold(*k);
 			held_event = true;
 			return;

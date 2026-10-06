@@ -50,8 +50,13 @@ class CoreWorker {
 						IFW_LOG(session_notif_reg);
 					}
 				}
+				else if (timerId == KeyHold::kTimer) {
+					KeyHold::Tick();
+				}
 			}else if (msg.message == KeyHold::WM_Release) {
 				KeyHold::OnRelease((unsigned)msg.wParam, msg.lParam == 1);
+			}else if (msg.message == KeyHold::WM_Next) {
+				KeyHold::OnNext();
 			}else if(msg.message == WM_ClearWordsBuffer){
 				LOG_ANY("get clear request");
 				Worker()->PostMsg(Message_ClearWorlds{});

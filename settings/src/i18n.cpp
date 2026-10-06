@@ -344,8 +344,6 @@ const std::unordered_map<std::string, const char*>& English()
         { "Отключить залипание клавиш", "Turn off Sticky Keys" },
         { "Пять нажатий Shift и другие сочетания специальных возможностей Windows не будут открывать их окна",
           "Pressing Shift five times and other accessibility shortcuts of Windows won't open their windows" },
-        { "Не перехватывать клавиши, которые уходят на удалённый компьютер", "Don't catch keys that go to a remote computer" },
-        { "Для подключения к удалённому рабочему столу с этого компьютера", "For Remote Desktop connections from this computer" },
         { "Сочетания с Ctrl + Alt в раскладках с AltGr", "Ctrl + Alt hotkeys in layouts with AltGr" },
         { "Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "
           "польской раскладке, в русской – ₽ на Ctrl + Alt + 8. FluentSwitcher на миг переключает раскладку, и "

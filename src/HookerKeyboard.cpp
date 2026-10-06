@@ -78,10 +78,11 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			return;
 		}
 
-		if (is_low_inject && cfg->SkipLowLevelInjectKeys) {
-			LOG_ANY(L"skip low_inject");
-			return;
-		}
+		// SkipLowLevelInjectKeys (нажатия от программ с правами ниже наших - мимо) больше не действует: он был для
+		// полноэкранного RDP, а окна удалённого рабочего стола теперь исключены сами (RemoteDesktop.h). С ним
+		// FluentSwitcher от администратора не видел того, что посылает AutoHotkey без прав, - Enter, отправляющий
+		// сообщение, уходил мимо проверки слова (Дмитрий 06.10: Ctrl+Enter его скрипта в Claude Desktop).
+		if (is_low_inject) LOG_ANY(L"low_inject");
 
 		CHotKey possible_hk_up_current;
 		std::swap(possible_hk_up_current, possible_hk_up); // сразу очищаем

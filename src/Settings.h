@@ -106,7 +106,7 @@ public:
     static constexpr UStr showFlags_Nothing = "Nothing";
     string flagsSet = "Glossy";
     //bool SkipAllInjectKeys = false;
-    bool SkipLowLevelInjectKeys = false;
+    bool SkipLowLevelInjectKeys = false; // с 1.5.0 не действует (HookerKeyboard.cpp): поле остаётся в файле настроек
     bool AlternativeLayoutChange = false;
 	uint32_t quick_press_ms = 280;
 	SeparateExtMode separate_ext_mode = SeparateExtMode::Symbol;

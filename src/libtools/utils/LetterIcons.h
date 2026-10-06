@@ -130,23 +130,26 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 	float size = inner * (style == Style::Plain ? 0.62f : 0.58f) / capShare;
 	ComPtr<IDWriteTextFormat> format;
 	ComPtr<IDWriteTextLayout> layout;
-	auto measure = [&](float s) {
+	auto measure = [&](const std::wstring& t, float s) {
 		layout.Reset();
 		format.Reset();
 		DWRITE_TEXT_METRICS m{};
 		if (FAILED(dw->CreateTextFormat(details::Family().c_str(), nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
 		                                DWRITE_FONT_STRETCH_NORMAL, s, L"", &format)) ||
-			FAILED(dw->CreateTextLayout(text.c_str(), (UINT32)text.size(), format.Get(), 1000, 1000, &layout)) ||
+			FAILED(dw->CreateTextLayout(t.c_str(), (UINT32)t.size(), format.Get(), 1000, 1000, &layout)) ||
 			FAILED(layout->GetMetrics(&m)))
 			return 0.0f;
 		return m.width;
 	};
+	// Не шире места - один кегль для букв всех раскладок: по самым широким из набранного и частых (RU, UK, DE). Иначе
+	// "RU", которое шире "EN", уменьшалось сильнее, и на 100 % его буквы выходили на строку ниже (Maz на форуме,
+	// 06.10.2026: "буквы EN визуально больше").
 	const float room = w - 2 * padX;
-	float tw = measure(size);
-	if (tw > room && tw > 0) {
-		size *= room / tw;
-		tw = measure(size);
+	for (const std::wstring& t : { text, std::wstring(L"RU"), std::wstring(L"UK"), std::wstring(L"DE") }) {
+		const float width = measure(t, size);
+		if (width > room && width > 0) size *= room / width;
 	}
+	const float tw = measure(text, size);
 
 	const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
 		D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
@@ -195,21 +198,48 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			GdiFlush(); // точки - в памяти картинки, прежде чем их читать
 			return done;
 		};
-		// Сначала одни буквы - где легли их точки; потом сдвиг на целые точки, чтобы они стояли посередине
-		// (не делится поровну - выше и левее на полточки), и всё начисто.
-		ok = draw(false);
-		if (ok) {
-			int top = h, bottom = -1, left = w, right = -1;
+		// Сначала одни буквы - со сдвигом на долю точки, при котором их штрихи ложатся на точки чётче всего (больше
+		// всего непрозрачных точек: сумма квадратов непрозрачности). Без этого одни буквы выходили чёткими, а другие,
+		// попав между точками, - бледнее и ниже: на 100 % "RU" на строку ниже "EN" (Maz на форуме, 06.10.2026: "буквы EN
+		// визуально больше"). Потом сдвиг на целые точки, чтобы буквы стояли посередине (не делится поровну - выше и
+		// левее на полточки), и всё начисто.
+		// Сдвиг - по восьмой доле точки, сначала по ширине (вертикальные штрихи), потом по высоте (горизонтальные).
+		const float baseX = std::floor(x), baseY = std::floor(y);
+		double best = -1;
+		float bestX = baseX, bestY = baseY;
+		int top = h, bottom = -1, left = w, right = -1;
+		auto tryAt = [&](float tx, float ty) {
+			x = tx;
+			y = ty;
+			if (!draw(false)) return;
+			double score = 0;
+			int t = h, b = -1, l = w, r = -1;
 			for (int yy = 0; yy < h; yy++) {
 				for (int xx = 0; xx < w; xx++) {
-					if (px[(yy * w + xx) * 4 + 3] > 96) {
-						top = (std::min)(top, yy);
-						bottom = (std::max)(bottom, yy);
-						left = (std::min)(left, xx);
-						right = (std::max)(right, xx);
+					const unsigned a = px[(yy * w + xx) * 4 + 3];
+					score += (double)a * a;
+					if (a > 96) {
+						t = (std::min)(t, yy);
+						b = (std::max)(b, yy);
+						l = (std::min)(l, xx);
+						r = (std::max)(r, xx);
 					}
 				}
 			}
+			if (score > best) {
+				best = score;
+				bestX = tx;
+				bestY = ty;
+				top = t, bottom = b, left = l, right = r;
+			}
+		};
+		for (int i = 0; i < 8; i++) tryAt(baseX + i / 8.0f, baseY);
+		const float columnX = bestX;
+		for (int j = 1; j < 8; j++) tryAt(columnX, baseY + j / 8.0f);
+		ok = best >= 0;
+		if (ok) {
+			x = bestX;
+			y = bestY;
 			if (bottom >= 0) {
 				y += (float)((h - (bottom - top + 1)) / 2 - top);
 				x += (float)((w - (right - left + 1)) / 2 - left);

@@ -263,9 +263,46 @@ void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL res
     m_cycleList.SetSeparateLast();
 }
 
+// Слова перепечатываемого с двумя заглавными в начале ("ЕРу еуые" - "THe test", "ЕРуку" - "THere": Shift отпустили
+// поздно) - по правилу "ДВух ЗАглавных": вторая буква строчная (так же FixText при "Исправить последнее слово";
+// автопереключение переводит слово раньше, чем его увидело бы правило). Слово из трёх букв под правило не подходит
+// (PCs, IDs, GHz так и пишутся) - его исправляем, только если словарь знает его так ("The"), а с двумя заглавными нет.
+// Меняется только перепечатываемое: в буфере слово как набрано, и отмена вернёт его как было.
+void WorkerImplement::TwoCapsInKeys(TKeyRevert& keys, HKL to) {
+    if (!conf_get_unsafe()->two_caps) return;
+    const auto exceptions = TwoCapsExceptions();
+    const std::wstring lang = Utils::GetNameForHKL_simple(to);
+    for (size_t i = 0; i < keys.size();) {
+        const size_t b = i;
+        std::wstring w;
+        for (; i < keys.size(); i++) {
+            const auto c = InputSender::KeyText(keys[i], to, false);
+            if (c.size() != 1 || !TwoCaps::IsLetter(c[0])) break;
+            w += c;
+        }
+        if (i == b) {
+            i++;
+            continue;
+        }
+        bool fix = TwoCaps::Matches(w, exceptions);
+        if (!fix && w.size() == 3 && TwoCaps::IsUpper(w[0]) && TwoCaps::IsUpper(w[1]) && TwoCaps::IsLower(w[2]) &&
+            std::find(exceptions.begin(), exceptions.end(), w) == exceptions.end()) {
+            std::wstring one = w;
+            one[1] = TwoCaps::ToLower(one[1]);
+            fix = SpellCheck::Check(w, lang, true) == SpellCheck::Result::NotWord &&
+                SpellCheck::Check(one, lang, true) == SpellCheck::Result::Word;
+        }
+        if (fix) {
+            LOG_ANY(L"autoswitch: two capitals in {}", w);
+            keys[b + 1].is_shift = false;
+        }
+    }
+}
+
 void WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     TKeyRevert list = m_cycleList.KeysFrom(begin);
     if (list.empty()) return;
+    TwoCapsInKeys(list, to);
     TextFixed();
     IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = to,
                             .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));

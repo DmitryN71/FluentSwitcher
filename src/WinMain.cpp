@@ -173,6 +173,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			Sleep(50);
 		}
 		g_enabled.TryEnable();
+		LOG_ANY("enabled: {}", g_enabled.IsEnabled());
+		// "Включено" держит прежняя копия, которая ещё выходит (установщик закрыл её только что): эта осталась бы
+		// выключенной - значок серый, сочетания и автопереключение не работают. Ещё 30 с пробовать, пока той нет.
+		if (!g_enabled.IsEnabled()) {
+			std::thread([] {
+				for (int i = 1; i <= 60 && !g_enableTouched && !g_enabled.IsEnabled(); i++) {
+					Sleep(500);
+					if (!g_enableTouched && g_enabled.TryEnable()) {
+						LOG_ANY("enabled after {} ms: the other copy has gone", i * 500);
+						new_layout_request();
+					}
+				}
+			}).detach();
+		}
 	}
 
 	CoreWorker core;

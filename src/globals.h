@@ -10,10 +10,12 @@ inline HWND g_guiHandle = nullptr;
 //inline bool OpenClipboard2(CAutoClipBoard& clip) { auto res = OpenClipboard(clip); IFS_LOG(res); return res == SW_ERR_SUCCESS; }
 
 inline EnableHodler g_enabled{};
+// Пользователь сам включал или выключал программу: повторные попытки включиться при запуске (WinMain) его не перебивают.
+inline std::atomic<bool> g_enableTouched = false;
 // inline std::atomic_bool hk_edit_now = false; // пока не нужно.
 // otherWindow: раскладка другая потому, что впереди другое окно со своей раскладкой (звука переключения нет).
 inline void new_layout_request(HKL layout = 0, bool otherWindow = false) { PostMessage(g_guiHandle, WM_LayNotif, (WPARAM)layout, otherWindow); }
-inline void try_toggle_enable() { if (g_enabled.TryToggle()) new_layout_request(); } // todo not thread safe
+inline void try_toggle_enable() { g_enableTouched = true; if (g_enabled.TryToggle()) new_layout_request(); } // todo not thread safe
 inline void show_main_wind(int mode = 0) {
 	WinUtils::PostMsg(g_guiHandle, WM_ShowWindow, mode);
 }

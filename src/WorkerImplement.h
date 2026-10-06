@@ -200,6 +200,7 @@ class WorkerImplement {
     // Перевести набранное с клавиши begin до конца в раскладку to (стереть, переключить, напечатать). wordEnded - слово
     // кончилось: отметка "исправлено", дальше - новое слово.
     void SwitchTail(size_t begin, HKL to, bool wordEnded);
+    void TwoCapsInKeys(TKeyRevert& keys, HKL to);
     // Перепечатать набранное с клавиши begin: до middle - в раскладке first, дальше - в rest; раскладку не менять.
     void RetypeTail(size_t begin, size_t middle, HKL first, HKL rest);
     // Курсор переехал (щелчок, другое окно): печатающееся исправление - бросить. Под придержкой - она отнята (щелчок и

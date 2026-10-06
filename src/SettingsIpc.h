@@ -74,6 +74,7 @@ namespace SettingsIpc {
 			if (on && !IsAdminOk()) {
 				return 0;
 			}
+			g_enableTouched = true;
 			if (g_enabled.TryEnable(on)) {
 				new_layout_request();
 			}

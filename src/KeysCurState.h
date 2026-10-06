@@ -153,8 +153,10 @@ private:
 		all_keys.erase_if([this, now = TimePoint::Now()](const auto& item) {
 			auto const& [code, info] = item; // деструктуризация (C++17)
 
-			// Условие удаления: например, если кнопка эмулирована
-			if (info.hasEmulated == false && info.time.DeltTo(now)>=10s && !(GetAsyncKeyState(code) & 0x8000)) {
+			// Нажата давно, а Windows считает её отпущенной: отпускание потерялось. И для отправленных заново (KeyHold.h -
+			// придержанные нажатия возвращаются как эмулированные): иначе такая клавиша оставалась "нажатой" навсегда, и
+			// Shift дважды выглядел бы как сочетание с ней.
+			if (info.time.DeltTo(now)>=10s && !(GetAsyncKeyState(code) & 0x8000)) {
 				LOG_WARN("delete key because it not down now {}", CHotKey::ToString(code));
 				one_value.Remove(code);
 				return true;

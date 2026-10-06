@@ -3,6 +3,9 @@
 #include <clocale>
 #include "Errors.h"
 #include <mutex>
+#include <condition_variable>
+#include <deque>
+#include <thread>
 #include <source_location>
 #include <print>
 
@@ -23,65 +26,89 @@ inline void SetLogLevel(TLogLevel val) { _log_int::log_level = val; }
 
 namespace _log_int {
 
-	class SwLogger {
+	// Строка журнала собирается в том потоке, который пишет, а в файл её пишет свой поток (SwLogger::Writer): запись на
+	// диск иногда ждёт сотни миллисекунд, а журнал пишет и перехват клавиш и мыши - Windows ждёт его на каждое нажатие и
+	// движение мыши (тормозят набор и указатель), а не дождавшись, молча отключает перехват.
+	class LogLine {
 	public:
-		static SwLogger& Get() {
-			static SwLogger logger;
-			return logger;
-		}
+		std::wstring s;
 		void Append(const TChar* data) {
-			if (!data) return;
-			if (LazyOpen()) {
-				fputws(data, m_fp);
-			}
+			if (data) s += data;
 		}
-		void Append(const char* data) {
-			if (!data) return;
-			if (LazyOpen()) {
-				fwprintf_s(m_fp, L"%S", data);
-			}
+		void Append(const char* data) { // UTF-8 (setlocale в WinMain - как прежний вывод через %S)
+			if (!data || !*data) return;
+			const int n = MultiByteToWideChar(CP_UTF8, 0, data, -1, nullptr, 0);
+			if (n <= 1) return;
+			const size_t at = s.size();
+			s.resize(at + n - 1);
+			MultiByteToWideChar(CP_UTF8, 0, data, -1, s.data() + at, n);
 		}
 		void AppendPrefix() {
-			if (!LazyOpen()) return;
-			SYSTEMTIME ST;
-			::GetLocalTime(&ST);
-			fwprintf_s(m_fp,
-				L"%02u.%02u|%02u:%02u:%02u.%03u|%05u ",
-				(uint32_t)ST.wDay,
-				(uint32_t)ST.wMonth,
-				(uint32_t)ST.wHour,
-				(uint32_t)ST.wMinute,
-				(uint32_t)ST.wSecond,
-				(uint32_t)ST.wMilliseconds,
-				GetCurrentThreadId());
+			SYSTEMTIME st;
+			::GetLocalTime(&st);
+			s += std::format(L"{:02}.{:02}|{:02}:{:02}:{:02}.{:03}|{:05} ", st.wDay, st.wMonth, st.wHour, st.wMinute,
+				st.wSecond, st.wMilliseconds, GetCurrentThreadId());
 		}
 		template<typename... Args>
-		void AppendFormat(const std::wformat_string<Args...>& s, Args&&... v) {
-			Append(std::vformat(s.get(), std::make_wformat_args(v...)).c_str());
+		void AppendFormat(const std::wformat_string<Args...>& f, Args&&... v) {
+			s += std::vformat(f.get(), std::make_wformat_args(v...));
 		}
 		template<typename... Args>
-		void AppendFormat(const std::format_string<Args...>& s, Args&&... v) {
-			Append(std::vformat(s.get(), std::make_format_args(v...)).c_str());
+		void AppendFormat(const std::format_string<Args...>& f, Args&&... v) {
+			Append(std::vformat(f.get(), std::make_format_args(v...)).c_str());
 		}
-		void Flash() {
-			if (m_fp)
-				fflush(m_fp);
+	};
+
+	class SwLogger {
+	public:
+		// Не уничтожается: поток записи может дописывать и при выходе (atexit ждёт его не дольше секунды).
+		static SwLogger& Get() {
+			static SwLogger* logger = new SwLogger();
+			return *logger;
 		}
-		void EndLineFlash() {
-			if (LazyOpen()) {
-				fwprintf_s(m_fp, L"\n");
-				fflush(m_fp);
+		// Готовая строка (с \n) - в очередь; держит только очередь, не файл.
+		void Push(std::wstring&& line) {
+			{
+				std::lock_guard lock(m_mtx);
+				if (m_queue.size() >= 50000) { // диск совсем встал - не копить память
+					m_dropped++;
+					return;
+				}
+				m_queue.push_back(std::move(line));
+				if (!m_started) {
+					m_started = true;
+					std::thread([this] { Writer(); }).detach();
+					std::atexit([] { Get().Finish(); });
+				}
 			}
+			m_cv.notify_one();
 		}
-		~SwLogger() {
-			if (m_fp) {
-				fclose(m_fp);
-			}
-		}
-		std::mutex& Mtx() {
-			return m_mtxLog;
-		}
+
 	private:
+		void Writer() {
+			std::unique_lock lock(m_mtx);
+			while (true) {
+				m_cv.wait(lock, [this] { return !m_queue.empty(); });
+				std::deque<std::wstring> batch;
+				batch.swap(m_queue);
+				const size_t dropped = std::exchange(m_dropped, 0);
+				m_writing = true;
+				lock.unlock();
+				if (FILE* fp = LazyOpen()) {
+					for (const auto& line : batch) fputws(line.c_str(), fp);
+					if (dropped) fwprintf_s(fp, L"[log: %zu lines dropped, the disk did not keep up]\n", dropped);
+					fflush(fp);
+				}
+				lock.lock();
+				m_writing = false;
+				m_idleCv.notify_all();
+			}
+		}
+		// Выход: дописать очередь (не дольше секунды).
+		void Finish() {
+			std::unique_lock lock(m_mtx);
+			m_idleCv.wait_for(lock, std::chrono::seconds(1), [this] { return m_queue.empty() && !m_writing; });
+		}
 		FILE* LazyOpen() {
 			if (!m_fp) {
 				if (!m_tryOpen) {
@@ -106,32 +133,29 @@ namespace _log_int {
 					GetModuleBaseName(GetCurrentProcess(), NULL, base, std::ssize(base));
 
 					auto path = std::format(L"{}\\{}.log", sFolder, base);
-					//TChar sLogPath[0x1000];
-					//sLogPath[0] = 0;
-					//if (swprintf_s(sLogPath, L"%s\\%s(%d)_%u.log", sFolder, base, GetCurrentProcessId(), GetTick()) == -1)
-					//{
-					//	return m_fp;
-					//}
 					m_fp = _wfsopen(path.c_str(), L"wt, ccs=UTF-8", _SH_DENYNO);
-					//out_file.open(path, std::ios_base::out | std::ios::trunc);
 				}
 			}
 			return m_fp;
 		}
-		std::mutex m_mtxLog;
-		FILE* m_fp = NULL;
+		std::mutex m_mtx; // очередь
+		std::condition_variable m_cv, m_idleCv;
+		std::deque<std::wstring> m_queue;
+		size_t m_dropped = 0;
+		bool m_started = false, m_writing = false;
+		FILE* m_fp = NULL; // только поток записи
 		bool m_tryOpen = false;
-		std::wofstream out_file;
 	};
 
 	inline SwLogger& SwLoggerGlobal() { return SwLogger::Get(); }
 
 	template<bool iswarn = false> void __LOG_LINE_FORMAT(auto&&... v) {
-		std::unique_lock<std::mutex> _lock(SwLoggerGlobal().Mtx());
-		SwLoggerGlobal().AppendPrefix();
-		if constexpr (iswarn) SwLoggerGlobal().Append("[WARN] ");
-		SwLoggerGlobal().AppendFormat(FORWARD(v)...);
-		SwLoggerGlobal().EndLineFlash();
+		LogLine line;
+		line.AppendPrefix();
+		if constexpr (iswarn) line.Append("[WARN] ");
+		line.AppendFormat(FORWARD(v)...);
+		line.s += L'\n';
+		SwLoggerGlobal().Push(std::move(line.s));
 	}
 
 	class WinErrBOOL {
@@ -139,8 +163,8 @@ namespace _log_int {
 		DWORD m_dwErr = 0;
 	public:
 		WinErrBOOL(BOOL r) : m_res(r) {}
-		void Log() const {
-			SwLoggerGlobal().AppendFormat(L"WinErr={} ", m_dwErr);
+		void Log(LogLine& line) const {
+			line.AppendFormat(L"WinErr={} ", m_dwErr);
 
 			CAutoWinMem lpMsgBuf;
 			FormatMessage(
@@ -150,7 +174,7 @@ namespace _log_int {
 				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 				(LPTSTR)&lpMsgBuf,
 				0, NULL);
-			SwLoggerGlobal().Append((TStr)lpMsgBuf.get());
+			line.Append((TStr)lpMsgBuf.get());
 		}
 		operator bool() {
 			if (m_res)
@@ -164,8 +188,8 @@ namespace _log_int {
 	struct SwErrTStatus {
 		TStatus res;
 		SwErrTStatus(TStatus r) : res(r) {}
-		void Log() const {
-			SwLoggerGlobal().AppendFormat("TStatus={}({})", (int)res, simple_enum::enum_name(res));
+		void Log(LogLine& line) const {
+			line.AppendFormat("TStatus={}({})", (int)res, simple_enum::enum_name(res));
 		}
 		operator bool() const { return res != SW_ERR_SUCCESS; }
 		TStatus ToTStatus() { return res; }
@@ -174,7 +198,7 @@ namespace _log_int {
 	struct WinErrLSTATUS {
 		LSTATUS res;
 		WinErrLSTATUS(LSTATUS r) : res(r) {}
-		void Log() const { SwLoggerGlobal().AppendFormat(L"LSTATUS={}", (int)res); }
+		void Log(LogLine& line) const { line.AppendFormat(L"LSTATUS={}", (int)res); }
 		bool IsError() const { return res != ERROR_SUCCESS; }
 		operator bool() const { return IsError(); }
 		TStatus ToTStatus() { return SW_ERR_WINAPI; }
@@ -183,7 +207,7 @@ namespace _log_int {
 	struct WinErrHRESULT {
 		HRESULT res;
 		WinErrHRESULT(HRESULT r) : res(r) {}
-		void Log() const { SwLoggerGlobal().AppendFormat(L"HResult={}(0x{:x})", res, res); }
+		void Log(LogLine& line) const { line.AppendFormat(L"HResult={}(0x{:x})", res, res); }
 		operator bool() const { return FAILED(res); }
 		TStatus ToTStatus() { return SW_ERR_HRESULT; }
 	};
@@ -194,15 +218,15 @@ namespace _log_int {
 		if (GetLogLevel() < LOG_LEVEL_1)
 			return;
 
-		std::unique_lock<std::mutex> _lock(SwLoggerGlobal().Mtx());
-
-		SwLoggerGlobal().AppendPrefix();
-		err.Log();
+		LogLine line;
+		line.AppendPrefix();
+		err.Log(line);
 		auto file = loc.file_name();
 		auto cur = strrchr(file, '\\');
-		SwLoggerGlobal().AppendFormat("file={}({})", cur ? cur + 1 : file, loc.line());
-		SwLoggerGlobal().AppendFormat(s, FORWARD(v)...);
-		SwLoggerGlobal().EndLineFlash();
+		line.AppendFormat("file={}({})", cur ? cur + 1 : file, loc.line());
+		line.AppendFormat(s, FORWARD(v)...);
+		line.s += L'\n';
+		SwLoggerGlobal().Push(std::move(line.s));
 	}
 
 	inline void __Log_Err_Common(const auto& err, std::source_location loc) { __Log_Err_Common(err, loc, L""); }

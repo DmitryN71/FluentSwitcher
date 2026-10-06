@@ -28,6 +28,7 @@ class CoreWorker {
 
 		Hooker hooker;
 		IFS_LOG(hooker.StartHook());
+		SetTimer(m_hWnd, 6, 2000, NULL); // перехват не отключён Windows? (Hooker::Watch)
 
 		MSG msg;
 		while (GetMessage(&msg, NULL, 0, 0) > 0) {
@@ -52,6 +53,9 @@ class CoreWorker {
 				}
 				else if (timerId == KeyHold::kTimer) {
 					KeyHold::Tick();
+				}
+				else if (timerId == 6) {
+					hooker.Watch();
 				}
 			}else if (msg.message == KeyHold::WM_Release) {
 				KeyHold::OnRelease((unsigned)msg.wParam, msg.lParam == 1);

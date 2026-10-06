@@ -312,7 +312,8 @@ inline void SetLogLevel_print_info(TLogLevel logLevel) {
 	LOG_ANY("Is Admin: {}", Utils::IsSelfElevated());
 	LOG_ANY("IsWindows11OrGreater: {}", IsWindows11OrGreater());
 
-	if (GetLogLevel() >= LOG_LEVEL_2) {
+	// Настройки ещё не загружены (force_DbgMode: журнал включается посреди их загрузки) - нечего показывать.
+	if (GetLogLevel() >= LOG_LEVEL_2 && conf_get_unsafe()) {
 		std::ostringstream buffer;
 		cfg_details::Save_conf_To_Stream(buffer, *conf_get_unsafe());
 		LOG_ANY("CONFIG:\n{}", buffer.str());

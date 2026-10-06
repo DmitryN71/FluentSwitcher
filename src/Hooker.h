@@ -43,11 +43,16 @@ public: class HookerKeyboard {
 
 private: inline static HookerKeyboard hookerKeyb;
 
+	// Последний вызов перехвата клавиатуры или мыши (GetTickCount) - по нему видно, что Windows его отключила (Watch).
+	inline static DWORD lastHookTick = 0;
+	inline static DWORD lastRehook = 0;
+
 	static LRESULT CALLBACK LowLevelKeyboardProc(
 		_In_  int nCode,
 		_In_  WPARAM wParam,
 		_In_  LPARAM lParam
 	) {
+		lastHookTick = GetTickCount();
 		return hookerKeyb.LowLevelKeyboardProc(nCode, wParam, lParam);
 	}
 
@@ -76,6 +81,7 @@ private: inline static HookerKeyboard hookerKeyb;
 		_In_  WPARAM wParam,
 		_In_  LPARAM lParam
 	) {
+		lastHookTick = GetTickCount();
 		if (nCode == HC_ACTION) {
 			if (wParam == WM_MOUSEMOVE) {
 				// nothing
@@ -109,6 +115,7 @@ public:
 
 		hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
 		IFW_RET(hHookKeyGlobal.IsValid());
+		lastHookTick = GetTickCount();
 
 		if (!Utils::IsDebug()) {
 			hHookMouseGlobal = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
@@ -127,5 +134,28 @@ public:
 		IFW_LOG(hHookEventGlobal.IsValid());
 
 		RETURN_SUCCESS;
+	}
+
+	// Windows молча отключает перехват, который не ответил вовремя (LowLevelHooksTimeout): программа перестаёт видеть
+	// клавиши, а пока не отключила - каждое нажатие и движение мыши ждёт его. Ввод был, а перехват не видел ничего
+	// больше 1,5 с - подключиться заново (не чаще раза в 30 с: ввод мимо перехвата бывает у сенсорного экрана и пера).
+	// Таймер потока перехвата (HookerThread.h), раз в 2 с.
+	void Watch() {
+		LASTINPUTINFO li{ sizeof(li) };
+		if (!GetLastInputInfo(&li)) return;
+		const DWORD now = GetTickCount();
+		if ((LONG)(li.dwTime - lastHookTick) < 1500 || now - lastRehook < 30000) return;
+		if (!KeyHold::CanHold()) return; // впереди окно от администратора, а мы нет: его ввод Windows нам и не показывает
+		LOG_WARN("hook: input {} ms after the hooks last saw any, hooking again", li.dwTime - lastHookTick);
+		lastRehook = now;
+		hHookKeyGlobal.Cleanup();
+		hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
+		IFW_LOG(hHookKeyGlobal.IsValid());
+		if (!Utils::IsDebug()) {
+			hHookMouseGlobal.Cleanup();
+			hHookMouseGlobal = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
+			IFW_LOG(hHookMouseGlobal.IsValid());
+		}
+		lastHookTick = now;
 	}
 };

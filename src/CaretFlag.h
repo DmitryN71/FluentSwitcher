@@ -180,6 +180,10 @@ private:
 		}
 		if (how) {
 			if (Inside(uia, el, rc)) res = { req.seq, true, rc, how, res.type, res.state };
+			// Поле поиска на домашней странице Firefox - кнопка с нарисованной кареткой: набор Firefox отдаёт адресной
+			// строке, а системную каретку ставит в то поле на странице. Фокус в адресной строке, своя каретка Firefox - не
+			// в ней: это оно (в адресной строке, куда щёлкнули, каретка всегда внутри).
+			else if (req.system && Handoff(el)) res = { req.seq, true, rc, "caret (search on the page)", res.type, res.state };
 			else res.how = "caret outside the field or the page";
 		}
 		// Что браузер считает фокусом и где каретка - в журнал (по нему видно, почему флажок есть или нет).
@@ -206,6 +210,13 @@ private:
 		CComBSTR fw;
 		if (!el || FAILED(el->get_CurrentFrameworkId(&fw)) || !fw) return false;
 		return wcscmp(fw, L"Gecko") == 0 || wcscmp(fw, L"Chrome") == 0;
+	}
+
+	// Адресная строка Firefox.
+	static bool Handoff(IUIAutomationElement* el) {
+		CComBSTR fw, cls;
+		return el && SUCCEEDED(el->get_CurrentFrameworkId(&fw)) && fw && wcscmp(fw, L"Gecko") == 0 &&
+			SUCCEEDED(el->get_CurrentClassName(&cls)) && cls && wcsstr(cls, L"urlbar") != nullptr;
 	}
 
 	static bool Chromium(IUIAutomationElement* el) {

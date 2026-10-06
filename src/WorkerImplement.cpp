@@ -25,7 +25,9 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         for (TKeyCode k : keyData.cur_hotKey)
             if (CHotKey::IsKnownMods(k)) m_heldMods.push_back(k);
         if (!AutoSwitchLastWord(false)) FixTwoCaps(false);
-        if (m_heldModsUp) {
+        // Только пока придержка наша: отнятую (щелчок, другое окно, таймаут) хук уже отпускает сам, и нажатый снова
+        // модификатор мог бы остаться нажатым - его отпускание пальцем уже ушло.
+        if (m_heldModsUp && KeyHold::Allowed(keyData.holdId)) {
             InputSender sender;
             for (TKeyCode k : m_heldMods) sender.Add(k, KEY_STATE_DOWN);
             sender.Send();
@@ -219,13 +221,7 @@ std::wstring ForegroundProgram() {
 }
 
 // Консоль (командная строка, Windows Terminal, ConEmu, mintty): там команды и пути, а не слова.
-bool IsConsole() {
-    wchar_t cls[64] = {};
-    GetClassNameW(GetForegroundWindow(), cls, 64);
-    for (const wchar_t* name : { L"ConsoleWindowClass", L"CASCADIA_HOSTING_WINDOW_CLASS", L"VirtualConsoleClass", L"mintty" })
-        if (wcscmp(cls, name) == 0) return true;
-    return false;
-}
+bool IsConsole() { return KeyHold::IsConsoleWindow(GetForegroundWindow()); }
 }
 
 namespace {
@@ -610,13 +606,6 @@ void WorkerImplement::Journal(const char* what, const std::wstring& from, const 
                               const std::string& note) {
     GETCONF;
     if (!cfg->autoswitch || !cfg->autoswitch_journal) return;
-    namespace fs = std::filesystem;
-    std::error_code ec;
-    const fs::path dir = PathUtils::GetPath_folder_noLower2() / L"log";
-    fs::create_directories(dir, ec);
-    const fs::path file = dir / L"autoswitch.log";
-    if (fs::exists(file, ec) && fs::file_size(file, ec) > 1024 * 1024) // больше мегабайта - в старый, начать заново
-        fs::rename(file, dir / L"autoswitch.old.log", ec);
     SYSTEMTIME st{};
     GetLocalTime(&st);
     const std::wstring label = StrUtils::Convert(std::string(LOC(what)));
@@ -624,15 +613,27 @@ void WorkerImplement::Journal(const char* what, const std::wstring& from, const 
     const std::wstring line = std::format(L"{:02}.{:02}.{:04} {:02}:{:02}:{:02}  {:<10} {} \u2192 {}  ({}){}\r\n", st.wDay,
                                           st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond, label, from, to,
                                           ForegroundProgram(), after);
-    const std::string utf8 = StrUtils::Convert(line);
+    // Пишет файл поток окна (gui2/main.cpp, WriteJournalLine): здесь, пока хук держит нажатия, диск (и антивирус на нём)
+    // не ждём. Строка - с временем и программой этой минуты.
+    auto* utf8 = new std::string(StrUtils::Convert(line));
+    if (!PostMessageW(g_guiHandle, WM_JournalLine, 0, (LPARAM)utf8)) delete utf8;
+}
+
+void WriteJournalLine(const std::string& utf8) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dir = PathUtils::GetPath_folder_noLower2() / L"log";
+    fs::create_directories(dir, ec);
+    const fs::path file = dir / L"autoswitch.log";
+    if (fs::exists(file, ec) && fs::file_size(file, ec) > 1024 * 1024) // больше мегабайта - в старый, начать заново
+        fs::rename(file, dir / L"autoswitch.old.log", ec);
     std::ofstream out(file, std::ios::binary | std::ios::app);
     out.write(utf8.data(), (std::streamsize)utf8.size());
 }
 
 void WorkerImplement::JournalHandFix() {
     GETCONF;
-    if (!cfg->autoswitch || !cfg->autoswitch_journal) return;
-    if (IsPasswordFocus() || IsPasswordUia()) return; // пароль, исправленный вручную, - не в журнал
+    if (!cfg->autoswitch) return;
     auto keys = m_cycleList.LastWordKeys();
     if (keys.empty()) keys = m_cycleList.TrailingWordKeys();
     const HKL lay = CurLay(), next = cfg->layouts_info.NextEnabledLayout(lay);
@@ -642,9 +643,20 @@ void WorkerImplement::JournalHandFix() {
         typed += InputSender::KeyText(*key, lay, false);
         fixed += InputSender::KeyText(*key, next, false);
     }
+    // Только что отменённое автопереключение исправляют снова ("Shift дважды" по привычке сразу после него - отмена, ещё
+    // раз - обратно): переключение было верным, отмена не в счёт исключений (иначе на третий раз верное слово ушло бы в
+    // "Не переключать").
+    const auto undone = std::exchange(m_lastUndo, {});
+    const bool again = !undone.word.empty() && GetTickCount64() - undone.at < 10000 &&
+        AutoSwitch::Lower(AutoSwitch::Letters(typed).core) == undone.word;
+    if (again) PostMessageW(g_guiHandle, WM_AutoSwitchUnlearn, 0, (LPARAM)new std::wstring(undone.word));
+    if (!cfg->autoswitch_journal) return;
+    if (IsPasswordFocus() || IsPasswordUia()) return; // пароль, исправленный вручную, - не в журнал
     // Почему автопереключение его не тронуло: проверяло это слово - его причина; нет - до проверки не дошло (быстрый
     // набор во время другой проверки, окно от администратора, отключено).
-    Journal("by hand", typed, fixed, m_autoNo.typed == typed ? m_autoNo.why : "not checked");
+    Journal("by hand", typed, fixed,
+            again ? "fixed again right after switching back: the switch was right"
+                  : m_autoNo.typed == typed ? m_autoNo.why : "not checked");
 }
 
 bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
@@ -684,6 +696,7 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
     LOG_ANY(L"autoswitch: {} switched back", last.word);
     Journal("switched back", last.there, last.typed);
     PostMessageW(g_guiHandle, WM_AutoSwitchLearn, 0, (LPARAM)new std::wstring(last.word));
+    m_lastUndo = { .word = last.word, .at = GetTickCount64() };
     if (undo && span) *undo = { .tail = keys, .retro = 0, .all = true, .from = last.from, .to = last.to };
     return true;
 }
@@ -799,6 +812,10 @@ bool WorkerImplement::UndoTwoCaps() {
 
 TStatus WorkerImplement::GetClipStringCallback() {
     LOG_ANY(L"GetClipStringCallback");
+    // Отдельное сообщение, позже сочетания: его придержка (если оно было набрано под ней) уже отпущена, и по её номеру
+    // CaretStop остановил бы вставку - щелчок и смена окна считаются с этой минуты (KeyHold::caretMoves).
+    m_holdId = 0;
+    m_caretBase = KeyHold::caretMoves;
 
     auto data = m_clipWorker.getCurString();
 

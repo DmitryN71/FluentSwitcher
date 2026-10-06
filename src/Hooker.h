@@ -118,7 +118,8 @@ private: inline static HookerKeyboard hookerKeyb;
 					KeyHold::current = 0;
 					KeyHold::caretMoves++; // и печатающееся исправление - бросить
 				}
-				Worker()->PostMsg(Message_ClearWorlds{ .click = wParam != WM_MOUSEWHEEL && wParam != WM_MOUSEHWHEEL });
+				// И после прокрутки (буфер очищен, а каретка там же): дописанное дальше - кусок слова, как после щелчка.
+				Worker()->PostMsg(Message_ClearWorlds{ .click = true });
 				// Щелчок или прокрутка двигают каретку. Отпустили левую - курсор могли поставить в поле: в режиме
 				// "ненадолго" флажок показывается и от этого (браузеры о фокусе внутри страницы Windows не сообщают).
 				CaretFlagPoke(80, wParam == WM_LBUTTONUP);

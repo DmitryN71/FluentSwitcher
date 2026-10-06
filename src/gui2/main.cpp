@@ -8,6 +8,8 @@
 #include "Update.h"
 #include "utils/WinTimer.h"
 
+void WriteJournalLine(const std::string& utf8); // WorkerImplement.cpp: строка журнала автопереключения - в файл
+
 void StartGui() {
 
 	// Служебное окно + таймеры
@@ -149,6 +151,26 @@ void StartGui() {
 						[] { show_main_wind(); });
 				}
 				SaveApplyGuiConfig();
+				return 0;
+			}
+
+			if (msg == WM_JournalLine) {
+				std::unique_ptr<std::string> line(reinterpret_cast<std::string*>(lParam));
+				WriteJournalLine(*line);
+				return 0;
+			}
+
+			if (msg == WM_AutoSwitchUnlearn) {
+				// Отмену тут же исправили обратно ("Shift дважды" по привычке после автопереключения, потом ещё раз): переключение
+				// было верным - отмена не в счёт.
+				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
+				auto& counts = conf_gui()->autoswitch_undo;
+				const auto it = counts.find(StrUtils::Convert(*word));
+				if (it != counts.end()) {
+					if (--it->second <= 0) counts.erase(it);
+					LOG_ANY(L"autoswitch: {} fixed again after switching back, not counted", *word);
+					SaveApplyGuiConfig();
+				}
 				return 0;
 			}
 

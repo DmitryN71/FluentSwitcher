@@ -207,6 +207,10 @@ class WorkerImplement {
         HKL from = 0, to = 0; // раскладка до переключения и после
     };
     bool CountAutoSwitchUndo(AutoUndo* undo = nullptr);
+    struct {
+        std::wstring word; // как в m_autoSwitched.word
+        ULONGLONG at = 0;
+    } m_lastUndo; // последняя отмена автопереключения: исправили снова сразу после неё - не в счёт (JournalHandFix)
     // Перевести набранное с клавиши begin до конца в раскладку to (стереть, переключить, напечатать). wordEnded - слово
     // кончилось: отметка "исправлено", дальше - новое слово.
     void SwitchTail(size_t begin, HKL to, bool wordEnded);

@@ -323,14 +323,27 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// отправленных (придержка уже кончилась).
 			bool hold = false, early = false;
 			unsigned holdId = 0;
+			// Придерживать можно: не окно от администратора, не удалённый рабочий стол, не консоль (KeyHold::CanHold) и не
+			// программа из исключений - там движок всё равно ничего не исправит, а игра, которая не принимает
+			// отправленных нажатий, потеряла бы придержанное. Последним: это поход за именем программы.
+			auto canHold = [&] { return KeyHold::CanHold() && !cfg->IsSkipProgramTop(); };
 			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
 				const auto end = KeyHold::EndWord();
-				// Shift+Enter (новая строка в мессенджерах) и Ctrl+Enter (отправить) - тоже конец слова, как Enter;
-				// модификатор движок на время исправления отпускает и нажимает снова (WorkerImplement::LiftHeldMods).
-				const bool modEnter = vkCode == VK_RETURN && curk.Size() == 2 &&
-					(curk.HasMod(VK_SHIFT) || curk.HasMod(VK_CONTROL));
-				const bool check = KeyHold::CanStart() && (curk.Size() == 1 || modEnter) && g_enabled.IsEnabled() &&
-					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch)) && KeyHold::CanHold();
+				// Модификатор вместе с ней - сочетание, не конец слова; кроме Shift+Enter (новая строка в мессенджерах) и
+				// Ctrl+Enter (отправить): модификатор движок на время исправления отпускает и нажимает снова
+				// (WorkerImplement::LiftHeldMods). Ещё нажатая последняя буква слова от двух букв - быстрый набор, пальцы
+				// ещё на ней: слово кончилось (раньше и это было "сочетанием" - слово не проверялось). Другая нажатая
+				// клавиша (W в игре и пробел) - не конец слова.
+				int mods = 0;
+				bool otherKey = false;
+				for (TKeyCode key : curk)
+				{
+					if (CHotKey::IsKnownMods(key)) mods++;
+					else if (key != vkCode && (key != end.lastLetter || end.size < 2)) otherKey = true;
+				}
+				const bool modEnter = vkCode == VK_RETURN && mods == 1 && (curk.HasMod(VK_SHIFT) || curk.HasMod(VK_CONTROL));
+				const bool check = KeyHold::CanStart() && !otherKey && (mods == 0 || modEnter) && g_enabled.IsEnabled() &&
+					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch)) && canHold();
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
 					// поле), поэтому ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе
@@ -350,9 +363,9 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			}
 			else {
 				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,
-					curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN));
+					curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN), curKeys.IsHold());
 				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
-					KeyHold::CanStart() && KeyHold::EarlyPoint() && KeyHold::CanHold();
+					KeyHold::CanStart() && KeyHold::EarlyPoint() && canHold();
 				hold = early;
 				if (hold) {
 					LOG_ANY("hold: keys wait for the check in the middle of the word");

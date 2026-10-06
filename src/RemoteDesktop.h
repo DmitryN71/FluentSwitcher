@@ -1,5 +1,6 @@
-// Окна удалённого рабочего стола и виртуальных машин (mstsc, Windows App, Hyper-V, VMware, VirtualBox, TeamViewer,
-// AnyDesk, RustDesk, Parsec, VNC, менеджеры подключений): набранное там уходит в другой компьютер со своей раскладкой
+// Окна удалённого рабочего стола и виртуальных машин (mstsc, Windows App, Hyper-V, VMware, VirtualBox, Citrix, Horizon,
+// TeamViewer, AnyDesk, RustDesk, Parsec, NoMachine, Splashtop, VNC, менеджеры подключений): набранное там уходит в
+// другой компьютер со своей раскладкой
 // и, может быть, своим FluentSwitcher. Там FluentSwitcher этого компьютера не работает, как в программах из
 // disableInPrograms (Settings.h): стёртое и перепечатанное отсюда приходит туда искажённым, раскладка этого компьютера
 // там ничего не решает, а сочетание, съеденное здесь, не дошло бы до копии там (Дмитрий 06.10: Блокнот дома по RDP -
@@ -19,7 +20,10 @@ inline bool IsClient(const std::wstring& name) {
 		L"vmconnect.exe",                // Hyper-V
 		L"vmware.exe", L"vmplayer.exe",  // VMware Workstation, Player
 		L"virtualboxvm.exe",             // VirtualBox
-		L"teamviewer.exe", L"anydesk.exe", L"rustdesk.exe", L"parsecd.exe",
+		L"wfica32.exe", L"cdviewer.exe",           // Citrix Workspace
+		L"vmware-view.exe", L"vmware-remotemks.exe", // VMware Horizon
+		L"teamviewer.exe", L"anydesk.exe", L"rustdesk.exe", L"parsecd.exe", L"nxplayer.exe", L"strwinclt.exe",
+		L"anyviewer.exe", L"aeroadmin.exe", L"supremo.exe",
 		L"vncviewer.exe", L"tvnviewer.exe",
 		L"rdcman.exe", L"mremoteng.exe", L"royalts.exe", L"remotedesktopmanager.exe",
 	};

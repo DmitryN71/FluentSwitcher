@@ -13,6 +13,8 @@ static const UINT WM_UpdateChecked = 0xBFFF - 26; // окно настроек �
 static const UINT WM_TextFixed = 0xBFFF - 25; // FluentSwitcher исправляет текст: звук исправления (LayoutSound.h)
 static const UINT WM_TwoCapsLearn = 0xBFFF - 24; // lParam - std::wstring*: слово в исключения ДВух ЗАглавных
 static const UINT WM_AutoSwitchLearn = 0xBFFF - 23; // lParam - std::wstring*: автопереключение отменили (AutoSwitch.h)
+static const UINT WM_AutoSwitchUnlearn = 0xBFFF - 22; // lParam - std::wstring*: ... и тут же исправили снова - не в счёт
+static const UINT WM_JournalLine = 0xBFFF - 21; // lParam - std::string* (UTF-8): строка журнала автопереключения - в файл
 
 static const UINT c_timerKeyloggerDefence = 12;
 static const TChar c_sArgAutostart[] = L"/autostart";

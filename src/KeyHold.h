@@ -132,12 +132,23 @@ inline bool CanStart() {
 	return !active && replaying == 0 && now() >= pausedUntil;
 }
 
+// Консоль (командная строка, Windows Terminal, ConEmu, mintty): там команды и пути, а не слова - не исправляем.
+inline bool IsConsoleWindow(HWND w) {
+	wchar_t cls[64] = {};
+	GetClassNameW(w, cls, 64);
+	for (const wchar_t* name : { L"ConsoleWindowClass", L"CASCADIA_HOSTING_WINDOW_CLASS", L"VirtualConsoleClass", L"mintty" })
+		if (wcscmp(cls, name) == 0) return true;
+	return false;
+}
+
 // Окно впереди запущено от администратора, а мы нет: Windows не даст отправить ему нажатия - придерживать нельзя,
-// они бы пропали. Окно удалённого рабочего стола или виртуальной машины (RemoteDesktop.h): там мы ничего не исправляем
-// - придерживать незачем.
+// они бы пропали. Окно удалённого рабочего стола или виртуальной машины (RemoteDesktop.h) и консоль: там мы ничего не
+// исправляем - придерживать незачем.
 inline bool CanHold() {
+	const HWND fg = GetForegroundWindow();
+	if (IsConsoleWindow(fg)) return false;
 	DWORD pid = 0;
-	GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+	GetWindowThreadProcessId(fg, &pid);
 	HANDLE process = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
 	if (!process) return Utils::IsSelfElevated();
 	const bool remote = RemoteDesktop::IsClientProcess(process);
@@ -314,6 +325,7 @@ inline void AfterKey() {
 
 // ----- регистр букв текущего слова, как его видит хук -----
 inline std::vector<bool> word; // true - заглавная
+inline UINT lastLetter = 0;    // клавиша последней буквы слова
 inline bool broken = false;    // в слове цифра, CapsLock, сочетание - не наш случай
 inline std::atomic<bool> earlyDone = false; // рабочий поток: посреди этого слова решать больше нечего
 
@@ -324,12 +336,15 @@ inline bool IsLetterKey(UINT vk) {
 
 inline void ResetWord() {
 	word.clear();
+	lastLetter = 0;
 	broken = false;
 	earlyDone = false;
 }
 
-// Нажатие, которое движок получает как набор (не пробел). true - в слово добавилась буква.
-inline bool Track(UINT vk, bool shift, bool caps, bool command) {
+// Нажатие, которое движок получает как набор (не пробел). true - в слово добавилась буква. repeat - автоповтор
+// зажатой клавиши: так слова не набирают ("ааааа", W в игре), слово - не наш случай (не считать буквы автоповтора, а
+// с ними и придерживать пробел после них).
+inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = false) {
 	if (CHotKey::IsKnownMods(vk)) return false; // сам Shift (Ctrl...) - не буква и не помеха
 	if (command || caps) {
 		word.clear();
@@ -340,8 +355,13 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command) {
 		if (!word.empty()) word.pop_back();
 		return false;
 	}
+	if (repeat && IsLetterKey(vk)) {
+		broken = true;
+		return false;
+	}
 	if (IsLetterKey(vk)) {
 		word.push_back(shift);
+		lastLetter = vk;
 		return true;
 	}
 	if (vk >= '0' && vk <= '9') {
@@ -366,11 +386,15 @@ inline bool EarlyPoint() {
 struct WordEnd {
 	bool twoCaps = false; // могло подойти под ДВе ЗАглавные (две заглавные, потом строчные)
 	bool letters = false; // буквы без цифр и команд - его проверит автопереключение (и одну: список "Переключать всегда")
+	size_t size = 0;      // букв
+	UINT lastLetter = 0;  // клавиша последней
 };
 inline WordEnd EndWord() {
 	WordEnd end;
 	end.twoCaps = !broken && word.size() >= 4 && word[0] && word[1] && !word[2] && !word[3];
 	end.letters = !broken && !word.empty();
+	end.size = word.size();
+	end.lastLetter = lastLetter;
 	ResetWord();
 	return end;
 }

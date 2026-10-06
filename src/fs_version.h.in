@@ -1,8 +1,9 @@
 // The version of FluentSwitcher: made by CMake from FLUENTSWITCHER_VERSION (CMakeLists.txt), one place for the
-// program, its file properties (res.rc) and the settings window.
+// program, its file properties (res.rc) and the settings window. FS_VERSION has the beta suffix ("1.5.0-beta1"),
+// the numbers do not.
 #pragma once
 
-#define FS_VERSION "@FLUENTSWITCHER_VERSION@"
+#define FS_VERSION "@FLUENTSWITCHER_VERSION@@FLUENTSWITCHER_VERSION_SUFFIX@"
 #define FS_VER_MAJOR @FLUENTSWITCHER_VERSION_MAJOR@
 #define FS_VER_MINOR @FLUENTSWITCHER_VERSION_MINOR@
 #define FS_VER_PATCH @FLUENTSWITCHER_VERSION_PATCH@

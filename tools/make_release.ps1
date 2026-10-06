@@ -30,6 +30,8 @@ if (Test-Path $zip) { Remove-Item -LiteralPath $zip -Force }
 Compress-Archive -Path $folder -DestinationPath $zip
 
 if (-not (Test-Path $Iscc)) { throw "Inno Setup 6 is not found: $Iscc" }
-& $Iscc /Q "/DAppVersion=$version" "/DSourceDir=$folder" "/DOutputDir=$out" "$root\installer\FluentSwitcher.iss"
+# The file properties of the installer take numbers only: "1.5.0-beta1" - 1.5.0.
+$numeric = $version -replace '-.*$', ''
+& $Iscc /Q "/DAppVersion=$version" "/DAppNumVersion=$numeric" "/DSourceDir=$folder" "/DOutputDir=$out" "$root\installer\FluentSwitcher.iss"
 if ($LASTEXITCODE) { throw "the installer failed" }
 Get-Item $zip, "$out\FluentSwitcher-$version-setup.exe" | ForEach-Object { "{0}  {1:N0} bytes" -f $_.Name, $_.Length }

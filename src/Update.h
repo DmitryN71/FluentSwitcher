@@ -31,24 +31,35 @@ struct Result {
 	std::string error;  // для журнала, когда не ok
 };
 
-// "1.0.10" новее "1.0.9".
-inline bool IsNewer(const std::string& latest, const std::string& current) {
-	size_t a = 0, b = 0;
-	while (a < latest.size() || b < current.size()) {
-		long x = 0, y = 0;
-		while (a < latest.size() && latest[a] != '.') {
-			if (latest[a] >= '0' && latest[a] <= '9') x = x * 10 + (latest[a] - '0');
+// "1.0.10" новее "1.0.9". Бета старше выпуска с тем же номером: "1.5.0" новее "1.5.0-beta1", "1.5.0-beta2" новее
+// "1.5.0-beta1" (иначе "1.5.0-beta1" читалось как 1.5.01 = 1.5.1, и бете не предлагался выпуск 1.5.0).
+inline bool IsNewer(const std::string& latestFull, const std::string& currentFull) {
+	auto number = [](const std::string& v) { return v.substr(0, v.find('-')); };
+	auto suffix = [](const std::string& v) { return v.find('-') == std::string::npos ? std::string() : v.substr(v.find('-') + 1); };
+	// Числа через точку; в суффиксе ("beta2") - его число.
+	auto compare = [](const std::string& latest, const std::string& current) {
+		size_t a = 0, b = 0;
+		while (a < latest.size() || b < current.size()) {
+			long x = 0, y = 0;
+			while (a < latest.size() && latest[a] != '.') {
+				if (latest[a] >= '0' && latest[a] <= '9') x = x * 10 + (latest[a] - '0');
+				a++;
+			}
+			while (b < current.size() && current[b] != '.') {
+				if (current[b] >= '0' && current[b] <= '9') y = y * 10 + (current[b] - '0');
+				b++;
+			}
+			if (x != y) return x > y ? 1 : -1;
 			a++;
-		}
-		while (b < current.size() && current[b] != '.') {
-			if (current[b] >= '0' && current[b] <= '9') y = y * 10 + (current[b] - '0');
 			b++;
 		}
-		if (x != y) return x > y;
-		a++;
-		b++;
-	}
-	return false;
+		return 0;
+	};
+	const int numbers = compare(number(latestFull), number(currentFull));
+	if (numbers != 0) return numbers > 0;
+	const std::string latestSuffix = suffix(latestFull), currentSuffix = suffix(currentFull);
+	if (latestSuffix.empty() != currentSuffix.empty()) return latestSuffix.empty(); // выпуск новее своей беты
+	return compare(latestSuffix, currentSuffix) > 0;
 }
 
 // Спрашивает GitHub сейчас; ждёт до ~10 с на каждый шаг (нет сети, медленный прокси).

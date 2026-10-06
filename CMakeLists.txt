@@ -40,6 +40,9 @@ endif()
 
 # Версия FluentSwitcher - одна на программу, свойства файла и окно настроек: build/.../generated/fs_version.h.
 set(FLUENTSWITCHER_VERSION 1.5.0)
+# Бета: "-beta1" - в названии версии ("1.5.0-beta1": программа, файлы выпуска, метка v1.5.0-beta1 - выпуск на GitHub
+# станет предварительным), числа свойств файла - без него. Выпуск - пусто.
+set(FLUENTSWITCHER_VERSION_SUFFIX "-beta1")
 string(REPLACE "." ";" fs_version_parts ${FLUENTSWITCHER_VERSION})
 list(GET fs_version_parts 0 FLUENTSWITCHER_VERSION_MAJOR)
 list(GET fs_version_parts 1 FLUENTSWITCHER_VERSION_MINOR)

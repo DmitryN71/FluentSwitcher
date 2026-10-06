@@ -42,4 +42,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $files = Get-ChildItem build/release -File | Where-Object { $_.Name -like '*.zip' -or $_.Name -like '*-setup.exe' }
-          gh release create "${{ github.ref_name }}" $files.FullName --title "FluentSwitcher ${{ github.ref_name }}" --generate-notes
+          # A beta tag (v1.5.0-beta1) - a pre-release: GitHub does not give it as the latest, the update check does not offer it.
+          $extra = @()
+          if ("${{ github.ref_name }}" -like '*-*') { $extra += '--prerelease' }
+          gh release create "${{ github.ref_name }}" $files.FullName --title "FluentSwitcher ${{ github.ref_name }}" --generate-notes @extra

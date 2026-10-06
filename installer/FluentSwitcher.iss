@@ -1,5 +1,6 @@
 ; The FluentSwitcher installer (Inno Setup 6). Built by tools\make_release.ps1, which passes:
-;   AppVersion - "1.0.0" (the program's own, from FluentSwitcher.exe)
+;   AppVersion - "1.0.0" (the program's own, from FluentSwitcher.exe; a beta - "1.5.0-beta1")
+;   AppNumVersion - its numbers, "1.5.0"
 ;   SourceDir  - the folder with FluentSwitcher.exe, flags\, sounds\, LICENSE and THIRD-PARTY-NOTICES.txt
 ;   OutputDir  - where FluentSwitcher-<version>-setup.exe goes
 ; For the current user, without administrator rights: into %LOCALAPPDATA%\Programs\FluentSwitcher, a shortcut
@@ -7,6 +8,10 @@
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
+#endif
+; The numbers of AppVersion for the file properties (a beta, "1.5.0-beta1", - 1.5.0).
+#ifndef AppNumVersion
+  #define AppNumVersion AppVersion
 #endif
 #ifndef SourceDir
   #define SourceDir "..\build\release\FluentSwitcher"
@@ -25,7 +30,7 @@ AppPublisherURL=https://github.com/DmitryN71/FluentSwitcher
 AppSupportURL=https://github.com/DmitryN71/FluentSwitcher/issues
 AppUpdatesURL=https://github.com/DmitryN71/FluentSwitcher/releases
 AppCopyright=GPL-3.0. Based on SimpleSwitcher by Aegel5
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#AppNumVersion}
 DefaultDirName={localappdata}\Programs\FluentSwitcher
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest

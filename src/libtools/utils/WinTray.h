@@ -141,12 +141,30 @@ public:
 		KillTimer(hwnd, ID_CLICK_TIMER);
 		timer_func = nullptr;
 	}
-	// Меню у флага, у курсора (правый щелчок; по настройке - и левый).
+	// Где открыть меню: у самого значка - над панелью задач (под ней, если она сверху; сбоку - рядом), а не у курсора.
+	// По щелчку меню открывается с задержкой (ждёт, не будет ли второго щелчка), и мышь уже на пути к пункту - меню
+	// уезжало за ней; у значка пункты всегда на одном месте, в них попадают по памяти. Значок не нашёлся - у курсора.
+	POINT MenuPoint() const {
+		POINT p{};
+		GetCursorPos(&p);
+		NOTIFYICONIDENTIFIER id{ sizeof(id) };
+		id.hWnd = nid.hWnd;
+		id.uID = nid.uID;
+		RECT r{};
+		if (FAILED(Shell_NotifyIconGetRect(&id, &r)) || r.right <= r.left) return p;
+		MONITORINFO mi{ sizeof(mi) };
+		GetMonitorInfoW(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi);
+		const RECT& work = mi.rcWork;
+		if (r.bottom <= work.top + 1) return { r.left, r.bottom }; // панель задач сверху
+		if (r.right <= work.left + 1) return { r.right, r.bottom }; // слева
+		if (r.left >= work.right - 1) return { r.left, r.bottom };  // справа
+		return { r.left, r.top }; // снизу; или значок среди скрытых - над ним
+	}
+	// Меню у флага (правый щелчок; по настройке - и левый).
 	void ShowMenu() {
 		if (!createMenu) return;
 		last_menu = createMenu();
-		POINT cursorPos;
-		GetCursorPos(&cursorPos);
+		POINT cursorPos = MenuPoint();
 
 		// Меню в стиле Windows 11 (FluentMenu.h); не вышло - обычное меню Windows, как раньше.
 		std::vector<FluentMenu::Item> items;

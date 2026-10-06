@@ -105,8 +105,10 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     if (keyData.hold) {
         // Хук придерживает нажатия после этого пробела (или буквы посреди слова): решить и отпустить, что бы ни случилось.
         Release release{ keyData.holdId };
-        if (keyData.early)
-            AutoSwitchEarly();
+        if (keyData.sign || keyData.early) {
+            // Знак после слова в другой раскладке - слово целиком; не он - посреди слова, если это буква там.
+            if (!(keyData.sign && AutoSwitchAtSign()) && keyData.early) AutoSwitchEarly();
+        }
         else if (!AutoSwitchLastWord())
             FixTwoCaps();
     }
@@ -486,6 +488,35 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         return true;
     }
     return false;
+}
+
+bool WorkerImplement::AutoSwitchAtSign() {
+    GETCONF;
+    if (!cfg->autoswitch || !KeyHold::Allowed(m_holdId)) return false;
+    auto keys = m_cycleList.TrailingWordKeys();
+    if (keys.size() < 3) return false;
+    CheckCurLay();
+    const HKL lay = CurLay();
+    const auto& last = *keys.back();
+    const std::wstring here = InputSender::KeyText(last, lay, false);
+    bool sign = false;
+    for (HKL other : cfg->layouts_info.EnabledLayouts()) {
+        if (other == lay) continue;
+        const std::wstring there = InputSender::KeyText(last, other, false);
+        sign = sign || (there.size() == 1 && there != here && wcschr(L".,;:?!\"'", there[0]));
+    }
+    if (!sign) return false;
+    std::wstring typed;
+    for (auto* key : keys) typed += InputSender::KeyText(*key, lay, false);
+    // Набранное - слово или начало слова своего языка: оно, скорее, ещё пишется ("шаб" - "шаблон", хотя там "if,").
+    const std::wstring core = AutoSwitch::Letters(typed).core;
+    if (core.size() < 2) return false;
+    if (WordStart::Typed(core, Utils::GetNameForHKL_simple(lay))) {
+        LOG_ANY(L"autoswitch: {} at a sign: a word or the beginning of one as typed", typed);
+        return false;
+    }
+    LOG_ANY(L"autoswitch: {} at a sign that ends a word in the other layout: checked as at its end", typed);
+    return AutoSwitchLastWord(false);
 }
 
 void WorkerImplement::AutoSwitchEarly() {

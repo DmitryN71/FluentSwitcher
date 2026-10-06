@@ -334,6 +334,14 @@ inline bool IsLetterKey(UINT vk) {
 		vk == VK_OEM_102;
 }
 
+// Клавиша, которая в одной из раскладок бывает знаком после слова: , . ; : ' " ? (б ю ж э и "/ ?" русской раскладки -
+// буквы и точка там, где в английской знаки; Shift с 1 2 4 6 7 - знаки, разные в раскладках). Знак ли это в другой
+// раскладке на самом деле - решает движок.
+inline bool SignKey(UINT vk, bool shift) {
+	if (vk == VK_OEM_COMMA || vk == VK_OEM_PERIOD || vk == VK_OEM_1 || vk == VK_OEM_7 || vk == VK_OEM_2) return true;
+	return shift && (vk == '1' || vk == '2' || vk == '4' || vk == '6' || vk == '7');
+}
+
 inline void ResetWord() {
 	word.clear();
 	lastLetter = 0;

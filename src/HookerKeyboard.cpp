@@ -321,7 +321,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// нажатия придерживаются, пока движок решает. Так же - буква посреди слова (автопереключение, не
 			// дожидаясь конца слова: early). Отправленное заново после придержки - тоже, если оно последнее из
 			// отправленных (придержка уже кончилась).
-			bool hold = false, early = false;
+			bool hold = false, early = false, sign = false;
 			unsigned holdId = 0;
 			// Придерживать можно: не окно от администратора, не удалённый рабочий стол, не консоль (KeyHold::CanHold) и не
 			// программа из исключений - там движок всё равно ничего не исправит, а игра, которая не принимает
@@ -362,13 +362,23 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				}
 			}
 			else {
-				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1,
-					curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN), curKeys.IsHold());
+				const bool command = curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN);
+				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold());
 				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
 					KeyHold::CanStart() && KeyHold::EarlyPoint() && canHold();
-				hold = early;
+				// Клавиша, которая в другой раскладке бывает знаком после слова (б ю ж э - , . ; ', "/ ?" - . ,, Shift с
+				// цифрой - ? : ; "): слово проверяется сразу, как в конце, без пробела ("ПшеРгию" - "GitHub.", "b xnj&" -
+				// "и что?"; Дмитрий 06.10). Решает движок (AutoSwitchAtSign): знак ли это там и не начало ли слова здесь.
+				sign = !command && cfg->autoswitch && g_enabled.IsEnabled() && KeyHold::SignKey(vkCode, curk.HasMod(VK_SHIFT)) &&
+					!KeyHold::broken && KeyHold::word.size() >= 2 && KeyHold::CanStart() && canHold();
+				hold = early || sign;
 				if (hold) {
-					LOG_ANY("hold: keys wait for the check in the middle of the word");
+					if (sign) {
+						LOG_ANY("hold: keys wait for the check at a sign after the word");
+					}
+					else {
+						LOG_ANY("hold: keys wait for the check in the middle of the word");
+					}
 					holdId = KeyHold::Start();
 				}
 			}
@@ -379,6 +389,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				.is_caps = iscaps == 1,
 				.hold = hold,
 				.early = early,
+				.sign = sign,
 				.holdId = holdId,
 				});
 		}

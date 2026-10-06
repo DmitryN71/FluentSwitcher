@@ -380,21 +380,24 @@ void SettingsFrame::BuildGeneral()
     FinishPage();
 }
 
-// The details of a card as its tooltip: over the card and everything on it (a tooltip of a window is not shown over
-// its children). `inCard` - anything on the card: its control or its description.
+// The details of a card as the tooltip of its title, where the "i" is (WithTip); `inCard` - anything on the card: its
+// control or its description. Not over the whole card: it popped up whenever the mouse rested on the card on its way
+// elsewhere, and lay over the cards below for half a minute (Дмитрий: the tooltip of "Переключать всегда" over the
+// journal's card). The mouse leaves the title - the tooltip goes at once.
 static void CardTip(wxWindow* inCard, const wxString& tip)
 {
     wxWindow* card = inCard;
     while (card && !dynamic_cast<Card*>(card))
         card = card->GetParent();
-    if (!card)
+    if (!card || card->GetChildren().empty())
         return;
-    std::function<void(wxWindow*)> set = [&](wxWindow* w) {
-        w->SetToolTip(tip);
-        for (wxWindow* child : w->GetChildren())
-            set(child);
-    };
-    set(card);
+    wxWindow* title = card->GetChildren().front(); // AddSettingsCard makes the title first
+    title->SetToolTip(tip);
+    title->Bind(wxEVT_LEAVE_WINDOW, [](wxMouseEvent& e) {
+        wxToolTip::Enable(false); // hides the one shown
+        wxToolTip::Enable(true);
+        e.Skip();
+    });
 }
 
 // A title that has details in its tooltip: with the "i" in a circle after it.

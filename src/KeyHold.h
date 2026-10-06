@@ -38,6 +38,8 @@
 // конца слова буквы идут без задержки.
 #pragma once
 
+#include "RemoteDesktop.h"
+
 #include <deque>
 #include <vector>
 
@@ -131,13 +133,18 @@ inline bool CanStart() {
 }
 
 // Окно впереди запущено от администратора, а мы нет: Windows не даст отправить ему нажатия - придерживать нельзя,
-// они бы пропали.
+// они бы пропали. Окно удалённого рабочего стола или виртуальной машины (RemoteDesktop.h): там мы ничего не исправляем
+// - придерживать незачем.
 inline bool CanHold() {
-	if (Utils::IsSelfElevated()) return true;
 	DWORD pid = 0;
 	GetWindowThreadProcessId(GetForegroundWindow(), &pid);
 	HANDLE process = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
-	if (!process) return false;
+	if (!process) return Utils::IsSelfElevated();
+	const bool remote = RemoteDesktop::IsClientProcess(process);
+	if (remote || Utils::IsSelfElevated()) {
+		CloseHandle(process);
+		return !remote;
+	}
 	bool elevated = false;
 	HANDLE token = nullptr;
 	if (OpenProcessToken(process, TOKEN_QUERY, &token)) {

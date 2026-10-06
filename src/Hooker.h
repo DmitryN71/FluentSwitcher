@@ -172,7 +172,9 @@ public:
 		if (!GetLastInputInfo(&li)) return;
 		const DWORD now = GetTickCount();
 		if ((LONG)(li.dwTime - lastHookTick) < 1500 || now - lastRehook < 30000) return;
-		if (!KeyHold::CanHold()) return; // впереди окно от администратора, а мы нет: его ввод Windows нам и не показывает
+		// Впереди окно от администратора, а мы нет: его ввод Windows нам и не показывает. Или удалённый рабочий стол: его
+		// клиент на весь экран ловит клавиатуру своим перехватом, и новый наш встал бы перед ним.
+		if (!KeyHold::CanHold()) return;
 		LOG_WARN("hook: input {} ms after the hooks last saw any, hooking again", li.dwTime - lastHookTick);
 		lastRehook = now;
 		hHookKeyGlobal.Cleanup();

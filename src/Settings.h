@@ -2,6 +2,7 @@
 
 #include "ConfigData.h"
 #include "ConfigData_hk.h"
+#include "RemoteDesktop.h"
 
 enum class SeparateExtMode {
 	Disabled = 3,
@@ -54,11 +55,10 @@ public:
         }
 		disableInPrograms = std::move(res);
     }
+    // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h).
     bool IsSkipProgramTop() const {
 
         const auto& col = disableInPrograms;
-
-        if (col.empty()) return false;
 
         auto info = Utils::GetFocusedWndInfo();
 
@@ -68,6 +68,11 @@ public:
         if (name.empty()) {
             LOG_ANY(L"can't find name. pid={}", info.pid_top);
             return false;
+        }
+
+        if (RemoteDesktop::IsClient(name)) {
+            LOG_ANY(L"Skip process {}: a remote desktop or a virtual machine", name);
+            return true;
         }
 
         if (col.contains(name)) {

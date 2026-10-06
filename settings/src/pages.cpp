@@ -506,7 +506,10 @@ void SettingsFrame::BuildTyping()
         wxStaticText* about = AddSettingsCard(
             m_page, m_column, WithTip(T("Журнал автопереключения")),
             T("Что переключилось само, что вернули и что исправили вручную"), [&](wxWindow* card) {
+                // The card's colour: the button and the switch round their corners on the colour of their
+                // parent, and the panel's own (the system's) showed as a dark frame around them.
                 wxPanel* box = new wxPanel(card);
+                box->SetBackgroundColour(card->GetBackgroundColour());
                 wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
                 FluentButton* open = new FluentButton(box, wxID_ANY, T("Открыть"));
                 open->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
@@ -966,18 +969,21 @@ void SettingsFrame::BuildAdvanced()
         }
     };
 
-    // Switched at once, as in the old window; not a setting that is saved.
-    ToggleSwitch* log = nullptr;
+    // Not a setting that is saved: the engine keeps it until it quits. Switched by Apply, as "FluentSwitcher
+    // включён" (Дмитрий 06.10: switched at once, it left Apply grey, as if the switch had not taken).
     AddSettingsCard(m_page, m_column, T("Журнал отладки"),
-                    T("Сразу и до выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
+                    T("До выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
                       "в папке программы. Пароли при этом не вводите; после проверки выключите и удалите журнал"),
-                    [&](wxWindow* card) { return log = new ToggleSwitch(card, (m_state & Engine::StateLogging) != 0); });
-    log->onChange = [this, log] {
-        if (!m_engine || !Engine::SetLogging(m_engine, log->IsOn()))
+                    [&](wxWindow* card) { return m_loggingSwitch = new ToggleSwitch(card, m_logging); });
+    m_loggingSwitch->onChange = [this] {
+        if (!m_state)
         {
-            log->SetOn(false);
+            m_loggingSwitch->SetOn(false);
             SetStatus(T("FluentSwitcher не запущен: журнал вести некому"), true);
+            return;
         }
+        m_logging = m_loggingSwitch->IsOn();
+        Changed();
     };
     AddSettingsCard(m_page, m_column, T("Папка журнала"),
                     T("Там файл FluentSwitcher.exe.log – его можно приложить к сообщению об ошибке"),
@@ -1139,11 +1145,16 @@ void SettingsFrame::RefreshEngine()
     // The switches follow the engine, except one the user has just changed and not applied yet.
     const bool enabledPending = m_state && m_enabled != ((m_state & Engine::StateEnabled) != 0);
     const bool autostartPending = m_state && m_autostart != ((m_state & Engine::StateAutostart) != 0);
+    const bool loggingPending = m_state && m_logging != ((m_state & Engine::StateLogging) != 0);
     m_state = state;
     if (!enabledPending)
         m_enabled = (state & Engine::StateEnabled) != 0 || !running;
     if (!autostartPending)
         m_autostart = (state & Engine::StateAutostart) != 0;
+    if (!loggingPending || !running)
+        m_logging = (state & Engine::StateLogging) != 0;
+    if (m_loggingSwitch)
+        m_loggingSwitch->SetOn(m_logging);
     if (m_enabledSwitch)
     {
         // Not running: on/off and autostart are the engine's to tell and to do, so their cards go.
@@ -1161,7 +1172,8 @@ bool SettingsFrame::HasChanges() const
     if (m_edit != m_saved)
         return true;
     return m_state && (m_enabled != ((m_state & Engine::StateEnabled) != 0) ||
-                       m_autostart != ((m_state & Engine::StateAutostart) != 0));
+                       m_autostart != ((m_state & Engine::StateAutostart) != 0) ||
+                       m_logging != ((m_state & Engine::StateLogging) != 0));
 }
 
 void SettingsFrame::Changed()
@@ -1215,6 +1227,8 @@ bool SettingsFrame::Apply()
         return RestartElevated();
     if (m_autostart != ((state & Engine::StateAutostart) != 0) && !Engine::SetAutostart(m_engine, m_autostart))
         problem = T("Автозапуск не изменился: в режиме «от имени администратора» для этого нужны права администратора. ");
+    if (m_logging != ((state & Engine::StateLogging) != 0) && !Engine::SetLogging(m_engine, m_logging))
+        problem += T("Журнал отладки не переключился. ");
     if (m_enabled != ((state & Engine::StateEnabled) != 0) && !Engine::SetEnabled(m_engine, m_enabled))
         problem += m_edit.GetBool("isMonitorAdmin", false) && !(state & Engine::StateElevated)
             ? T("Не включился: запустите FluentSwitcher от имени администратора или выключите работу в программах "

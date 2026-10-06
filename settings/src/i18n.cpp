@@ -369,10 +369,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Два нажатия быстрее этого считаются двойным – для сочетаний «дважды». Обычно 250–350",
           "Two presses faster than this count as a double press – for “twice” hotkeys. Usually 250–350" },
         { "Журнал отладки", "Debug log" },
-        { "Сразу и до выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
+        { "До выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
           "в папке программы. Пароли при этом не вводите; после проверки выключите и удалите журнал",
-          "At once and until FluentSwitcher quits, every key press is written to log\\FluentSwitcher.exe.log in the "
+          "Until FluentSwitcher quits, every key press is written to log\\FluentSwitcher.exe.log in the "
           "app folder. Don't type passwords meanwhile; after the check, turn it off and delete the log" },
+        { "Журнал отладки не переключился. ", "The debug log did not switch. " },
         { "FluentSwitcher не запущен: журнал вести некому", "FluentSwitcher is not running: nothing can keep the log" },
 
         // About

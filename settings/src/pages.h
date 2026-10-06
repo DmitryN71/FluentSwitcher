@@ -74,8 +74,10 @@ private:
     long m_state = 0;              // Engine::GetState when last asked; 0 = not running
     bool m_enabled = true;         // as the switches show them
     bool m_autostart = false;
+    bool m_logging = false;        // the debug log
     ToggleSwitch* m_enabledSwitch = nullptr;
     ToggleSwitch* m_autostartSwitch = nullptr;
+    ToggleSwitch* m_loggingSwitch = nullptr;
     wxWindow* m_notRunningCard = nullptr;
 
     SectionNav* m_nav = nullptr;

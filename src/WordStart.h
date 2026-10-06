@@ -84,7 +84,9 @@ inline const List* For(const std::wstring& language, bool common = false) {
 
 inline std::string_view Word(const List& l, uint32_t start) {
 	const size_t end = l.data.find('\n', start);
-	return l.data.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
+	std::string_view w = l.data.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
+	if (!w.empty() && w.back() == '\r') w.remove_suffix(1); // список с переводами строк Windows
+	return w;
 }
 }
 

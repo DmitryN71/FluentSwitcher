@@ -250,7 +250,7 @@ void ReportDialog(wxWindow* parent, const wxString& report)
     label->SetForegroundColour(g.text);
     SetWrappedLabel(label,
                     T("Только ошибки из журнала: что вы вернули и что исправили вручную; в скобках – причина, она для "
-                      "разработчика. Вычеркните то, что не хотите показывать. Программа ничего не отправляет: «Копировать» "
+                      "разработчика. Вычеркните то, что не хотите показывать. Приложение ничего не отправляет: «Копировать» "
                       "положит текст в буфер обмена – вставьте его в сообщение в теме FluentSwitcher на форуме"),
                     dialog.FromDIP(640));
     sizer->Add(label, 0, wxLEFT | wxRIGHT | wxTOP, pad);
@@ -523,7 +523,7 @@ void SettingsFrame::BuildGeneral()
                         FluentButton* start = new FluentButton(card, wxID_ANY, T("Запустить"), true);
                         start->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
                             if (!Engine::Start(m_folder))
-                                return SetStatus(T("Не нашёл FluentSwitcher.exe в папке программы"), true);
+                                return SetStatus(T("Не нашёл FluentSwitcher.exe в папке приложения"), true);
                             // It needs a moment to create its window.
                             for (int wait = 0; wait < 30 && !Engine::Find(m_folder, m_enginePid); wait++)
                                 wxMilliSleep(100);
@@ -541,13 +541,13 @@ void SettingsFrame::BuildGeneral()
         Changed();
     };
     AddSettingsCard(m_page, m_column, T("Запускать вместе с Windows"),
-                    T("Программа стартует при входе в Windows, видно только флаг у часов"),
+                    T("Приложение стартует при входе в Windows, видно только флаг у часов"),
                     [&](wxWindow* card) { return m_autostartSwitch = new ToggleSwitch(card, m_autostart); });
     m_autostartSwitch->onChange = [this] {
         m_autostart = m_autostartSwitch->IsOn();
         Changed();
     };
-    Toggle(T("Работать в программах, запущенных от имени администратора"),
+    Toggle(T("Работать в приложениях, запущенных от имени администратора"),
            T("FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один раз, дальше "
              "он запускается через планировщик заданий без вопросов"),
            "isMonitorAdmin", false);
@@ -677,7 +677,7 @@ void SettingsFrame::BuildTyping()
     CardTip(Toggle(WithTip(T("Не ждать конца слова")), T("Переключать с четвёртой буквы: njkm станет «толь», ыщьу – some"),
                    "autoswitch_early", true),
             T("Переключает посреди слова, когда так не начинается ни одно слово своего языка, а те же клавиши в другой "
-              "раскладке – начало слова. Начала слов – по спискам частых слов, встроенным в программу (330 тысяч "
+              "раскладке – начало слова. Начала слов – по спискам частых слов, встроенным в приложение (330 тысяч "
               "русских и 150 тысяч английских форм), и по списку «Переключать всегда». В конце слова оно проверяется "
               "ещё раз по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
               "третий раз его начало попадёт в «Не переключать»"));
@@ -718,7 +718,7 @@ void SettingsFrame::BuildTyping()
             m_edit.SetBool("autoswitch_journal", journal->IsOn());
             Changed();
         };
-        CardTip(about, T("Файл autoswitch.log в папке log рядом с программой: по нему видно, где автопереключение "
+        CardTip(about, T("Файл autoswitch.log в папке log рядом с приложением: по нему видно, где автопереключение "
                          "ошибается и что пропускает. Пароли туда не попадают – в их полях оно не работает"));
     }
     // The report for the forum: the journal's errors in a window, to see, edit and copy (JournalReport, ReportDialog).
@@ -754,7 +754,7 @@ void SettingsFrame::BuildTyping()
 
     const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
     Choice(T("Как переключать раскладку"),
-           T("Если в какой-то программе раскладка после исправления не переключается, выберите второй способ: "
+           T("Если в каком-то приложении раскладка после исправления не переключается, выберите второй способ: "
              "FluentSwitcher нажмёт то сочетание, которым раскладка переключается в Windows"),
            { T("Обычный"), T("Нажимать сочетание Windows") }, alternative ? 1 : 0,
            [this](int i) { m_edit.SetBool("AlternativeLayoutChange", i == 1); });
@@ -839,7 +839,7 @@ void SettingsFrame::BuildLayouts()
     };
     sound(T("Звук при переключении раскладки"),
           T("Сочетанием FluentSwitcher или Windows, щелчком по флагу. Звук – switch.wav в папке sounds рядом с "
-            "программой; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
+            "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
           "sound_switch");
     sound(T("Звук при исправлении текста"),
           T("Когда FluentSwitcher исправляет слово или выделенный текст. Звук – fix.wav в папке sounds"), "sound_fix");
@@ -913,7 +913,7 @@ void SettingsFrame::BuildFlags()
     values.Add("LettersFramed");
     names.Add(T("Буквы в рамке: EN, RU"));
     values.Add("Application Icon");
-    names.Add(T("Значок программы вместо флага"));
+    names.Add(T("Значок приложения вместо флага"));
     values.Add("Nothing");
     names.Add(T("Не показывать значок у часов"));
     // A set that is gone (the old "Fluent") shows as the glossy one: the engine does the same.
@@ -993,7 +993,7 @@ void SettingsFrame::FillCommands()
         list = nlohmann::json::array();
 
     AddSettingsCard(page, column, T("Команды по сочетанию клавиш"),
-                    T("Запустить программу или вставить текст. В тексте @@(…) нажимает клавиши: "
+                    T("Запустить приложение или вставить текст. В тексте @@(…) нажимает клавиши: "
                       "@@(Ctrl + A) – выделить всё, @@(Enter) – новая строка"),
                     [this](wxWindow* card) {
                         FluentButton* add = new FluentButton(card, wxID_ANY, T("Добавить команду"), true);
@@ -1012,13 +1012,13 @@ void SettingsFrame::FillCommands()
         const auto& command = list[i];
         const bool snippet = command.value("type", 0) == 1;
         const wxString cmd = FromUtf8(command.value("cmd", std::string()));
-        wxString title = snippet ? T("Вставить текст") : T("Запустить программу");
+        wxString title = snippet ? T("Вставить текст") : T("Запустить приложение");
         if (!cmd.empty())
             title += ": " + (snippet ? cmd.Left(40) : wxFileName(cmd).GetFullName());
 
         AddSettingsCard(page, column, title,
                         snippet ? T("Текст печатается туда, где курсор")
-                                : T("Программа, документ или папка; путь можно вставить или выбрать"),
+                                : T("Приложение, документ или папка; путь можно вставить или выбрать"),
                         [&](wxWindow* card) {
             wxPanel* panel = new wxPanel(card);
             panel->SetBackgroundColour(card->GetBackgroundColour());
@@ -1027,7 +1027,7 @@ void SettingsFrame::FillCommands()
 
             // What it does, on or off, remove.
             wxBoxSizer* top = new wxBoxSizer(wxHORIZONTAL);
-            FluentChoice* kind = new FluentChoice(panel, { T("Запустить программу"), T("Вставить текст") }, snippet ? 1 : 0);
+            FluentChoice* kind = new FluentChoice(panel, { T("Запустить приложение"), T("Вставить текст") }, snippet ? 1 : 0);
             kind->onChange = [this, kind, i] {
                 m_edit.Json()["run_programs"][i]["type"] = kind->GetSelection();
                 Changed();
@@ -1065,20 +1065,20 @@ void SettingsFrame::FillCommands()
 
             // The program and its arguments, or the text.
             TextField* what = new TextField(panel, cmd, snippet ? 488 : 370);
-            what->SetHint(snippet ? T("Текст, например: С уважением, Дмитрий") : T("Путь к программе"));
+            what->SetHint(snippet ? T("Текст, например: С уважением, Дмитрий") : T("Путь к приложению"));
             what->onChange = [this, what, i] {
                 m_edit.Json()["run_programs"][i]["cmd"] = ToUtf8(what->Value());
                 Changed();
             };
-            rows->Add(label(snippet ? "Текст" : "Программа"), 0, wxTOP, FromDIP(10));
+            rows->Add(label(snippet ? "Текст" : "Приложение"), 0, wxTOP, FromDIP(10));
             wxBoxSizer* whatRow = new wxBoxSizer(wxHORIZONTAL);
             whatRow->Add(what, 0, wxALIGN_CENTER_VERTICAL);
             if (!snippet)
             {
                 FluentButton* browse = new FluentButton(panel, wxID_ANY, T("Выбрать…"));
                 browse->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
-                    wxFileDialog dialog(this, T("Программа для команды"), wxString(), wxString(),
-                                        T("Программы (*.exe;*.bat;*.cmd;*.lnk)|*.exe;*.bat;*.cmd;*.lnk|Все файлы (*.*)|*.*"),
+                    wxFileDialog dialog(this, T("Приложение для команды"), wxString(), wxString(),
+                                        T("Приложения (*.exe;*.bat;*.cmd;*.lnk)|*.exe;*.bat;*.cmd;*.lnk|Все файлы (*.*)|*.*"),
                                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
                     if (dialog.ShowModal() != wxID_OK)
                         return;
@@ -1142,11 +1142,11 @@ void SettingsFrame::BuildAdvanced()
     Toggle(T("Сочетания с Ctrl + Alt в раскладках с AltGr"),
            T("Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "
              "польской раскладке, в русской – ₽ на Ctrl + Alt + 8. FluentSwitcher на миг переключает раскладку, и "
-             "программа получает сочетание"),
+             "приложение получает сочетание"),
            "fixRAlt", false);
     Toggle(T("Перепечатывать исправленное клавишами"),
            T("Старый способ. Обычно исправленное слово вставляется готовыми символами: так новый Блокнот Windows 11 "
-             "не теряет Shift. Включите, если какая-то программа не принимает такую вставку"),
+             "не теряет Shift. Включите, если какое-то приложение не принимает такую вставку"),
            "retype_keys", false);
     NumberField* delay = nullptr;
     AddSettingsCard(m_page, m_column, T("Пауза между символами при исправлении, мс"),
@@ -1179,7 +1179,7 @@ void SettingsFrame::BuildAdvanced()
     // включён" (Дмитрий 06.10: switched at once, it left Apply grey, as if the switch had not taken).
     AddSettingsCard(m_page, m_column, T("Журнал отладки"),
                     T("До выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
-                      "в папке программы. Пароли при этом не вводите; после проверки выключите и удалите журнал"),
+                      "в папке приложения. Пароли при этом не вводите; после проверки выключите и удалите журнал"),
                     [&](wxWindow* card) { return m_loggingSwitch = new ToggleSwitch(card, m_logging); });
     m_loggingSwitch->onChange = [this] {
         if (!m_state)
@@ -1208,7 +1208,7 @@ void SettingsFrame::BuildAdvanced()
 
 void SettingsFrame::BuildAbout()
 {
-    Section(kIconAbout, T("О программе"));
+    Section(kIconAbout, T("О приложении"));
 
     AddSettingsCard(m_page, m_column, wxString::Format("FluentSwitcher %s", kVersion),
                     T("Исправляет текст, набранный не в той раскладке, и переключает раскладки"),
@@ -1220,7 +1220,7 @@ void SettingsFrame::BuildAbout()
                         return open;
                     });
     Toggle(T("Проверять обновления"),
-           T("Раз в день программа спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
+           T("Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
              "Скачивать и ставить новую – решаете вы"),
            "check_updates", true);
     // "Проверить сейчас"; once a newer version is known, "Скачать" opens its page; when GitHub could not be
@@ -1247,7 +1247,7 @@ void SettingsFrame::BuildAbout()
                     });
     // THIRD-PARTY-NOTICES.txt lies next to the program (the installer and the zip put it there).
     AddSettingsCard(m_page, m_column, T("Лицензия GPL-3.0"),
-                    T("Программа бесплатная, исходный код открыт. Поставляется без каких-либо гарантий. Части "
+                    T("Приложение бесплатное, исходный код открыт. Поставляется без каких-либо гарантий. Части "
                       "других авторов – под своими лицензиями: wxWidgets, оформление FluentClipper, значки Fluent "
                       "UI System Icons (Microsoft), флаги GoSquared и другие"),
                     [this](wxWindow* card) {
@@ -1255,7 +1255,7 @@ void SettingsFrame::BuildAbout()
                         open->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
                             const wxString notices = m_folder + "\\THIRD-PARTY-NOTICES.txt";
                             if (!wxFileName::FileExists(notices))
-                                return SetStatus(T("Рядом с программой нет файла THIRD-PARTY-NOTICES.txt"), true);
+                                return SetStatus(T("Рядом с приложением нет файла THIRD-PARTY-NOTICES.txt"), true);
                             OpenAsUser(notices.ToStdWstring());
                         });
                         return open;
@@ -1303,7 +1303,7 @@ void SettingsFrame::CheckUpdateNow(FluentButton* button)
     if (Update::NewerKnown(state))
         state.notified = state.latest; // seen here: the engine does not tell about it by the clock again
     if (!Update::Save(folder, state))
-        SetStatus(T("Не удалось записать update.json в папку программы"), true);
+        SetStatus(T("Не удалось записать update.json в папку приложения"), true);
     // The answer also comes as a note by the flag, as in FluentClipper.
     if (HWND engine = Engine::Find(m_folder, m_enginePid))
         Engine::UpdateChecked(engine);
@@ -1437,9 +1437,9 @@ bool SettingsFrame::Apply()
         problem += T("Журнал отладки не переключился. ");
     if (m_enabled != ((state & Engine::StateEnabled) != 0) && !Engine::SetEnabled(m_engine, m_enabled))
         problem += m_edit.GetBool("isMonitorAdmin", false) && !(state & Engine::StateElevated)
-            ? T("Не включился: запустите FluentSwitcher от имени администратора или выключите работу в программах "
+            ? T("Не включился: запустите FluentSwitcher от имени администратора или выключите работу в приложениях "
                 "администратора")
-            : T("Не включился: включена другая копия программы");
+            : T("Не включился: включена другая копия приложения");
     m_state = 0; // take the engine's state as it is now, pending nothing
     RefreshEngine();
     if (!problem.empty())
@@ -1453,14 +1453,14 @@ bool SettingsFrame::Apply()
 bool SettingsFrame::RestartElevated()
 {
     if (!AskFluent(this,
-                   T("Чтобы работать в программах, запущенных от имени администратора, FluentSwitcher перезапустится "
-                     "с правами администратора. Windows спросит разрешения один раз: дальше программа запускается "
+                   T("Чтобы работать в приложениях, запущенных от имени администратора, FluentSwitcher перезапустится "
+                     "с правами администратора. Windows спросит разрешения один раз: дальше приложение запускается "
                      "через планировщик заданий, без вопросов"),
                    T("Перезапустить"), T("Не сейчас")))
     {
         RefreshEngine();
         SetStatus(T("Без прав администратора FluentSwitcher выключен: перезапустите его или выключите работу "
-                    "в программах администратора"), true);
+                    "в приложениях администратора"), true);
         return false;
     }
     // The engine goes; the new one, as administrator, takes the autostart wish with it: with the rights it

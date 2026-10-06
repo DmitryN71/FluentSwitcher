@@ -31,7 +31,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Всё, что набрано подряд в этом окне: до Enter, стрелок или смены окна",
           "Everything typed in a row in this window: back to Enter, the arrows or a window switch" },
         { "Исправить выделенный текст", "Fix the selected text" },
-        { "Выделенное в любой программе печатается в другой раскладке",
+        { "Выделенное в любом приложении печатается в другой раскладке",
           "The selection in any app is retyped in the other layout" },
         { "Выделенное ПРОПИСНЫМИ / строчными", "Selection to UPPERCASE / lowercase" },
         { "Если выделенное уже прописными – строчными", "If it is uppercase already, to lowercase" },
@@ -45,7 +45,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Нажать CapsLock", "Press CapsLock" },
         { "Если CapsLock занят под сочетание, включить его можно так", "If CapsLock is taken by a hotkey, this turns it on" },
         { "Включить / выключить FluentSwitcher", "Turn FluentSwitcher on / off" },
-        { "Работает и когда программа выключена", "Works even while the app is off" },
+        { "Работает и когда приложение выключено", "Works even while the app is off" },
         { "Открыть настройки", "Open settings" },
         { "Это окно", "This window" },
 
@@ -79,37 +79,37 @@ const std::unordered_map<std::string, const char*>& English()
         { "Не удалось сохранить: ", "Can't save: " },
         { "Автозапуск не изменился: в режиме «от имени администратора» для этого нужны права администратора. ",
           "Autostart did not change: in the “as administrator” mode this needs administrator rights. " },
-        { "Не включился: запустите FluentSwitcher от имени администратора или выключите работу в программах "
+        { "Не включился: запустите FluentSwitcher от имени администратора или выключите работу в приложениях "
           "администратора",
           "Did not turn on: run FluentSwitcher as administrator or turn off work in administrator apps" },
-        { "Не включился: включена другая копия программы", "Did not turn on: another copy of the app is on" },
+        { "Не включился: включена другая копия приложения", "Did not turn on: another copy of the app is on" },
 
         // General
         { "Основные", "General" },
         { "FluentSwitcher не запущен", "FluentSwitcher is not running" },
         { "Настройки сохранятся и подействуют при запуске", "Settings are saved and take effect when it starts" },
         { "Запустить", "Start" },
-        { "Не нашёл FluentSwitcher.exe в папке программы", "FluentSwitcher.exe is not in the app folder" },
+        { "Не нашёл FluentSwitcher.exe в папке приложения", "FluentSwitcher.exe is not in the app folder" },
         { "FluentSwitcher включён", "FluentSwitcher is on" },
         { "Выключенный не исправляет текст и не отвечает на сочетания, кроме «Включить / выключить»",
           "When off, it fixes no text and answers no hotkeys except “Turn on / off”" },
         { "Запускать вместе с Windows", "Start with Windows" },
-        { "Программа стартует при входе в Windows, видно только флаг у часов",
+        { "Приложение стартует при входе в Windows, видно только флаг у часов",
           "Starts when you sign in to Windows; only the flag by the clock shows" },
-        { "Работать в программах, запущенных от имени администратора", "Work in apps run as administrator" },
+        { "Работать в приложениях, запущенных от имени администратора", "Work in apps run as administrator" },
         { "FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один раз, дальше "
           "он запускается через планировщик заданий без вопросов",
           "FluentSwitcher then runs as administrator: Windows asks once, after that it starts through the Task "
           "Scheduler without asking" },
-        { "Чтобы работать в программах, запущенных от имени администратора, FluentSwitcher перезапустится "
-          "с правами администратора. Windows спросит разрешения один раз: дальше программа запускается "
+        { "Чтобы работать в приложениях, запущенных от имени администратора, FluentSwitcher перезапустится "
+          "с правами администратора. Windows спросит разрешения один раз: дальше приложение запускается "
           "через планировщик заданий, без вопросов",
           "To work in programs run as administrator, FluentSwitcher will restart as administrator. Windows asks "
           "once: after that the app starts through the Task Scheduler without asking" },
         { "Перезапустить", "Restart" },
         { "Не сейчас", "Not now" },
         { "Без прав администратора FluentSwitcher выключен: перезапустите его или выключите работу "
-          "в программах администратора",
+          "в приложениях администратора",
           "Without administrator rights FluentSwitcher is off: restart it or turn off work in administrator apps" },
         { "Windows не дала прав администратора: FluentSwitcher запущен без них и выключен",
           "Windows gave no administrator rights: FluentSwitcher runs without them and is off" },
@@ -166,7 +166,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Громкий", "Loud" },
         { "Звук при переключении раскладки", "Sound when the layout is switched" },
         { "Сочетанием FluentSwitcher или Windows, щелчком по флагу. Звук – switch.wav в папке sounds рядом с "
-          "программой; положите туда en.wav, ru.wav – и у каждого языка будет свой",
+          "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой",
           "With a hotkey of FluentSwitcher or Windows, with a click on the flag. The sound is switch.wav in the "
           "sounds folder next to the app; put en.wav, ru.wav there for a sound of each language" },
         { "Звук при исправлении текста", "Sound when text is fixed" },
@@ -188,7 +188,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Максимальная", "Maximum" },
         { "При масштабе 100 %; на экранах с большим масштабом он крупнее",
           "At 100 % scale; on screens with a larger scale it is larger" },
-        { "Значок программы вместо флага", "App icon instead of a flag" },
+        { "Значок приложения вместо флага", "App icon instead of a flag" },
         { "Не показывать значок у часов", "No icon by the clock" },
         { "Флаг у часов", "Flag by the clock" },
         { "Показывает текущую раскладку", "Shows the current layout" },
@@ -223,7 +223,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Переключать с четвёртой буквы: njkm станет «толь», ыщьу – some",
           "Switch from the fourth letter: njkm becomes \"толь\", ыщьу - some" },
         { "Переключает посреди слова, когда так не начинается ни одно слово своего языка, а те же клавиши в другой "
-          "раскладке – начало слова. Начала слов – по спискам частых слов, встроенным в программу (330 тысяч "
+          "раскладке – начало слова. Начала слов – по спискам частых слов, встроенным в приложение (330 тысяч "
           "русских и 150 тысяч английских форм), и по списку «Переключать всегда». В конце слова оно проверяется "
           "ещё раз по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
           "третий раз его начало попадёт в «Не переключать»",
@@ -251,7 +251,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Открыть", "Open" },
         { "Журнала ещё нет: включите его и подождите первого переключения",
           "No journal yet: turn it on and wait for the first switch" },
-        { "Файл autoswitch.log в папке log рядом с программой: по нему видно, где автопереключение "
+        { "Файл autoswitch.log в папке log рядом с приложением: по нему видно, где автопереключение "
           "ошибается и что пропускает. Пароли туда не попадают – в их полях оно не работает",
           "The file autoswitch.log in the log folder next to the program: it shows where the automatic switch is "
           "wrong and what it misses. Passwords do not get there - it does not work in their fields" },
@@ -265,7 +265,7 @@ const std::unordered_map<std::string, const char*>& English()
           "No mistakes in the journal: nothing was switched back or fixed by hand" },
         { "Отчёт для форума", "Report for the forum" },
         { "Только ошибки из журнала: что вы вернули и что исправили вручную; в скобках – причина, она для "
-          "разработчика. Вычеркните то, что не хотите показывать. Программа ничего не отправляет: «Копировать» "
+          "разработчика. Вычеркните то, что не хотите показывать. Приложение ничего не отправляет: «Копировать» "
           "положит текст в буфер обмена – вставьте его в сообщение в теме FluentSwitcher на форуме",
           "Only the mistakes from the journal: what you switched back and what you fixed by hand; in brackets is the "
           "reason, it is for the developer. Strike out what you don't want to show. The program sends nothing: \"Copy\" "
@@ -308,7 +308,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Считать буквами", "Treat as letters" },
         { "Эти знаки не разделяют слова: some_name, кто-то", "These characters do not split words: some_name, well-known" },
         { "Как переключать раскладку", "How to switch the layout" },
-        { "Если в какой-то программе раскладка после исправления не переключается, выберите второй способ: "
+        { "Если в каком-то приложении раскладка после исправления не переключается, выберите второй способ: "
           "FluentSwitcher нажмёт то сочетание, которым раскладка переключается в Windows",
           "If the layout does not switch after a fix in some app, choose the second way: FluentSwitcher presses the "
           "combination that switches the layout in Windows" },
@@ -339,28 +339,28 @@ const std::unordered_map<std::string, const char*>& English()
         // Commands
         { "Команды", "Commands" },
         { "Команды по сочетанию клавиш", "Commands on hotkeys" },
-        { "Запустить программу или вставить текст. В тексте @@(…) нажимает клавиши: "
+        { "Запустить приложение или вставить текст. В тексте @@(…) нажимает клавиши: "
           "@@(Ctrl + A) – выделить всё, @@(Enter) – новая строка",
           "Start an app or type text. In the text, @@(…) presses keys: @@(Ctrl + A) selects all, @@(Enter) starts "
           "a new line" },
         { "Добавить команду", "Add a command" },
         { "Вставить текст", "Type text" },
-        { "Запустить программу", "Start an app" },
+        { "Запустить приложение", "Start an app" },
         { "Текст печатается туда, где курсор", "The text is typed where the cursor is" },
-        { "Программа, документ или папка; путь можно вставить или выбрать",
+        { "Приложение, документ или папка; путь можно вставить или выбрать",
           "An app, a document or a folder; paste the path or browse for it" },
         { "Удалить команду", "Delete the command" },
         { "Включена", "On" },
         { "Выполнить сейчас", "Run now" },
         { "FluentSwitcher не запущен: команду выполнить некому", "FluentSwitcher is not running: nothing can run the command" },
         { "Текст, например: С уважением, Дмитрий", "Text, for example: Best regards, Dmitry" },
-        { "Путь к программе", "Path to the app" },
+        { "Путь к приложению", "Path to the app" },
         { "Выбрать…", "Browse…" },
-        { "Программа для команды", "App for the command" },
-        { "Программы (*.exe;*.bat;*.cmd;*.lnk)|*.exe;*.bat;*.cmd;*.lnk|Все файлы (*.*)|*.*",
+        { "Приложение для команды", "App for the command" },
+        { "Приложения (*.exe;*.bat;*.cmd;*.lnk)|*.exe;*.bat;*.cmd;*.lnk|Все файлы (*.*)|*.*",
           "Apps (*.exe;*.bat;*.cmd;*.lnk)|*.exe;*.bat;*.cmd;*.lnk|All files (*.*)|*.*" },
         { "Необязательно", "Optional" },
-        { "Программа", "App" },
+        { "Приложение", "App" },
         { "Аргументы", "Arguments" },
         { "Пауза, мс", "Pause, ms" },
         { "Текст", "Text" },
@@ -374,13 +374,13 @@ const std::unordered_map<std::string, const char*>& English()
         { "Сочетания с Ctrl + Alt в раскладках с AltGr", "Ctrl + Alt hotkeys in layouts with AltGr" },
         { "Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "
           "польской раскладке, в русской – ₽ на Ctrl + Alt + 8. FluentSwitcher на миг переключает раскладку, и "
-          "программа получает сочетание",
+          "приложение получает сочетание",
           "Windows takes Ctrl + Alt for the right Alt (AltGr) and types a character instead of the hotkey: in German, "
           "Polish layouts, in Russian – ₽ on Ctrl + Alt + 8. FluentSwitcher switches the layout for a moment, and the "
           "app gets the hotkey" },
         { "Перепечатывать исправленное клавишами", "Retype fixes with keys" },
         { "Старый способ. Обычно исправленное слово вставляется готовыми символами: так новый Блокнот Windows 11 "
-          "не теряет Shift. Включите, если какая-то программа не принимает такую вставку",
+          "не теряет Shift. Включите, если какое-то приложение не принимает такую вставку",
           "The old way. Normally a fixed word goes in as ready characters, so the new Windows 11 Notepad doesn't lose "
           "Shift. Turn it on if some app doesn't accept that" },
         { "Пауза между символами при исправлении, мс", "Pause between characters when fixing, ms" },
@@ -395,14 +395,14 @@ const std::unordered_map<std::string, const char*>& English()
           "Two presses faster than this count as a double press – for “twice” hotkeys. Usually 250–350" },
         { "Журнал отладки", "Debug log" },
         { "До выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "
-          "в папке программы. Пароли при этом не вводите; после проверки выключите и удалите журнал",
+          "в папке приложения. Пароли при этом не вводите; после проверки выключите и удалите журнал",
           "Until FluentSwitcher quits, every key press is written to log\\FluentSwitcher.exe.log in the "
           "app folder. Don't type passwords meanwhile; after the check, turn it off and delete the log" },
         { "Журнал отладки не переключился. ", "The debug log did not switch. " },
         { "FluentSwitcher не запущен: журнал вести некому", "FluentSwitcher is not running: nothing can keep the log" },
 
         // About
-        { "О программе", "About" },
+        { "О приложении", "About" },
         { "Исправляет текст, набранный не в той раскладке, и переключает раскладки",
           "Fixes text typed in the wrong keyboard layout and switches layouts" },
         { "Основан на SimpleSwitcher", "Based on SimpleSwitcher" },
@@ -414,7 +414,7 @@ const std::unordered_map<std::string, const char*>& English()
           "without prompts and other fixes" },
         { "Открыть на GitHub", "Open on GitHub" },
         { "Проверять обновления", "Check for updates" },
-        { "Раз в день программа спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
+        { "Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
           "Скачивать и ставить новую – решаете вы",
           "Once a day the app asks GitHub for the number of the latest version and sends nothing else. "
           "Whether to download and install it is up to you" },
@@ -429,16 +429,16 @@ const std::unordered_map<std::string, const char*>& English()
         { "У вас последняя версия", "You have the latest version" },
         { "Не удалось связаться с GitHub. Страница загрузки откроется в браузере",
           "Could not reach GitHub. The download page opens in the browser" },
-        { "Не удалось записать update.json в папку программы", "Could not write update.json in the app's folder" },
+        { "Не удалось записать update.json в папку приложения", "Could not write update.json in the app's folder" },
         { "Лицензия GPL-3.0", "GPL-3.0 license" },
-        { "Программа бесплатная, исходный код открыт. Поставляется без каких-либо гарантий. Части "
+        { "Приложение бесплатное, исходный код открыт. Поставляется без каких-либо гарантий. Части "
           "других авторов – под своими лицензиями: wxWidgets, оформление FluentClipper, значки Fluent "
           "UI System Icons (Microsoft), флаги GoSquared и другие",
           "The app is free and open source. It comes without any warranty. Parts by others are under their own "
           "licenses: wxWidgets, the FluentClipper design, Fluent UI System Icons (Microsoft), GoSquared flags "
           "and more" },
         { "Лицензии", "Licenses" },
-        { "Рядом с программой нет файла THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.txt is not next to the app" },
+        { "Рядом с приложением нет файла THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.txt is not next to the app" },
     };
     return table;
 }

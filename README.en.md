@@ -30,7 +30,8 @@ free and open source under GPL-3.0.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
   a mouse click; below or above the cursor, four sizes, transparency. In browsers only in text fields.
 - **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like, or the letters
-  EN, RU as Windows writes them, plain or in a frame, in the taskbar's text colour. A click and a double click on it
+  EN, RU as Windows writes them, plain or in a frame with a line in the language's colour (English blue, Russian
+  red), in the taskbar's text colour. A click and a double click on it
   do what you choose: the menu, the next layout (of the window you were typing in), on / off, settings.
 - **A Windows 11 style menu by the flag**: rounded corners, icons, an "Enabled" toggle that keeps the menu open; the
   theme follows the taskbar.

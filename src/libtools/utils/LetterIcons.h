@@ -37,6 +37,35 @@ inline std::wstring Text(const std::wstring& locale) {
 	return lang;
 }
 
+// Цвет языка - для черты под буквами в рамке, с его флага: английский - синий (США, Британия), русский - красный,
+// украинский - жёлтый и т. д.; цвет, который уже занят, - соседний оттенок. Незнакомый язык - из запасных по коду.
+// Цвета - средней яркости: видны и на тёмной панели задач, и на светлой. 0xRRGGBB.
+inline UINT32 Accent(const std::wstring& text) {
+	static const std::pair<const wchar_t*, UINT32> known[] = {
+		{ L"EN", 0x3B82F6 }, // синий
+		{ L"RU", 0xEF4444 }, // красный - нижняя полоса
+		{ L"UK", 0xFACC15 }, // жёлтый
+		{ L"BE", 0x22C55E }, // зелёный
+		{ L"KK", 0x06B6D4 }, // голубой
+		{ L"DE", 0xF59E0B }, // золотой
+		{ L"FR", 0x6366F1 }, // синий потемнее (синий - у английского)
+		{ L"ES", 0xF97316 }, // оранжевый - красный с жёлтым
+		{ L"IT", 0x10B981 }, // зелёный потемнее
+		{ L"PL", 0xEC4899 }, // розовый - белый с красным
+		{ L"TR", 0xDC2626 }, // красный потемнее
+		{ L"HY", 0xFB923C }, // оранжевый посветлее - нижняя полоса
+		{ L"KA", 0xF43F5E }, // малиновый - кресты
+		{ L"AZ", 0x0EA5E9 }, // голубой посветлее
+		{ L"UZ", 0x38BDF8 }, // небесный
+	};
+	for (const auto& [code, color] : known)
+		if (text == code) return color;
+	static const UINT32 spare[] = { 0xA855F7, 0x14B8A6, 0x84CC16, 0xE879F9, 0x22D3EE, 0xFB7185 };
+	unsigned hash = 0;
+	for (wchar_t c : text) hash = hash * 31 + c;
+	return spare[hash % std::size(spare)];
+}
+
 struct Picture {
 	int width = 0, height = 0;
 	std::vector<unsigned char> rgba; // без умножения на альфу
@@ -110,24 +139,33 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 	HGDIOBJ old = SelectObject(mem, bmp);
 	const auto* px = (const unsigned char*)bits;
 
-	// Рамка: во всю ширину, высотой в три четверти, ровно посередине (поля сверху и снизу равны); толщина - точка
-	// (на 200 % - две). Плашка у курсора - вся картинка.
-	const float stroke = style == Style::Frame ? (float)(std::max)(1, (int)std::floor(h / 16.0f + 0.25f)) : 1.0f;
+	// Рамка: во всю ширину, высотой в семь восьмых, ровно посередине (поля сверху и снизу равны); толщина - точка
+	// (на 200 % - две). Внутри - буквы и под ними черта цвета языка (Accent). Плашка у курсора - вся картинка.
+	// (Было: рамка в три четверти высоты и поля шире, без черты; Дмитрий 06.10: "иконки немного побольше" и
+	// "подчеркнуть черточкой разного цвета".)
+	const bool frame = style == Style::Frame;
+	const float stroke = frame ? (float)(std::max)(1, (int)std::floor(h / 16.0f + 0.25f)) : 1.0f;
 	float frameTop = 0, frameBottom = (float)h;
-	if (style == Style::Frame) {
-		int fh = (int)std::lround(h * 0.75f);
+	if (frame) {
+		int fh = (int)std::lround(h * 0.875f);
 		if ((h - fh) % 2) fh++;
 		frameTop = (h - fh) / 2.0f;
 		frameBottom = frameTop + fh;
 	}
 	const float frameH = frameBottom - frameTop;
+	const int barH = (int)stroke, barGap = (std::max)(1, (int)std::lround(h / 16.0f));
 
-	// Кегль: заглавные не выше 62 % высоты (в рамке - её внутренней части), и буквы не шире места.
+	// Кегль: заглавные не выше 62 % высоты (в рамке - внутренней части без черты, на плашке - 58 %), и буквы не шире
+	// места.
 	const DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
 	const float capShare = details::CapHeight(weight);
-	const float inner = style == Style::Plain ? (float)h : frameH - 2 * stroke;
-	const float padX = style == Style::Plain ? 0 : stroke + (std::max)(1.0f, std::round(h * 0.14f));
-	float size = inner * (style == Style::Plain ? 0.62f : 0.58f) / capShare;
+	const float inner = style == Style::Plain ? (float)h
+		: frame ? frameH - 2 * stroke - barH - barGap
+		: frameH - 2 * stroke;
+	const float padX = style == Style::Plain ? 0
+		: frame ? stroke + (std::max)(1.0f, std::round(h * 0.09f))
+		: stroke + (std::max)(1.0f, std::round(h * 0.14f));
+	float size = inner * (style == Style::Badge ? 0.58f : frame ? 0.72f : 0.62f) / capShare;
 	ComPtr<IDWriteTextFormat> format;
 	ComPtr<IDWriteTextLayout> layout;
 	auto measure = [&](const std::wstring& t, float s) {
@@ -171,6 +209,8 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 
 		D2D1_COLOR_F ink = style == Style::Badge || dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
 		const float alpha = gray ? 0.45f : 1.0f;
+		D2D1_RECT_F bar{}; // черта под буквами в рамке: где - после того, как встали буквы
+		bool hasBar = false;
 		auto draw = [&](bool shape) {
 			rt->BeginDraw();
 			rt->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -194,6 +234,11 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			letters.a = alpha;
 			brush->SetColor(letters);
 			rt->DrawTextLayout({ x, y }, layout.Get(), brush.Get());
+			if (shape && hasBar) {
+				brush->SetColor(D2D1::ColorF(Accent(text), alpha));
+				const float r = (bar.bottom - bar.top) / 2;
+				rt->FillRoundedRectangle({ bar, r, r }, brush.Get());
+			}
 			const bool done = SUCCEEDED(rt->EndDraw());
 			GdiFlush(); // точки - в памяти картинки, прежде чем их читать
 			return done;
@@ -212,6 +257,8 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			x = tx;
 			y = ty;
 			if (!draw(false)) return;
+			// Края букв: верх и низ - по заметным точкам (бледная строка не делает буквы выше), левый и правый - и по
+			// бледным: штрих между точками ("U" на 100 %) - тоже буква, иначе надпись вставала не посередине.
 			double score = 0;
 			int t = h, b = -1, l = w, r = -1;
 			for (int yy = 0; yy < h; yy++) {
@@ -221,6 +268,8 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 					if (a > 96) {
 						t = (std::min)(t, yy);
 						b = (std::max)(b, yy);
+					}
+					if (a > 32) {
 						l = (std::min)(l, xx);
 						r = (std::max)(r, xx);
 					}
@@ -241,8 +290,21 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			x = bestX;
 			y = bestY;
 			if (bottom >= 0) {
-				y += (float)((h - (bottom - top + 1)) / 2 - top);
-				x += (float)((w - (right - left + 1)) / 2 - left);
+				const int inkW = right - left + 1, inkH = bottom - top + 1, newLeft = (w - inkW) / 2;
+				x += (float)(newLeft - left);
+				if (frame) {
+					// Буквы с чертой под ними - посередине рамки; черта - в две трети ширины букв, посередине под ними.
+					const int innerTop = (int)(frameTop + stroke), innerH = (int)(frameH - 2 * stroke);
+					const int blockTop = innerTop + (innerH - (inkH + barGap + barH)) / 2;
+					y += (float)(blockTop - top);
+					int barW = (std::max)(3, (int)std::lround(inkW * 0.66));
+					if ((inkW - barW) % 2) barW++;
+					const float barLeft = (float)(newLeft + (inkW - barW) / 2), barTop = (float)(blockTop + inkH + barGap);
+					bar = { barLeft, barTop, barLeft + barW, barTop + barH };
+					hasBar = true;
+				}
+				else
+					y += (float)((h - inkH) / 2 - top);
 			}
 			ok = draw(true);
 		}

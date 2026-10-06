@@ -22,6 +22,9 @@
 // (адресная строка, программы на Electron). Вся страница браузера - одно окно, так что "в этом окне каретки нет" там
 // не запоминается, а не нашли - ещё две попытки: поле могло открываться с анимацией. После щелчка - ещё одна проверка
 // через 350 мс: фокус внутри Chromium переезжает не сразу.
+// Firefox: редактор на странице (contenteditable) он описывает группой без значения - это поле, если у него системная
+// каретка; со специальными возможностями, запрещёнными в его настройках, он не говорит ничего - тогда его системная
+// каретка без проверок, как до 1.4.2 (BrowserCaret).
 //
 // Окно флажка - слоистое (UpdateLayeredWindow, плавная прозрачность), не берёт фокус и щелчки, поверх всех.
 // В полноэкранных программах, при открытом меню, перетаскивании окна и Alt+Tab флажок прячется.
@@ -116,41 +119,7 @@ private:
 				Result res{ .seq = req.seq };
 				RECT rc{};
 				if (req.browser) {
-					CComPtr<IUIAutomationElement> el;
-					const int editable = uia ? Editable(uia, req.pid, res.type, res.state, el) : -1;
-					const char* how = nullptr;
-					if (editable != 1) {
-						res.how = editable == 0 ? "not a text field" : "no focus";
-					}
-					else if (req.system) {
-						rc = req.systemRc;
-						how = "caret";
-					}
-					else if (Msaa(req.focus, rc)) {
-						how = "msaa";
-					}
-					else if (UiaCaret(el, rc, true)) {
-						how = "uia";
-					}
-					else {
-						res.how = "text field, no caret";
-					}
-					if (how) {
-						if (Inside(uia, el, rc)) res = { req.seq, true, rc, how, res.type, res.state };
-						else res.how = "caret outside the field or the page";
-					}
-					// Что браузер считает фокусом и где каретка - в журнал (по нему видно, почему флажок есть или нет).
-					wchar_t cls[64] = {};
-					GetClassNameW(req.focus, cls, 64);
-					RECT box{};
-					BOOL kb = FALSE;
-					if (el) {
-						el->get_CurrentBoundingRectangle(&box);
-						el->get_CurrentHasKeyboardFocus(&kb);
-					}
-					res.detail = std::format("browser {}: type {} state 0x{:x} keyboard {} field ({},{})-({},{}) caret ({},{})-({},{}) -> {}",
-						StrUtils::Convert(std::wstring(cls)), res.type, res.state, kb != FALSE, box.left, box.top, box.right,
-						box.bottom, rc.left, rc.top, rc.right, rc.bottom, res.ok ? res.how : (*res.how ? res.how : "no caret"));
+					res = BrowserCaret(uia, req);
 				}
 				else if (!req.uiaFirst && Msaa(req.focus, rc)) {
 					res = { req.seq, true, rc, "msaa" };
@@ -169,6 +138,71 @@ private:
 			}
 		}
 		CoUninitialize();
+	}
+
+	// Браузер: каретка, если в фокусе поле ввода, и она в нём и в видимой части страницы; detail - для журнала.
+	static Result BrowserCaret(IUIAutomation* uia, const Request& req) {
+		Result res{ .seq = req.seq };
+		RECT rc{};
+		CComPtr<IUIAutomationElement> el;
+		int editable = uia ? Editable(uia, req.pid, res.type, res.state, el) : -1;
+		// Редактор на странице в Firefox (contenteditable - группа без значения): поле, если у него системная каретка -
+		// Firefox заводит её только там, где можно печатать (и в тексте страницы при F7, но страница - Document "только
+		// для чтения").
+		if (editable == 2) editable = req.system ? 1 : 0;
+		// Firefox без специальных возможностей ("Запретить службам специальных возможностей доступ к браузеру",
+		// accessibility.force_disabled - бывает в "усиленных" настройках): про страницу он ничего не говорит, в фокусе
+		// для UI Automation - само окно. Тогда, как до 1.4.2, - его системная каретка, без проверки поля.
+		const bool blind = editable != 1 && req.system && !Speaks(el);
+		const char* how = nullptr;
+		if (blind) {
+			rc = req.systemRc;
+			res = { req.seq, true, rc, "caret, no accessibility", res.type, res.state };
+		}
+		else if (editable != 1) {
+			res.how = editable == 0 ? "not a text field" : "no focus";
+		}
+		else if (req.system) {
+			rc = req.systemRc;
+			how = "caret";
+		}
+		else if (Msaa(req.focus, rc)) {
+			how = "msaa";
+		}
+		else if (UiaCaret(el, rc, true)) {
+			how = "uia";
+		}
+		else {
+			res.how = "text field, no caret";
+		}
+		if (how) {
+			if (Inside(uia, el, rc)) res = { req.seq, true, rc, how, res.type, res.state };
+			else res.how = "caret outside the field or the page";
+		}
+		// Что браузер считает фокусом и где каретка - в журнал (по нему видно, почему флажок есть или нет).
+		wchar_t cls[64] = {};
+		GetClassNameW(req.focus, cls, 64);
+		RECT box{};
+		BOOL kb = FALSE;
+		CComBSTR fw;
+		if (el) {
+			el->get_CurrentBoundingRectangle(&box);
+			el->get_CurrentHasKeyboardFocus(&kb);
+			el->get_CurrentFrameworkId(&fw);
+		}
+		res.detail = std::format("browser {}: {} type {} state 0x{:x} keyboard {} field ({},{})-({},{}) caret ({},{})-({},{}) -> {}",
+			StrUtils::Convert(std::wstring(cls)), StrUtils::Convert(std::wstring(fw ? (const wchar_t*)fw : L"")), res.type,
+			res.state, kb != FALSE, box.left, box.top, box.right, box.bottom, rc.left, rc.top, rc.right, rc.bottom,
+			res.ok ? res.how : (*res.how ? res.how : "no caret"));
+		return res;
+	}
+
+	// Элемент в фокусе - от самого браузера (его специальные возможности работают), а не окно, которое описывает
+	// за него Windows.
+	static bool Speaks(IUIAutomationElement* el) {
+		CComBSTR fw;
+		if (!el || FAILED(el->get_CurrentFrameworkId(&fw)) || !fw) return false;
+		return wcscmp(fw, L"Gecko") == 0 || wcscmp(fw, L"Chrome") == 0;
 	}
 
 	static bool Msaa(HWND focus, RECT& rc) {
@@ -219,7 +253,8 @@ private:
 	}
 
 	// Браузер: в фокусе поле ввода? 1 - да, 0 - нет (текст страницы, ссылка, кнопка, список), -1 - фокус не в этой
-	// программе или UI Automation не ответил. Текст страницы и поля "только для чтения" - с состоянием MSAA
+	// программе или UI Automation не ответил, 2 - может быть: группа с текстом без значения, не "только для чтения"
+	// (редактор на странице в Firefox - contenteditable; решает его системная каретка, BrowserCaret). Текст страницы и поля "только для чтения" - с состоянием MSAA
 	// STATE_SYSTEM_READONLY (так их отличают и программы чтения с экрана) или ValuePattern.IsReadOnly.
 	static int Editable(IUIAutomation* uia, DWORD pid, int& type, DWORD& state, CComPtr<IUIAutomationElement>& el) {
 		if (FAILED(uia->GetFocusedElement(&el)) || !el) return -1;
@@ -249,7 +284,10 @@ private:
 		if (ct == UIA_DocumentControlTypeId) return stateKnown ? 1 : 0; // страница, которую можно править (редактор)
 		// Остальное (поле с подсказками - ComboBox, contenteditable - группа): только с изменяемым значением.
 		// Выпадающий список (select) - ComboBox со значением "только для чтения".
-		return hasValue && !valueReadOnly ? 1 : 0;
+		if (hasValue) return valueReadOnly ? 0 : 1;
+		CComPtr<IUIAutomationTextPattern> text;
+		return ct == UIA_GroupControlTypeId && stateKnown &&
+			SUCCEEDED(el->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&text))) && text ? 2 : 0;
 	}
 
 	// Браузер: каретка внутри поля в фокусе и внутри видимой части страницы (ближайший документ над полем - страница

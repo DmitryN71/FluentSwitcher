@@ -295,7 +295,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (m_autoWord.undone) return no("switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
-    if (m_autoWord.lay && lay != m_autoWord.lay) return no("the layout was switched by hand");
+    if (ByHandAfterOurs()) return no("the layout was switched by hand right after a switch");
     std::wstring typed;
     for (auto* key : keys) {
         if (key->is_caps) return no("CapsLock");
@@ -310,7 +310,9 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     auto dictionary = [](HKL l) {
         return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); };
     };
-    auto suggestions = [lang = Utils::GetNameForHKL_simple(lay)](const std::wstring& w) { return SpellCheck::Suggest(w, lang); };
+    auto suggestions = [](HKL l) {
+        return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::Suggest(w, lang); };
+    };
     // Слово перед этим - контекст коротких слов (AutoSwitch.h); слова перед ним - их переводят вместе с этим.
     bool fixedBefore = false;
     const auto tail = m_cycleList.TailWords(afterSpace, 6, &fixedBefore);
@@ -333,8 +335,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         if (!force) {
             const char* why = AutoSwitch::Skip(typed, there, minLetters, exceptions);
             if (!why)
-                why = AutoSwitch::DecideWhy(typed, there, dictionary(lay), dictionary(other), suggestions,
-                                            ShortWords::TrustDictionary(Utils::GetNameForHKL_simple(lay)));
+                why = AutoSwitch::DecideWhy(typed, there, dictionary(lay), dictionary(other), suggestions(lay),
+                                            suggestions(other), ShortWords::TrustDictionary(Utils::GetNameForHKL_simple(lay)));
             // Частое короткое слово своего языка ("шт", "руб", "ул", "gb") словарь может и не знать: "5 шт" - не "5 in".
             if (!why && AutoSwitch::FrequentAsTyped(typed, Utils::GetNameForHKL_simple(lay)))
                 why = "a frequent short word as typed";
@@ -386,6 +388,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
                            .retroTyped = retroFrom, .retroThere = retroTo, .from = lay, .to = other, .span = total - first,
                            .retro = wordBegin - first, .pair = shortWord == AutoSwitch::Short::WithPartner,
                            .total = m_cycleList.Total() };
+        m_lastAutoSwitch = GetTickCount64();
         Journal("switched", from, to);
         return true;
     }
@@ -406,7 +409,7 @@ void WorkerImplement::AutoSwitchEarly() {
     if (m_autoWord.undone) return never("switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
-    if (m_autoWord.lay && lay != m_autoWord.lay) return never("the layout was switched by hand");
+    if (ByHandAfterOurs()) return never("the layout was switched by hand right after a switch");
     auto keys = m_cycleList.TrailingWordKeys();
     if (keys.empty()) return;
     std::wstring typed;
@@ -468,6 +471,7 @@ void WorkerImplement::AutoSwitchEarly() {
                            .wordThere = there + more, .retroTyped = retroFrom, .retroThere = retroTo, .early = true,
                            .ends = m_wordEnds, .from = lay, .to = other, .span = total - begin, .retro = wordBegin - begin,
                            .total = m_cycleList.Total() };
+        m_lastAutoSwitch = GetTickCount64();
         Journal("switched", from, to);
         return;
     }

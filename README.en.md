@@ -15,8 +15,9 @@ free and open source under GPL-3.0.
 - **Automatic layout switch** (turned on in Typing): a word typed in the wrong layout is fixed by itself after a
   space, Enter or Tab - by the Windows dictionaries, as in LangBar++, and a long one already from the fourth letter
   ("njkm" - "толь"): Windows knows the beginnings of words from its text prediction. Short words go by their
-  neighbours: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. Words with digits, abbreviations,
-  a word after the layout was switched by hand or after Backspace, passwords and the console are left alone; fixed
+  neighbours: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
+  too: "нфдлштп" - "yalking". Words with digits, abbreviations, a word typed again after the layout was switched by
+  hand right after a fix, a word after Backspace, passwords and the console are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab. PCs, IDs, GHz, eM, iPhone are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.

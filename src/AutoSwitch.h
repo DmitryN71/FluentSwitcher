@@ -10,6 +10,8 @@
 //   - опечатка - не другая раскладка: "helo" (в русской раскладке "руды") - словарь знает "hello", на одну букву
 //     иначе (слова латиницей от четырёх букв); буквы, ставшие там знаками, какими слова не начинаются и не кончаются
 //     ("бувы" - ",eds", "дувх" - "led[");
+//   - а опечатка в другой раскладке - переключается: "нфдлштп" - "yalking" (словарь предлагает talking), если там от
+//     пяти букв, а набранное ни на одно слово своего языка не похоже (TypoThere);
 //   - знак после настоящего слова - просто знак: "it." - не "шею", хотя точка там, где в русской раскладке "ю"; и
 //     после короткого незнакомого: "En." - не "Утю" (буква там только из знака на конце - не меньше трёх букв).
 //   - слово после ручной смены раскладки, после Backspace, в поле пароля, в консоли - не трогает движок.
@@ -209,16 +211,45 @@ inline bool LooksLikeTypo(const std::wstring& word, const std::vector<std::wstri
 	return false;
 }
 
+// В другой раскладке - слово с опечаткой ("нфдлштп" - "yalking": словарь предлагает talking, walking) - переключить
+// (как есть, с опечаткой: исправлять её - не наше дело). Там от пяти букв, без знаков внутри, и словарь её языка
+// предлагает слово на одну правку иначе (OneEditApart); набранное же ни на одно слово своего языка не похоже - его
+// словарь на одну правку не предлагает ничего (иначе это, скорее, своя опечатка: "привкт"). typedHasSigns - в
+// набранном знак внутри ("ghbdtn,s"): своим словом оно бывает, только если его знает словарь ("let's"). Короче пяти
+// букв "каша" на одну правку от какого-нибудь слова бывает часто. Не трогает (tools/test_autoswitch.cmd): буквы там из
+// знаков по краям ("\"Next" - "ЭТуче"), заглавные внутри (LShift, RevertText - код).
+inline constexpr size_t kTypoThereMin = 5;
+inline bool TypoThere(const Part& t, const Part& a, bool typedHasSigns, auto&& spellTyped, auto&& suggestTyped,
+                      auto&& suggestThere) {
+	if (a.inner || a.core.size() < kTypoThereMin || a.begin != t.begin || a.end != t.end) return false;
+	for (size_t i = 1; i < t.core.size(); i++)
+		if (TwoCaps::IsUpper(t.core[i])) return false;
+	if (typedHasSigns && spellTyped(t.core) == SpellCheck::Result::Word) return false;
+	bool close = false;
+	for (const auto& s : suggestThere(a.core)) {
+		if (OneEditApart(a.core, s)) {
+			close = true;
+			break;
+		}
+	}
+	if (!close) return false;
+	if (!typedHasSigns)
+		for (const auto& s : suggestTyped(t.core))
+			if (OneEditApart(t.core, s)) return false;
+	return true;
+}
+
 // Переключать ли (после Skip). spellTyped / spellThere - словарь языка набранного / другой раскладки
 // (SpellCheck::Result по слову). Набранное должно быть точно не словом: со знаком внутри ("j,]`v" - "объём") или из
 // одной буквы среди знаков (",s" - "бы") - не слово; иначе спрашиваем словарь (знаки по краям - знаки: "it." - слово
 // "it"), нет словаря - не переключаем. Там - слово.
-// suggestTyped - подсказки словаря языка набранного (только когда всё остальное за переключение).
+// suggestTyped, suggestThere - подсказки словарей языка набранного и другой раскладки (только когда всё остальное за
+// переключение, и там не слово - TypoThere).
 // DecideWhy - почему не переключать (для журнала: что пропущено и почему); nullptr - переключать.
 // shortTrusted - словарю языка набранного можно верить в коротких словах (ShortWords::TrustDictionary): "Bp-pf" ("Из-за")
 // английский словарь принимает по частям (bp, pf - сокращения), и это не в счёт.
 inline const char* DecideWhy(const std::wstring& typed, const std::wstring& there, auto&& spellTyped,
-                             auto&& spellThere, auto&& suggestTyped, bool shortTrusted = true) {
+                             auto&& spellThere, auto&& suggestTyped, auto&& suggestThere, bool shortTrusted = true) {
 	const Part t = Letters(typed), a = Letters(there);
 	// Знак внутри набранного - не слово; дефис - может быть и словом ("well-known"): спросить словарь.
 	const bool innerSign = t.inner && !OnlyHyphens(t.core);
@@ -233,13 +264,14 @@ inline const char* DecideWhy(const std::wstring& typed, const std::wstring& ther
 	}
 	const auto inOther = spellThere(a.core);
 	if (inOther == SpellCheck::Result::Unknown) return "no dictionary of the other layout";
-	if (inOther == SpellCheck::Result::NotWord) return "not a word in the other layout";
+	if (inOther == SpellCheck::Result::NotWord)
+		return TypoThere(t, a, innerSign, spellTyped, suggestTyped, suggestThere) ? nullptr : "not a word in the other layout";
 	if (!innerSign && !signFirst && LooksLikeTypo(t.core, suggestTyped(t.core))) return "looks like a typo";
 	return nullptr;
 }
 inline bool Decide(const std::wstring& typed, const std::wstring& there, auto&& spellTyped, auto&& spellThere,
-                   auto&& suggestTyped) {
-	return DecideWhy(typed, there, spellTyped, spellThere, suggestTyped) == nullptr;
+                   auto&& suggestTyped, auto&& suggestThere) {
+	return DecideWhy(typed, there, spellTyped, spellThere, suggestTyped, suggestThere) == nullptr;
 }
 
 // ----- Посреди слова (autoswitch_early) -----

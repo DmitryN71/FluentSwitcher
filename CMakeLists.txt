@@ -146,5 +146,9 @@ block()
 	add_library(SettingsUi STATIC ${src})
 	target_include_directories(SettingsUi PRIVATE settings/fluentui extern "${CMAKE_BINARY_DIR}/generated")
 	target_link_libraries(SettingsUi PUBLIC wx::core wx::base dwmapi)
-	target_link_libraries(${PROJECT_NAME} PRIVATE SettingsUi imm32 dwmapi windowsapp) # windowsapp - C++/WinRT (WordStart.h)
+	target_link_libraries(${PROJECT_NAME} PRIVATE SettingsUi imm32 dwmapi)
+	# The word lists in the resources (src/res/res.rc): a new list - the program is rebuilt.
+	set_property(SOURCE src/res/res.rc APPEND PROPERTY OBJECT_DEPENDS
+		"${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_ru.txt" "${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_en.txt"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_ru_common.txt" "${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_en_common.txt")
 endblock()

@@ -420,6 +420,7 @@ void WorkerImplement::AutoSwitchEarly() {
         typed += c;
     }
     const auto exceptions = AutoSwitchExceptions();
+    const auto forced = AutoSwitchForced();
     bool fixedBefore = false;
     const auto tail = m_cycleList.TailWords(false, 6, &fixedBefore);
     // После щелчка или стрелок в том же окне могли дописывать середину слова: на букву позже.
@@ -439,9 +440,19 @@ void WorkerImplement::AutoSwitchEarly() {
         }
         if (there.empty()) continue;
         const std::wstring otherLang = Utils::GetNameForHKL_simple(other);
+        // Свои слова ("Переключать всегда", в нужном виде: mofii) - тоже начала слов: "ьщаш" - mofi…
+        auto thereStarts = [&](const std::wstring& w) {
+            if (WordStart::There(w, otherLang)) return true;
+            const std::wstring l = WordStart::Lower(w);
+            for (const auto& f : forced) {
+                const std::wstring fl = WordStart::Lower(f);
+                if (fl.size() > l.size() && fl.compare(0, l.size(), l) == 0) return true;
+            }
+            return false;
+        };
         const auto verdict = AutoSwitch::DecideEarly(
             typed, there, minLetters, exceptions, [&](const std::wstring& w) { return WordStart::Typed(w, lang); },
-            [&](const std::wstring& w) { return WordStart::There(w, otherLang); });
+            thereStarts);
         if (verdict.what != AutoSwitch::Early::Switch) {
             later = later || verdict.what == AutoSwitch::Early::NotYet;
             LOG_ANY(L"autoswitch early: {} / {}: {}, {}", typed, there,

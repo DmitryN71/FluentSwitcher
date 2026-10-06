@@ -72,6 +72,22 @@ def main():
         ("SimpleSwitcher", "Aegel5, https://github.com/Aegel5/SimpleSwitcher",
          "FluentSwitcher is a modified version of SimpleSwitcher. Both are licensed under the GNU General Public\n"
          "License, version 3: see LICENSE next to this file."),
+        ("LangBar++ (LangBarXX)", "Krot66, https://github.com/Krot66/LangBarXX - ideas and rules, rewritten",
+         "No code of LangBar++ (an AutoHotkey script) is included. Two of its ideas are rewritten in C++: converting\n"
+         "selected text as a whole, by the layout of the whole line, and the rule of the automatic layout switch - a\n"
+         "word that is not a word of its language while the same keys in the other layout are one (and in the middle\n"
+         "of a word: not the beginning of a word while there it is), with its exceptions (single letters, words with digits, abbreviations, a word after the layout was switched by hand,\n"
+         "after a mouse click or after Backspace). LangBar++ is licensed under the GNU Lesser General Public License,\n"
+         "version 3, which allows its use in FluentSwitcher under the GNU General Public License, version 3."),
+        ("FrequencyWords", "Hermit Dave, https://github.com/hermitdave/FrequencyWords - word lists, CC BY-SA 4.0",
+         "The lists of words built into FluentSwitcher.exe (the beginnings of words for the automatic layout switch in\n"
+         "the middle of a word; source: src/data/words_ru.txt, words_en.txt) are adapted from the 2018 Russian and\n"
+         "English frequency lists of FrequencyWords, made from OpenSubtitles 2018 (http://opus.nlpl.eu/OpenSubtitles2018.php):\n"
+         "lower case, \"ё\" as \"е\", words of three letters and more met at least three times and known to the Windows\n"
+         "dictionary of the language (tools/corpus/make_wordlist.cmd in the project). The lists are licensed under the\n"
+         "Creative Commons Attribution-ShareAlike 4.0 International License\n"
+         "(https://creativecommons.org/licenses/by-sa/4.0/), and so are the adapted ones. CC BY-SA 4.0 is one-way\n"
+         "compatible with the GNU General Public License, version 3."),
         ("wxWidgets 3.3", "https://www.wxwidgets.org - the settings window", (wx / "docs" / "licence.txt").read_text(encoding="utf-8", errors="replace")),
         ("zlib (in wxWidgets)", "https://zlib.net", (wx / "src" / "zlib" / "LICENSE").read_text(encoding="utf-8", errors="replace")),
         ("libpng (in wxWidgets)", "http://www.libpng.org", (wx / "src" / "png" / "LICENSE").read_text(encoding="utf-8", errors="replace")),

@@ -209,27 +209,28 @@ const std::unordered_map<std::string, const char*>& English()
           "A word in the wrong layout is fixed by itself after a space, Enter or Tab: ghbdtn - \"привет\"" },
         { "Переключает, когда набранного нет в словаре Windows своего языка, а те же клавиши в другой раскладке – "
           "слово. Короткие слова решает по соседям: f vj;yj – «а можно», ns ult – «ты где», а plan B и «5 шт» не "
-          "трогает.\nНе трогает: слова с цифрами, аббревиатуры, адреса и почту, опечатки в английских словах, слово "
-          "после ручной смены раскладки или Backspace, пароли, консоль.\nИсправилось зря – сразу нажмите «Исправить "
+          "трогает.\nНе трогает: слова с цифрами, аббревиатуры, адреса и почту, опечатки в английских словах, слово, "
+          "перепечатанное после ручной смены раскладки сразу после исправления, слово после Backspace, пароли, "
+          "консоль.\nИсправилось зря – сразу нажмите «Исправить "
           "последнее слово» (Shift дважды): слово вернётся, а на третий раз попадёт в «Не переключать»",
           "Switches when the word typed is not in the Windows dictionary of its language while the same keys in the "
           "other layout are a word. Short words go by their neighbours: f vj;yj - \"а можно\", ns ult - \"ты где\", "
           "while plan B and \"5 шт\" are left alone.\nLeaves alone: words with digits, abbreviations, addresses and "
-          "mail, typos in English words, a word after the layout was switched by hand or after Backspace, passwords, "
-          "the console.\nFixed by mistake - press \"Fix the last word\" (Shift twice) at once: the word comes back, "
+          "mail, typos in English words, a word typed again after the layout was switched by hand right after a fix, "
+          "a word after Backspace, passwords, the console.\nFixed by mistake - press \"Fix the last word\" (Shift twice) at once: the word comes back, "
           "and the third time it goes to \"Never switch\"" },
         { "Не ждать конца слова", "Do not wait for the end of the word" },
-        { "Переключать с четвёртой буквы: njkm станет «толь», штеу – inte",
-          "Switch from the fourth letter: njkm becomes \"толь\", штеу - inte" },
+        { "Переключать с четвёртой буквы: njkm станет «толь», ыщьу – some",
+          "Switch from the fourth letter: njkm becomes \"толь\", ыщьу - some" },
         { "Переключает посреди слова, когда так не начинается ни одно слово своего языка, а те же клавиши в другой "
-          "раскладке – начало слова. Начала слов Windows знает по предсказанию текста, как подсказки сенсорной "
-          "клавиатуры: частые слова и те, что набирали на этом компьютере. В конце слова оно проверяется ещё раз "
-          "по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
+          "раскладке – начало слова. Начала слов – по спискам частых слов, встроенным в программу (330 тысяч "
+          "русских и 150 тысяч английских форм), и по списку «Переключать всегда». В конце слова оно проверяется "
+          "ещё раз по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
           "третий раз его начало попадёт в «Не переключать»",
           "Switches in the middle of a word when no word of its language begins like that while the same keys in the "
-          "other layout are the beginning of a word. Windows knows the beginnings of words from its text prediction, "
-          "as the touch keyboard suggestions: frequent words and those typed on this computer. At the end of the word "
-          "it is checked once more by the dictionary.\nSwitched by mistake - press \"Fix the last word\" (Shift "
+          "other layout are the beginning of a word. The beginnings come from lists of frequent words built into the "
+          "program (330 thousand Russian and 150 thousand English forms) and from \"Always switch\". At the end "
+          "of the word it is checked once more by the dictionary.\nSwitched by mistake - press \"Fix the last word\" (Shift "
           "twice): the word comes back, and the third time its beginning goes to \"Never switch\"" },
         { "Не переключать", "Never switch" },
         { "Например, cv или см – в любой раскладке", "For example cv or см - in either layout" },

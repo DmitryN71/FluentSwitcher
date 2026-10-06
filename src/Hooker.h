@@ -53,7 +53,19 @@ private: inline static HookerKeyboard hookerKeyb;
 		_In_  LPARAM lParam
 	) {
 		lastHookTick = GetTickCount();
+		if (nCode == HC_ACTION) Late("key", ((KBDLLHOOKSTRUCT*)lParam)->time);
 		return hookerKeyb.LowLevelKeyboardProc(nCode, wParam, lParam);
+	}
+
+	// Нажатие или движение мыши пришло к перехвату позже, чем случилось (время события - от Windows): его держал
+	// кто-то до нас (перехваты, поставленные позже, зовутся раньше) или занятый поток перехвата. Только в журнал
+	// отладки, не чаще раза в секунду: по нему видно, кто тормозит ввод.
+	static void Late(const char* what, DWORD eventTime) {
+		const DWORD now = GetTickCount(), late = now - eventTime;
+		static DWORD lastReport = 0;
+		if (late < 200 || late > 60000 || now - lastReport < 1000 || GetLogLevel() < LOG_LEVEL_2) return;
+		lastReport = now;
+		LOG_WARN("hook: a {} event came {} ms late", what, late);
 	}
 
 	//static void CALLBACK WinEventProc_SwitchDesk(
@@ -83,6 +95,7 @@ private: inline static HookerKeyboard hookerKeyb;
 	) {
 		lastHookTick = GetTickCount();
 		if (nCode == HC_ACTION) {
+			Late("mouse", ((MSLLHOOKSTRUCT*)lParam)->time);
 			if (wParam == WM_MOUSEMOVE) {
 				// nothing
 			}

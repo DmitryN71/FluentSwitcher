@@ -4,6 +4,13 @@
 // The same icon under the name the settings window (settings/src/pages.cpp, wxICON(aaaa)) asks for.
 aaaa ICON "app.ico"
 
+// Beginnings of words for the automatic switch in the middle of a word (WordStart.h; tools/corpus/make_wordlist.cmd;
+// FrequencyWords by Hermit Dave, CC BY-SA 4.0 - see src/data/README.md).
+WORDS_RU RCDATA "../data/words_ru.txt"
+WORDS_EN RCDATA "../data/words_en.txt"
+WORDS_RU_COMMON RCDATA "../data/words_ru_common.txt"
+WORDS_EN_COMMON RCDATA "../data/words_en_common.txt"
+
 // The name Task Manager and the file's properties show.
 1 VERSIONINFO
 FILEVERSION FS_VER_MAJOR, FS_VER_MINOR, FS_VER_PATCH, 0

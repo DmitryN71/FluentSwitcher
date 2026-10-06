@@ -5,6 +5,7 @@ FluentSwitcher includes the following parts of others. Each keeps its own licenc
 
   - SimpleSwitcher (Aegel5, https://github.com/Aegel5/SimpleSwitcher)
   - LangBar++ (Krot66, https://github.com/Krot66/LangBarXX) - ideas and rules, rewritten
+  - FrequencyWords (Hermit Dave, https://github.com/hermitdave/FrequencyWords) - word lists, CC BY-SA 4.0
   - wxWidgets 3.3 (https://www.wxwidgets.org)
   - zlib (in wxWidgets) (https://zlib.net)
   - libpng (in wxWidgets) (http://www.libpng.org)
@@ -38,6 +39,21 @@ word that is not a word of its language while the same keys in the other layout 
 of a word: not the beginning of a word while there it is), with its exceptions (single letters, words with digits, abbreviations, a word after the layout was switched by hand,
 after a mouse click or after Backspace). LangBar++ is licensed under the GNU Lesser General Public License,
 version 3, which allows its use in FluentSwitcher under the GNU General Public License, version 3.
+
+
+------------------------------------------------------------------------------
+FrequencyWords
+Hermit Dave, https://github.com/hermitdave/FrequencyWords
+------------------------------------------------------------------------------
+
+The lists of words built into FluentSwitcher.exe (the beginnings of words for the automatic layout switch in
+the middle of a word; source: src/data/words_ru.txt, words_en.txt) are adapted from the 2018 Russian and
+English frequency lists of FrequencyWords, made from OpenSubtitles 2018 (http://opus.nlpl.eu/OpenSubtitles2018.php):
+lower case, "ё" as "е", words of three letters and more met at least three times and known to the Windows
+dictionary of the language (tools/corpus/make_wordlist.cmd in the project). The lists are licensed under the
+Creative Commons Attribution-ShareAlike 4.0 International License
+(https://creativecommons.org/licenses/by-sa/4.0/), and so are the adapted ones. CC BY-SA 4.0 is one-way
+compatible with the GNU General Public License, version 3.
 
 
 ------------------------------------------------------------------------------

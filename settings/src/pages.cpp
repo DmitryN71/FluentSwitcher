@@ -5,9 +5,11 @@
 #include "hotkeys.h"
 #include "icons.h"
 
+#include <wx/clipbrd.h>
 #include <wx/datetime.h>
 #include <wx/dcbuffer.h>
 #include <wx/dir.h>
+#include <wx/ffile.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/tooltip.h>
@@ -129,6 +131,191 @@ bool EditWordList(wxWindow* parent, const wxString& title, const wxString& descr
     }
     *words = result;
     return true;
+}
+
+// ----- The report for the forum: the errors of the journal of the automatic switch -----
+// The program sends nothing: the report is a text the user sees, edits and copies into a post (the beta testers' way to
+// tell what the switch got wrong, forum/beta-invite.txt).
+
+// "Windows 11 Pro 25H2 (26220)".
+wxString WindowsVersion()
+{
+    auto read = [](const wchar_t* name) {
+        wchar_t value[128] = {};
+        DWORD size = sizeof(value);
+        return RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", name, RRF_RT_REG_SZ,
+                            nullptr, value, &size) == ERROR_SUCCESS
+            ? wxString(value)
+            : wxString();
+    };
+    wxString product = read(L"ProductName");
+    const wxString display = read(L"DisplayVersion"), build = read(L"CurrentBuild");
+    long number = 0;
+    if (build.ToLong(&number) && number >= 22000)
+        product.Replace("Windows 10", "Windows 11"); // Windows 11 still calls itself 10 there
+    return wxString::Format("%s %s (%s)", product, display, build);
+}
+
+// The layouts of Windows: "en-US, ru-RU" (a variant of a language - with its number: "ru-RU (0419-f0a5)" is not usual).
+wxString LayoutList()
+{
+    HKL list[32];
+    const int n = GetKeyboardLayoutList(32, list);
+    wxString names;
+    for (int i = 0; i < n; i++)
+    {
+        const UINT_PTR value = (UINT_PTR)list[i];
+        wchar_t locale[LOCALE_NAME_MAX_LENGTH] = {};
+        wxString name = LCIDToLocaleName(MAKELCID(LOWORD(value), SORT_DEFAULT), locale, LOCALE_NAME_MAX_LENGTH, 0)
+            ? wxString(locale)
+            : wxString::Format("%04x", (unsigned)LOWORD(value));
+        if (HIWORD(value) != LOWORD(value))
+            name += wxString::Format(" (%04x-%04x)", (unsigned)LOWORD(value), (unsigned)HIWORD(value));
+        names += (names.empty() ? "" : ", ") + name;
+    }
+    return names;
+}
+
+// The report: the version, Windows, the layouts, the switches; how many lines of each kind the journal has; and its
+// errors - "switched back" (switched by mistake) and "by hand" (missed), at most the last 200. errors - how many there
+// are; -1 - no journal.
+wxString JournalReport(const wxString& folder, const Config& config, int* errors)
+{
+    const wxString back = wxString::FromUTF8("вернули"), hand = wxString::FromUTF8("вручную"); // the journal in Russian
+    wxArrayString found;
+    wxString first, last;
+    int switched = 0, backs = 0, hands = 0;
+    bool any = false;
+    for (const char* name : { "autoswitch.old.log", "autoswitch.log" })
+    {
+        const wxString path = folder + "\\log\\" + name;
+        if (!wxFileExists(path)) // the old one is there only after the journal grew over a megabyte
+            continue;
+        wxLogNull quiet; // a file being written by the engine: no message boxes of wxWidgets
+        wxFFile file(path, "rb");
+        wxString content;
+        if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8))
+            continue;
+        any = true;
+        // "06.10.2026 18:56:14  by hand    еру → the  (claude.exe)  [a short word alone]": the kind from the 22nd character.
+        for (wxString line : wxSplit(content, '\n', '\0'))
+        {
+            line.Trim();
+            if (line.length() < 22)
+                continue;
+            const wxString kind = line.Mid(21);
+            const bool isBack = kind.StartsWith("switched back") || kind.StartsWith(back);
+            const bool isHand = kind.StartsWith("by hand") || kind.StartsWith(hand);
+            (isBack ? backs : isHand ? hands : switched)++;
+            if (first.empty())
+                first = line.Left(10);
+            last = line.Left(10);
+            if (isBack || isHand)
+            {
+                line.Replace(wxString::FromUTF8("→"), "->"); // the forum is in windows-1251, it has no arrow
+                found.Add(line);
+            }
+        }
+    }
+    *errors = any ? (int)found.size() : -1;
+    const size_t kMax = 200;
+    const size_t skip = found.size() > kMax ? found.size() - kMax : 0;
+    auto onOff = [&config](const char* key, bool def) { return config.GetBool(key, def) ? T("вкл.") : T("выкл."); };
+    wxString text = wxString::Format("FluentSwitcher %s, %s\n", kVersion, WindowsVersion());
+    text += T("Раскладки: ") + LayoutList() + "\n";
+    text += wxString::Format(T("Автопереключение: %s, не ждать конца слова: %s, ДВе ЗАглавные: %s"),
+                             onOff("autoswitch", false), onOff("autoswitch_early", true), onOff("two_caps", false)) + "\n";
+    text += wxString::Format(T("Журнал с %s по %s: само – %d, вернули – %d, вручную – %d"), first, last, switched, backs,
+                             hands) + "\n";
+    if (skip)
+        text += wxString::Format(T("Последние %zu ошибок из %zu"), kMax, found.size()) + "\n";
+    text += "\n";
+    for (size_t i = skip; i < found.size(); i++)
+        text += found[i] + "\n";
+    return text;
+}
+
+// The report in a window of its own: it can be edited; "Копировать" puts it into the clipboard as a spoiler for the
+// forum ([more=...]), nothing goes anywhere by itself.
+void ReportDialog(wxWindow* parent, const wxString& report)
+{
+    wxDialog dialog(parent, wxID_ANY, T("Отчёт для форума"), wxDefaultPosition, wxDefaultSize,
+                    wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    dialog.SetBackgroundColour(g.bg);
+    ApplyDwm(&dialog, false, &g.bg);
+    const int pad = dialog.FromDIP(20);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText* label = new wxStaticText(&dialog, wxID_ANY, wxString());
+    label->SetFont(UiFont(10));
+    label->SetForegroundColour(g.text);
+    SetWrappedLabel(label,
+                    T("Только ошибки из журнала: что вы вернули и что исправили вручную; в скобках – причина, она для "
+                      "разработчика. Вычеркните то, что не хотите показывать. Программа ничего не отправляет: «Копировать» "
+                      "положит текст в буфер обмена – вставьте его в сообщение в теме FluentSwitcher на форуме"),
+                    dialog.FromDIP(640));
+    sizer->Add(label, 0, wxLEFT | wxRIGHT | wxTOP, pad);
+
+    // The box of the text: drawn like the kit's text boxes, a multi-line text control inside (as EditWordList).
+    wxPanel* box = new wxPanel(&dialog);
+    box->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    box->SetMinSize(dialog.FromDIP(wxSize(640, 360)));
+    wxTextCtrl* text = new wxTextCtrl(box, wxID_ANY, report, wxDefaultPosition, wxDefaultSize,
+                                      wxTE_MULTILINE | wxBORDER_NONE);
+    text->SetFont(UiFont(9));
+    text->SetBackgroundColour(g.input);
+    text->SetForegroundColour(g.text);
+    text->Bind(wxEVT_SET_FOCUS, [box](wxFocusEvent& e) { box->Refresh(); e.Skip(); });
+    text->Bind(wxEVT_KILL_FOCUS, [box](wxFocusEvent& e) { box->Refresh(); e.Skip(); });
+    box->Bind(wxEVT_PAINT, [box, text](wxPaintEvent&) {
+        wxAutoBufferedPaintDC dc(box);
+        dc.SetBackground(wxBrush(g.bg));
+        dc.Clear();
+        FillInput(dc, wxRect(box->GetClientSize()), box->FromDIP(4), g.input, text->HasFocus() ? &g.accent : nullptr,
+                  box->FromDIP(2));
+    });
+    box->Bind(wxEVT_SIZE, [box, text](wxSizeEvent& e) {
+        const wxSize size = box->GetClientSize();
+        text->SetSize(box->FromDIP(10), box->FromDIP(8), size.x - box->FromDIP(20), size.y - box->FromDIP(16));
+        e.Skip();
+    });
+    sizer->Add(box, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, pad);
+
+    wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+    // The topic of FluentSwitcher on ru-board, its last page (glp): the report goes into a post at the end.
+    FluentButton* topic = new FluentButton(&dialog, wxID_ANY, T("Открыть тему на форуме"));
+    topic->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
+        OpenAsUser(L"https://forum.ru-board.com/topic.cgi?forum=5&topic=51833&glp");
+    });
+    buttons->Add(topic);
+    buttons->AddStretchSpacer();
+    FluentButton* copy = new FluentButton(&dialog, wxID_ANY, T("Скопировано"), true);
+    copy->SetText(T("Копировать")); // as wide as the longer of the two
+    buttons->Add(copy);
+    buttons->Add(new FluentButton(&dialog, wxID_CANCEL, T("Готово")), 0, wxLEFT, dialog.FromDIP(8));
+    sizer->Add(buttons, 0, wxEXPAND | wxALL, pad);
+    copy->Bind(wxEVT_BUTTON, [copy, text](wxCommandEvent&) {
+        wxString body = text->GetValue();
+        body.Trim();
+        const wxString post = wxString::Format("[more=%s %s]\n", T("Отчёт FluentSwitcher"), kVersion) + body + "\n[/more]";
+        if (wxTheClipboard->Open())
+        {
+            wxTheClipboard->SetData(new wxTextDataObject(post));
+            wxTheClipboard->Close();
+            copy->SetText(T("Скопировано"));
+        }
+    });
+    text->Bind(wxEVT_TEXT, [copy](wxCommandEvent&) { copy->SetText(T("Копировать")); });
+    dialog.SetSizerAndFit(sizer);
+    dialog.Bind(wxEVT_CHAR_HOOK, [&dialog](wxKeyEvent& e) {
+        if (e.GetKeyCode() == WXK_ESCAPE)
+            dialog.EndModal(wxID_CANCEL);
+        else
+            e.Skip();
+    });
+    dialog.CentreOnParent();
+    text->SetFocus();
+    text->SetInsertionPoint(0);
+    dialog.ShowModal();
 }
 
 // "English (United States)", "русский (Россия)": the language of a layout, in that language.
@@ -534,6 +721,24 @@ void SettingsFrame::BuildTyping()
         CardTip(about, T("Файл autoswitch.log в папке log рядом с программой: по нему видно, где автопереключение "
                          "ошибается и что пропускает. Пароли туда не попадают – в их полях оно не работает"));
     }
+    // The report for the forum: the journal's errors in a window, to see, edit and copy (JournalReport, ReportDialog).
+    AddSettingsCard(m_page, m_column, T("Отчёт об ошибках для форума"),
+                    T("Что вы вернули и что исправили вручную – из журнала. Текст видно до отправки"),
+                    [this](wxWindow* card) {
+                        FluentButton* make = new FluentButton(card, wxID_ANY, T("Собрать…"));
+                        make->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                            int errors = 0;
+                            const wxString report = JournalReport(m_folder, m_saved, &errors);
+                            if (errors < 0)
+                                return SetStatus(T("Журнала ещё нет: включите его выше и поработайте с автопереключением"),
+                                                 true);
+                            if (errors == 0)
+                                return SetStatus(T("Ошибок в журнале нет: ничего не возвращали и не исправляли вручную"),
+                                                 false);
+                            ReportDialog(this, report);
+                        });
+                        return make;
+                    });
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
     CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух» после пробела, Enter или Tab"),

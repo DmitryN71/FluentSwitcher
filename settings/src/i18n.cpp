@@ -255,6 +255,33 @@ const std::unordered_map<std::string, const char*>& English()
           "ошибается и что пропускает. Пароли туда не попадают – в их полях оно не работает",
           "The file autoswitch.log in the log folder next to the program: it shows where the automatic switch is "
           "wrong and what it misses. Passwords do not get there - it does not work in their fields" },
+        { "Отчёт об ошибках для форума", "A report of the mistakes for the forum" },
+        { "Что вы вернули и что исправили вручную – из журнала. Текст видно до отправки",
+          "What you switched back and what you fixed by hand - from the journal. You see the text before sending" },
+        { "Собрать…", "Make…" },
+        { "Журнала ещё нет: включите его выше и поработайте с автопереключением",
+          "No journal yet: turn it on above and work with the automatic switch" },
+        { "Ошибок в журнале нет: ничего не возвращали и не исправляли вручную",
+          "No mistakes in the journal: nothing was switched back or fixed by hand" },
+        { "Отчёт для форума", "Report for the forum" },
+        { "Только ошибки из журнала: что вы вернули и что исправили вручную; в скобках – причина, она для "
+          "разработчика. Вычеркните то, что не хотите показывать. Программа ничего не отправляет: «Копировать» "
+          "положит текст в буфер обмена – вставьте его в сообщение в теме FluentSwitcher на форуме",
+          "Only the mistakes from the journal: what you switched back and what you fixed by hand; in brackets is the "
+          "reason, it is for the developer. Strike out what you don't want to show. The program sends nothing: \"Copy\" "
+          "puts the text into the clipboard - paste it into a post in the FluentSwitcher topic on the forum" },
+        { "Копировать", "Copy" },
+        { "Открыть тему на форуме", "Open the forum topic" },
+        { "Скопировано", "Copied" },
+        { "Отчёт FluentSwitcher", "FluentSwitcher report" },
+        { "Раскладки: ", "Layouts: " },
+        { "Автопереключение: %s, не ждать конца слова: %s, ДВе ЗАглавные: %s",
+          "Automatic switch: %s, do not wait for the end of the word: %s, TWo INitial CApitals: %s" },
+        { "вкл.", "on" },
+        { "выкл.", "off" },
+        { "Журнал с %s по %s: само – %d, вернули – %d, вручную – %d",
+          "Journal from %s to %s: by itself - %d, switched back - %d, by hand - %d" },
+        { "Последние %zu ошибок из %zu", "The last %zu mistakes of %zu" },
         { "«ДВух» станет «Двух» после пробела, Enter или Tab", "\"THis\" becomes \"This\" after a space, Enter or Tab" },
         { "PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. Исправилось зря – сразу нажмите «Исправить "
           "последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – "

@@ -18,7 +18,9 @@ free and open source under GPL-3.0.
   neighbours: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
   too: "нфдлштп" - "yalking". Words with digits, abbreviations, a word typed again after the layout was switched by
   hand right after a fix, a word after Backspace, passwords and the console are left alone; fixed
-  by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
+  by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it. The journal
+  of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the
+  reason; its mistakes make a report for the forum topic - you see and can edit the text, the app sends nothing.
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab. PCs, IDs, GHz, eM, iPhone are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives

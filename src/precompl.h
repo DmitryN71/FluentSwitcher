@@ -29,6 +29,7 @@
 #include <set>
 #include <format>
 #include <deque>
+#include <optional>
 #include <list>
 #include <generator>
 #include <ranges>

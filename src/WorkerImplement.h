@@ -200,8 +200,29 @@ class WorkerImplement {
     // Журнал автопереключения (log\autoswitch.log, если включён): what - что случилось, from -> to; note - в скобках
     // после (почему не переключилось само).
     static void Journal(const char* what, const std::wstring& from, const std::wstring& to, const std::string& note = {});
-    // В журнал: "Исправить последнее слово" вручную - слово, которое автопереключение не поймало.
-    void JournalHandFix();
+    // "Исправить последнее слово" вручную - слово, которое автопереключение не поймало: в журнал и в счёт "Переключать
+    // всегда". TakeHandFix - что исправляют (до перепечатки: потом клавиши уже в другой раскладке), HandFixDone - счёт
+    // и журнал после неё (проверка пароля через UI Automation не задерживает исправление).
+    struct HandFix {
+        std::wstring typed, fixed; // слово как набрано и каким станет
+        std::wstring lang;         // язык раскладки, в которой набрано
+        std::string why;           // почему автопереключение его не тронуло (для журнала)
+        std::wstring undoneAgain;  // исправляют только что отменённое автопереключение: его слово (не в счёт отмен)
+    };
+    std::optional<HandFix> TakeHandFix();
+    void HandFixDone(const HandFix& fix);
+    // В счёт "Переключать всегда" (строчными, в нужном виде) - или пусто: не учить (HandFixDone).
+    std::wstring LearnableFix(const HandFix& fix);
+    struct {
+        std::wstring fixed; // каким стало (строчными, только буквы)
+        std::wstring typed; // как было набрано
+        bool counted = false; // ушло в счёт "Переключать всегда"
+        ULONGLONG at = 0;
+    } m_lastHandFix; // последнее исправление вручную: исправили обратно сразу после - случайное нажатие, снять
+    // Последние автопереключения (строчными, только буквы; посреди слова - его начало): исправление вручную, которое
+    // возвращает такое слово, - поздняя отмена, а не слово, которое надо учить.
+    std::deque<std::pair<std::wstring, std::wstring>> m_recentSwitches; // набрано, стало
+    void RememberSwitch(const std::wstring& typed, const std::wstring& there);
     // "Исправить последнее слово" сразу после автопереключения - отмена: в счёт (на третью - в исключения). true - это
     // была отмена; undo - что вернуть (если переведённое ещё в буфере, иначе tail 0 - как обычно, последнее слово).
     struct AutoUndo {
@@ -214,7 +235,7 @@ class WorkerImplement {
     struct {
         std::wstring word; // как в m_autoSwitched.word
         ULONGLONG at = 0;
-    } m_lastUndo; // последняя отмена автопереключения: исправили снова сразу после неё - не в счёт (JournalHandFix)
+    } m_lastUndo; // последняя отмена автопереключения: исправили снова сразу после неё - не в счёт (TakeHandFix)
     // Перевести набранное с клавиши begin до конца в раскладку to (стереть, переключить, напечатать). wordEnded - слово
     // кончилось: отметка "исправлено", дальше - новое слово.
     void SwitchTail(size_t begin, HKL to, bool wordEnded);

@@ -484,6 +484,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         m_lastAutoSwitch = GetTickCount64();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = false;
+        RememberSwitch(typed, there);
         Journal("switched", from, to);
         return true;
     }
@@ -609,6 +610,7 @@ void WorkerImplement::AutoSwitchEarly() {
         m_lastAutoSwitch = GetTickCount64();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = true;
+        RememberSwitch(typed, there);
         Journal("switched", from, to);
         return;
     }
@@ -662,43 +664,90 @@ void WriteJournalLine(const std::string& utf8) {
     out.write(utf8.data(), (std::streamsize)utf8.size());
 }
 
-void WorkerImplement::JournalHandFix() {
+void WorkerImplement::RememberSwitch(const std::wstring& typed, const std::wstring& there) {
+    m_recentSwitches.emplace_back(AutoSwitch::Lower(AutoSwitch::Letters(typed).core),
+                                  AutoSwitch::Lower(AutoSwitch::Letters(there).core));
+    if (m_recentSwitches.size() > 64) m_recentSwitches.pop_front();
+}
+
+std::optional<WorkerImplement::HandFix> WorkerImplement::TakeHandFix() {
     GETCONF;
-    if (!cfg->autoswitch) return;
+    if (!cfg->autoswitch) return std::nullopt;
     auto keys = m_cycleList.LastWordKeys();
     if (keys.empty()) keys = m_cycleList.TrailingWordKeys();
     const HKL lay = CurLay(), next = cfg->layouts_info.NextEnabledLayout(lay);
-    if (keys.empty() || !lay || !next) return;
-    std::wstring typed, fixed;
+    if (keys.empty() || !lay || !next) return std::nullopt;
+    HandFix fix;
     for (auto* key : keys) {
-        typed += InputSender::KeyText(*key, lay, false);
-        fixed += InputSender::KeyText(*key, next, false);
+        fix.typed += InputSender::KeyText(*key, lay, false);
+        fix.fixed += InputSender::KeyText(*key, next, false);
     }
+    fix.lang = Utils::GetNameForHKL_simple(lay);
     // Только что отменённое автопереключение исправляют снова ("Shift дважды" по привычке сразу после него - отмена, ещё
     // раз - обратно): переключение было верным, отмена не в счёт исключений (иначе на третий раз верное слово ушло бы в
     // "Не переключать").
     const auto undone = std::exchange(m_lastUndo, {});
-    const bool again = !undone.word.empty() && GetTickCount64() - undone.at < 10000 &&
-        AutoSwitch::Lower(AutoSwitch::Letters(typed).core) == undone.word;
-    if (again) PostMessageW(g_guiHandle, WM_AutoSwitchUnlearn, 0, (LPARAM)new std::wstring(undone.word));
-    if (IsPasswordFocus() || IsPasswordUia()) return; // пароль, исправленный вручную, - ни в счёт, ни в журнал
-    // Слово, которое автопереключение не тронуло, исправили вручную: в счёт "Переключать всегда" (на третий раз - туда,
-    // gui2/main.cpp) - в нужном виде, строчными. Не в счёт: одна буква, знак внутри или цифры (адрес, код), слово из
-    // "Не переключать", слово, которое и так в "Переключать всегда".
-    if (!again) {
-        const auto part = AutoSwitch::Letters(fixed);
-        const std::wstring word = AutoSwitch::Lower(part.core);
-        const bool digits = std::ranges::any_of(typed, [](wchar_t c) { return iswdigit(c) != 0; });
-        if (word.size() >= 2 && !part.inner && !digits && !AutoSwitch::Excepted(typed, fixed, AutoSwitchExceptions()) &&
-            !AutoSwitch::Forced(typed, fixed, AutoSwitchForced()))
-            PostMessageW(g_guiHandle, WM_AutoSwitchLearnForce, 0, (LPARAM)new std::wstring(word));
-    }
-    if (!cfg->autoswitch_journal) return;
+    if (!undone.word.empty() && GetTickCount64() - undone.at < 10000 &&
+        AutoSwitch::Lower(AutoSwitch::Letters(fix.typed).core) == undone.word)
+        fix.undoneAgain = undone.word;
     // Почему автопереключение его не тронуло: проверяло это слово - его причина; нет - до проверки не дошло (быстрый
     // набор во время другой проверки, окно от администратора, отключено).
-    Journal("by hand", typed, fixed,
-            again ? "fixed again right after switching back: the switch was right"
-                  : m_autoNo.typed == typed ? m_autoNo.why : "not checked");
+    fix.why = m_autoNo.typed == fix.typed ? m_autoNo.why : "not checked";
+    return fix;
+}
+
+// Слово, которое автопереключение не тронуло, исправили вручную: в счёт "Переключать всегда" (на третий раз - туда,
+// gui2/main.cpp) - в нужном виде, строчными. Не в счёт:
+//   - одна буква, знак внутри или цифры (адрес, код);
+//   - набранное - слово своего языка (или словаря нет): "Переключать всегда" обходит словарь, и выученное "ты" (из
+//     "ns") переключало бы каждое английское ns;
+//   - поздняя отмена автопереключения (больше 10 с после него): возвращают то, что оно переключило ("лог" - "kju"),
+//     и выученное "kju" ломало бы правильно набранное "лог";
+//   - слово из "Не переключать" и слово, которое и так в "Переключать всегда".
+std::wstring WorkerImplement::LearnableFix(const HandFix& fix) {
+    if (!fix.undoneAgain.empty()) return {};
+    const auto part = AutoSwitch::Letters(fix.fixed);
+    const std::wstring word = AutoSwitch::Lower(part.core);
+    const std::wstring typedCore = AutoSwitch::Letters(fix.typed).core, typed = AutoSwitch::Lower(typedCore);
+    if (word.size() < 2 || part.inner || std::ranges::any_of(fix.typed, [](wchar_t c) { return iswdigit(c) != 0; }))
+        return {};
+    if (SpellCheck::CheckAnyCase(typedCore, fix.lang) != SpellCheck::Result::NotWord) return {};
+    for (const auto& [was, became] : m_recentSwitches)
+        if (!became.empty() && typed.starts_with(became) && word.starts_with(was)) return {};
+    if (AutoSwitch::Excepted(fix.typed, fix.fixed, AutoSwitchExceptions()) ||
+        AutoSwitch::Forced(fix.typed, fix.fixed, AutoSwitchForced()))
+        return {};
+    return word;
+}
+
+void WorkerImplement::HandFixDone(const HandFix& fix) {
+    GETCONF;
+    if (!fix.undoneAgain.empty()) PostMessageW(g_guiHandle, WM_AutoSwitchUnlearn, 0, (LPARAM)new std::wstring(fix.undoneAgain));
+    // Исправили обратно то, что только что исправили вручную (случайное нажатие - и ещё одно, назад): оба - не слова для
+    // "Переключать всегда"; ушедшее в счёт - снять.
+    const auto prev = std::exchange(m_lastHandFix, {});
+    const bool back = !prev.fixed.empty() && GetTickCount64() - prev.at < 10000 &&
+        AutoSwitch::Lower(AutoSwitch::Letters(fix.fixed).core) == prev.typed &&
+        AutoSwitch::Lower(AutoSwitch::Letters(fix.typed).core) == prev.fixed;
+    if (back && prev.counted)
+        PostMessageW(g_guiHandle, WM_AutoSwitchUnlearnForce, 0, (LPARAM)new std::wstring(prev.fixed));
+    const std::wstring learn = back ? std::wstring() : LearnableFix(fix);
+    // Пароль - ни в счёт, ни в журнал. Спрашиваем поле (UI Automation) только когда есть что записать; исправление уже
+    // напечатано - вопрос его не задерживает.
+    if (learn.empty() && !cfg->autoswitch_journal) {
+        if (!back) m_lastHandFix = { AutoSwitch::Lower(AutoSwitch::Letters(fix.fixed).core),
+                                     AutoSwitch::Lower(AutoSwitch::Letters(fix.typed).core), false, GetTickCount64() };
+        return;
+    }
+    if (IsPasswordFocus() || IsPasswordUia()) return;
+    if (!learn.empty()) PostMessageW(g_guiHandle, WM_AutoSwitchLearnForce, 0, (LPARAM)new std::wstring(learn));
+    if (!back) m_lastHandFix = { AutoSwitch::Lower(AutoSwitch::Letters(fix.fixed).core),
+                                 AutoSwitch::Lower(AutoSwitch::Letters(fix.typed).core), !learn.empty(), GetTickCount64() };
+    if (!cfg->autoswitch_journal) return;
+    Journal("by hand", fix.typed, fix.fixed,
+            !fix.undoneAgain.empty() ? "fixed again right after switching back: the switch was right"
+            : back                   ? "fixed back right after a fix by hand: not counted"
+                                     : fix.why);
 }
 
 bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
@@ -1268,9 +1317,14 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
 
         if (hk == hk_RevertLastWord) {
             AutoUndo undo;
-            if (!CountAutoSwitchUndo(&undo))
-                JournalHandFix();
-            else if (undo.tail && undo.from) {
+            if (!CountAutoSwitchUndo(&undo)) {
+                // Исправление вручную: что исправляют - до перепечатки, счёт и журнал - после неё.
+                const auto fix = TakeHandFix();
+                RevertText(hk);
+                if (fix) HandFixDone(*fix);
+                RETURN_SUCCESS;
+            }
+            if (undo.tail && undo.from) {
                 // Вернуть ровно то, что переводили (а не "последнее слово" буфера - оно может делиться иначе).
                 const size_t begin = m_cycleList.Size() - undo.tail;
                 if (undo.all)

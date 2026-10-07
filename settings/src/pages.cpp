@@ -133,6 +133,48 @@ bool EditWordList(wxWindow* parent, const wxString& title, const wxString& descr
     return true;
 }
 
+// The engine learns words while this window is open - the third undo puts a word into "Не переключать" or the
+// exceptions of ДВе ЗАглавные, the third fix by hand into "Переключать всегда" - and writes them to the file; the
+// window's copy is older, and writing it whole would drop them. Before the window writes the file: the words the engine
+// added since the window read it go into what it writes (a word the user removed here stays removed), and the engine's
+// counts are taken as they are now (the window does not edit them).
+void TakeEngineLearned(Config& edit, const Config& saved)
+{
+    Config disk;
+    wxString error;
+    if (!disk.Load(edit.Path(), &error))
+        return;
+    const nlohmann::json& now = std::as_const(disk).Json();
+    const nlohmann::json& before = saved.Json();
+    nlohmann::json& out = edit.Json();
+    for (const char* key : { "autoswitch_exceptions", "autoswitch_force", "two_caps_exceptions" })
+    {
+        const auto d = now.find(key);
+        if (d == now.end() || !d->is_array())
+            continue;
+        if (!out.contains(key) || !out[key].is_array())
+        {
+            out[key] = *d; // the window did not touch it: as the engine has it
+            continue;
+        }
+        const auto b = before.find(key);
+        for (const auto& word : *d)
+        {
+            const bool known = b != before.end() && b->is_array() && std::find(b->begin(), b->end(), word) != b->end();
+            if (!known && std::find(out[key].begin(), out[key].end(), word) == out[key].end())
+                out[key].push_back(word);
+        }
+    }
+    for (const char* key : { "autoswitch_undo", "autoswitch_fix", "two_caps_undo" })
+    {
+        const auto d = now.find(key);
+        if (d != now.end())
+            out[key] = *d;
+        else
+            out.erase(key);
+    }
+}
+
 // ----- The report for the forum: the errors of the journal of the automatic switch -----
 // The program sends nothing: the report is a text the user sees, edits and copies into a post (the beta testers' way to
 // tell what the switch got wrong, forum/beta-invite.txt).
@@ -1396,6 +1438,7 @@ bool SettingsFrame::Apply()
     const wxString oldTheme = m_saved.GetString("ui_theme", wxString());
     if (m_edit != m_saved)
     {
+        TakeEngineLearned(m_edit, m_saved);
         wxString error;
         if (!m_edit.Save(&error))
         {

@@ -24,6 +24,26 @@ void StartGui() {
 	CaretFlag caretFlag;
 	LayoutSound layoutSound;
 
+	// Счёт до трёх - отмены ДВух ЗАглавных и автопереключения, исправления вручную: на третий раз слово уходит в список
+	// (исключения или "Переключать всегда"), о чём говорит уведомление у флага. true - ушло.
+	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const std::wstring& word,
+	                       const char* title, const char* text) {
+		const std::string utf8 = StrUtils::Convert(word);
+		if (++counts[utf8] < 3) return false;
+		counts.erase(utf8);
+		if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
+		trayIcon.Notify(StrUtils::Convert(std::vformat(LOC(title), std::make_format_args(utf8))),
+		                StrUtils::Convert(std::string(LOC(text))), [] { show_main_wind(); });
+		return true;
+	};
+	// Счёт исправлений вручную изменился - в файл раз в минуту, а не на каждое исправление.
+	bool fixCountsChanged = false;
+	timer.CycleTimer([&] {
+		if (!fixCountsChanged) return;
+		fixCountsChanged = false;
+		SaveApplyGuiConfig();
+	}, 60 * 1000);
+
 	// Буквы вместо флага - цвета текста панели задач: сменилась её тема (светлая / тёмная) - перерисовать значок.
 	// Окна движка служебные (HWND_MESSAGE), WM_SETTINGCHANGE до них не доходит - смотрим раз в 2 с.
 	timer.CycleTimer([&, dark = FluentMenu::TaskbarDark()]() mutable {
@@ -116,62 +136,53 @@ void StartGui() {
 
 			if (msg == WM_TwoCapsLearn) {
 				// Слово вернули сразу после исправления ДВух ЗАглавных. Счёт - в настройках (переживает перезапуск);
-				// на третий раз слово уходит в исключения, о чём говорит уведомление у флага.
+				// на третий раз слово уходит в исключения.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
-				const std::string utf8 = StrUtils::Convert(*word);
-				auto& counts = conf_gui()->two_caps_undo;
-				const int times = ++counts[utf8];
-				LOG_ANY(L"two caps: {} brought back {} times", *word, times);
-				if (times >= 3) {
-					counts.erase(utf8);
-					auto& list = conf_gui()->two_caps_exceptions;
-					if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
-					trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("\"{}\" will not be fixed any more"), std::make_format_args(utf8))),
-						StrUtils::Convert(std::string(LOC("It is in the exceptions of TWo INitial CApitals: Settings, Typing"))),
-						[] { show_main_wind(); });
-				}
+				LOG_ANY(L"two caps: {} brought back", *word);
+				countToList(conf_gui()->two_caps_undo, conf_gui()->two_caps_exceptions, *word,
+				            "\"{}\" will not be fixed any more",
+				            "It is in the exceptions of TWo INitial CApitals: Settings, Typing");
 				SaveApplyGuiConfig();
 				return 0;
 			}
 
 			if (msg == WM_AutoSwitchLearn) {
-				// Слово вернули сразу после автопереключения. Как у ДВух ЗАглавных: счёт - в настройках, на третий
-				// раз слово уходит в исключения автопереключения, о чём говорит уведомление у флага.
+				// Слово вернули сразу после автопереключения. Как у ДВух ЗАглавных: на третий раз - в исключения
+				// автопереключения.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
-				const std::string utf8 = StrUtils::Convert(*word);
-				auto& counts = conf_gui()->autoswitch_undo;
-				const int times = ++counts[utf8];
-				LOG_ANY(L"autoswitch: {} switched back {} times", *word, times);
-				if (times >= 3) {
-					counts.erase(utf8);
-					auto& list = conf_gui()->autoswitch_exceptions;
-					if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
-					trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("\"{}\" will not be switched any more"), std::make_format_args(utf8))),
-						StrUtils::Convert(std::string(LOC("It is in the exceptions of the layout auto switch: Settings, Typing"))),
-						[] { show_main_wind(); });
-				}
+				LOG_ANY(L"autoswitch: {} switched back", *word);
+				countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, *word,
+				            "\"{}\" will not be switched any more",
+				            "It is in the exceptions of the layout auto switch: Settings, Typing");
 				SaveApplyGuiConfig();
 				return 0;
 			}
 
-			if (msg == WM_AutoSwitchLearnForce) {
-				// Слово исправили вручную ("Исправить последнее слово"), автопереключение его не тронуло. Как отмены: счёт - в
-				// настройках, на третий раз слово уходит в "Переключать всегда" (в нужном виде), о чём говорит
-				// уведомление у флага. (Maz на форуме, 07.10: "будет ли программа предлагать ... как Пунто?")
+			if (msg == WM_AutoSwitchLearnForce || msg == WM_AutoSwitchUnlearnForce) {
+				// Слово исправили вручную ("Исправить последнее слово"), автопереключение его не тронуло: на третий раз - в
+				// "Переключать всегда" (в нужном виде). (Maz на форуме, 07.10: "будет ли программа предлагать ... как
+				// Пунто?") Исправили обратно сразу после - случайное нажатие: снять. Счёт меняется на каждое исправление:
+				// в файл - не чаще раза в минуту (fixCountsChanged), сразу - только когда слово ушло в список; счёт "по разу"
+				// при трёхстах словах в нём забывается - он не растёт без конца.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
-				const std::string utf8 = StrUtils::Convert(*word);
 				auto& counts = conf_gui()->autoswitch_fix;
-				const int times = ++counts[utf8];
-				LOG_ANY(L"autoswitch: {} fixed by hand {} times", *word, times);
-				if (times >= 3) {
-					counts.erase(utf8);
-					auto& list = conf_gui()->autoswitch_force;
-					if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
-					trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("\"{}\" will always be switched"), std::make_format_args(utf8))),
-						StrUtils::Convert(std::string(LOC("It is in \"Always switch\" of the layout auto switch: Settings, Typing"))),
-						[] { show_main_wind(); });
+				if (msg == WM_AutoSwitchUnlearnForce) {
+					const auto it = counts.find(StrUtils::Convert(*word));
+					if (it != counts.end() && --it->second <= 0) counts.erase(it);
+					LOG_ANY(L"autoswitch: {} fixed back by hand, not counted", *word);
+					fixCountsChanged = true;
+					return 0;
 				}
-				SaveApplyGuiConfig();
+				LOG_ANY(L"autoswitch: {} fixed by hand", *word);
+				const bool learned = countToList(counts, conf_gui()->autoswitch_force, *word, "\"{}\" will always be switched",
+				                                 "It is in \"Always switch\" of the layout auto switch: Settings, Typing");
+				if (counts.size() > 300) std::erase_if(counts, [](const auto& c) { return c.second < 2; });
+				if (learned) {
+					fixCountsChanged = false;
+					SaveApplyGuiConfig();
+				}
+				else
+					fixCountsChanged = true;
 				return 0;
 			}
 

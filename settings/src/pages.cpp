@@ -674,9 +674,9 @@ static std::vector<HKL> SwitchLayouts(const Config& config)
     return layouts;
 }
 
-static wxString WordCountText(const wxString& about, size_t n)
+static wxString WordCountText(const wxString& about, WordKind kind, size_t n)
 {
-    return about + "\n" + (n == 0 ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), n));
+    return about + "\n" + WordListCount(kind, n);
 }
 
 void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& title, const wxString& about,
@@ -684,7 +684,7 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
 {
     const nlohmann::json& now = std::as_const(m_edit).Json();
     wxStaticText* label = AddSettingsCard(
-        m_page, m_column, WithTip(title), WordCountText(about, JsonWords(now, key, defaults).size()),
+        m_page, m_column, WithTip(title), WordCountText(about, kind, JsonWords(now, key, defaults).size()),
         [this, key, kind, title, help, defaults](wxWindow* card) {
             FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
             edit->Bind(wxEVT_BUTTON, [this, key, kind, title, help, defaults](wxCommandEvent&) {
@@ -714,14 +714,14 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
             return edit;
         });
     CardTip(label, tip);
-    m_wordLists.push_back({ key, defaults, about, label });
+    m_wordLists.push_back({ key, kind, defaults, about, label });
 }
 
 void SettingsFrame::RefillWordLists()
 {
     const nlohmann::json& file = std::as_const(m_edit).Json();
     for (const WordListOnPage& list : m_wordLists)
-        SetCardDescription(list.label, WordCountText(list.about, JsonWords(file, list.key, list.defaults).size()));
+        SetCardDescription(list.label, WordCountText(list.about, list.kind, JsonWords(file, list.key, list.defaults).size()));
 }
 
 void SettingsFrame::BuildAutoSwitch()
@@ -1253,6 +1253,22 @@ void SettingsFrame::FillCommands()
 void SettingsFrame::BuildAdvanced()
 {
     Section(kIconAdvanced, T("Дополнительно"));
+
+    // Apps (the engine's Settings.h): disableInPrograms - FluentSwitcher keeps quiet there altogether (SimpleSwitcher's
+    // list, now shown); autoswitch_console - console apps where the automatic switch works (ConsolePrograms.h).
+    WordList("disableInPrograms", WordKind::Programs, T("Не работать в приложениях"),
+             T("FluentSwitcher там молчит: ни сочетаний, ни исправлений, ни автопереключения"),
+             T("Приложения, где FluentSwitcher молчит совсем: игры, приложения со своими сочетаниями. Имя файла "
+               "приложения (far.exe) или путь к нему"),
+             T("Имя файла – как в Диспетчере задач на вкладке «Подробности». Путь – если нужно одно приложение из "
+               "нескольких с тем же именем"));
+    WordList("autoswitch_console", WordKind::Programs, T("Автопереключение в консоли"),
+             T("Консольные приложения, где оно работает: far.exe. Пароль в консоли Windows от текста не отличает"),
+             T("Консольные приложения, где автопереключение работает. В консоли его нет: там вводят команды и пароли, а "
+               "пароль Windows от текста не отличает. Имя файла приложения (far.exe) или путь к нему"),
+             T("В обычной консоли – и приложение, запущенное в ней: far.exe из cmd. В Windows Terminal и ConEmu "
+               "приложение вкладки не узнать: добавьте WindowsTerminal.exe или ConEmu64.exe – и автопереключение будет "
+               "во всех вкладках. Не вводите пароли там, где оно включено"));
 
     Toggle(T("Сочетания с Ctrl + Alt в раскладках с AltGr"),
            T("Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "

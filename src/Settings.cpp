@@ -95,6 +95,7 @@ namespace nlohmann {
 			disableAccessebility,
 			flagsSet,
 			disableInPrograms,
+			autoswitch_console,
 			logLevel,
 			//SkipAllInjectKeys,
 			SkipLowLevelInjectKeys,

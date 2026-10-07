@@ -6,6 +6,8 @@
 
 #include <wx/dcbuffer.h>
 #include <wx/dialog.h>
+#include <wx/filedlg.h>
+#include <wx/filename.h>
 #include <wx/scrolwin.h>
 #include <wx/tokenzr.h>
 
@@ -133,10 +135,6 @@ wxString Join(const wxArrayString& words)
     return s;
 }
 
-wxString CountText(size_t n)
-{
-    return n == 0 ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), n);
-}
 
 // The words, one to a row, drawn by the list itself (hundreds of words are not hundreds of windows); it is as tall as
 // its rows, the box around it scrolls. The row under the mouse is lit and has its buttons at the end: the cross that
@@ -335,7 +333,7 @@ public:
         wxStaticText* text = FluentText(this, wxString(), 10, g.text);
         SetWrappedLabel(text, about, FromDIP(520));
         m_field = new TextField(this, wxString(), 400, true);
-        m_field->SetHint(T("Добавить или найти слово"));
+        m_field->SetHint(m_kind == WordKind::Programs ? T("Добавить или найти приложение") : T("Добавить или найти слово"));
         m_field->onChange = [this] {
             m_done.clear();
             Refill();
@@ -346,6 +344,21 @@ public:
             Add();
             m_field->SetFocus();
         });
+        // Programs: one from a file too.
+        FluentButton* pick = nullptr;
+        if (m_kind == WordKind::Programs)
+        {
+            pick = new FluentButton(this, wxID_ANY, T("Выбрать…"));
+            pick->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                wxFileDialog dialog(this, T("Приложение"), wxString(), wxString(), T("Приложения (*.exe)|*.exe"),
+                                    wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+                if (dialog.ShowModal() != wxID_OK)
+                    return;
+                m_field->Clear();
+                AddText(wxFileName(dialog.GetPath()).GetFullName());
+                m_field->SetFocus();
+            });
+        }
         m_hint = FluentText(this, wxString(), 9, g.text2);
 
         // The box of the words: drawn like the cards, a scrolled window inside it.
@@ -375,6 +388,8 @@ public:
         wxBoxSizer* fieldRow = new wxBoxSizer(wxHORIZONTAL);
         fieldRow->Add(m_field, 1, wxALIGN_CENTER_VERTICAL);
         fieldRow->Add(add, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
+        if (pick)
+            fieldRow->Add(pick, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
         wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
         buttons->Add(m_count, 1, wxALIGN_CENTER_VERTICAL);
         buttons->Add(new FluentButton(this, wxID_OK, T("Готово"), true), 0, wxALIGN_CENTER_VERTICAL);
@@ -410,7 +425,7 @@ public:
 private:
     wxArrayString Forms(const wxString& word) const
     {
-        return m_kind == WordKind::Caps ? wxArrayString() : OtherForms(word, m_layouts);
+        return m_kind == WordKind::Caps || m_kind == WordKind::Programs ? wxArrayString() : OtherForms(word, m_layouts);
     }
 
     // The word of the list that `word` repeats (*covered false) or that has it as its other form or covers it (true);
@@ -433,9 +448,17 @@ private:
         return -1;
     }
 
-    // What a word of the field goes into the list as: in "Переключать всегда" - the form to get (TargetOf).
+    // What a word of the field goes into the list as: in "Переключать всегда" - the form to get (TargetOf); a program -
+    // in small letters, a name without an extension with ".exe" ("far" - "far.exe").
     wxString Kept(const wxString& word) const
     {
+        if (m_kind == WordKind::Programs)
+        {
+            wxString name = word.Lower();
+            if (!name.Contains("\\") && !name.Contains("/") && !name.Contains("."))
+                name += ".exe";
+            return name;
+        }
         return m_kind == WordKind::Always ? TargetOf(word, m_layouts) : word;
     }
 
@@ -451,10 +474,13 @@ private:
     }
 
     // Enter or "Добавить": each word of the field (a pasted "a, b c" is three) that is not there yet.
-    void Add()
+    void Add() { AddText(m_field->Value()); }
+
+    // Programs are separated by commas only: a path has spaces ("C:\\Program Files\\Far Manager\\Far.exe").
+    void AddText(const wxString& text)
     {
         wxArrayString added, already;
-        wxStringTokenizer words(m_field->Value(), " ,;\t\r\n", wxTOKEN_STRTOK);
+        wxStringTokenizer words(text, m_kind == WordKind::Programs ? ",;\t\r\n" : " ,;\t\r\n", wxTOKEN_STRTOK);
         while (words.HasMoreTokens())
         {
             const wxString w = words.GetNextToken();
@@ -555,9 +581,12 @@ private:
         else if (query.empty())
             hint = m_kind == WordKind::Always
                 ? T("Введите слово – как оно должно быть или как набирается по ошибке: Enter добавит его")
+                : m_kind == WordKind::Programs ? T("Имя файла приложения, например far.exe, или путь к нему: Enter добавит")
                 : T("Введите слово: Enter добавит его, а список покажет похожие");
-        else if (hit >= 0 && !covered && m_words[hit].IsSameAs(query, m_kind == WordKind::Caps))
+        else if (hit >= 0 && (m_kind == WordKind::Programs || (!covered && m_words[hit].IsSameAs(query, m_kind == WordKind::Caps))))
             hint = T("Уже в списке");
+        else if (m_kind == WordKind::Programs)
+            hint = wxString::Format(T("Enter добавит %s"), Quote(Kept(query)));
         else if (hit >= 0 && m_kind == WordKind::Caps)
             hint = wxString::Format(T("Уже закрыто словом %s: оно закрывает и слова, которые с него начинаются"),
                                     Quote(m_words[hit]));
@@ -568,7 +597,7 @@ private:
         else
             hint = wxString::Format(T("Enter добавит %s"), Quote(query));
         m_hint->SetLabel(hint);
-        m_count->SetLabel(CountText(m_words.size()));
+        m_count->SetLabel(WordListCount(m_kind, m_words.size()));
         Layout();
     }
 
@@ -583,6 +612,13 @@ private:
     WordRows* m_rows = nullptr;
     wxString m_done; // what the last add, removal or ⇄ did, for the hint until the field changes
 };
+}
+
+wxString WordListCount(WordKind kind, size_t n)
+{
+    if (n == 0)
+        return T("Пока пусто");
+    return wxString::Format(kind == WordKind::Programs ? T("Приложений в списке: %zu") : T("Слов в списке: %zu"), n);
 }
 
 bool EditWordList(wxWindow* parent, WordKind kind, const wxString& title, const wxString& about,

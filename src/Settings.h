@@ -44,16 +44,20 @@ public:
     }
 
     std::set <std::wstring> disableInPrograms;
+    // Консольные программы, где автопереключение всё же работает (ConsolePrograms.h): имя exe или путь.
+    std::set <std::wstring> autoswitch_console;
 
     void NormalizePaths() {
-		std::set <std::wstring> res;
-        for (const auto& it : disableInPrograms) {
-			auto cur = it;
-			StrUtils::ToLower(cur);
-            PathUtils::NormalizeDelims(cur);
-            res.insert(std::move(cur)); // todo cast
+        for (auto* list : { &disableInPrograms, &autoswitch_console }) {
+            std::set <std::wstring> res;
+            for (const auto& it : *list) {
+                auto cur = it;
+                StrUtils::ToLower(cur);
+                PathUtils::NormalizeDelims(cur);
+                res.insert(std::move(cur)); // todo cast
+            }
+            *list = std::move(res);
         }
-		disableInPrograms = std::move(res);
     }
     // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h).
     bool IsSkipProgramTop() const {

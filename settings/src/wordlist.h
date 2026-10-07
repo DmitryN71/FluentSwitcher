@@ -18,6 +18,8 @@ enum class WordKind
     Always, // "Переключать всегда": kept as it should be (http); typed is its form in the other layout (реез)
     Caps,   // the exceptions of ДВе ЗАглавные: as written, letter case and all; a word covers the words that begin
             // with it (from 4 letters, TwoCaps::Matches)
+    Programs, // programs (disableInPrograms, autoswitch_console): an exe name ("far" is "far.exe") or a path, any letter
+              // case; "Выбрать…" adds one from a file
 };
 
 // A list as the file has it: the words (the newest last) and those of them the app learned.
@@ -25,6 +27,9 @@ struct WordListWords
 {
     wxArrayString words, learned;
 };
+
+// "Слов в списке: 12", "Приложений в списке: 2"; none - "Пока пусто".
+wxString WordListCount(WordKind kind, size_t n);
 
 // The window of a list. layouts: those that take part in the switch, for the other forms of the words. True - "Готово":
 // *list is the new list.

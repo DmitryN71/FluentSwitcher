@@ -326,7 +326,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// Придерживать можно: не окно от администратора, не удалённый рабочий стол, не консоль (KeyHold::CanHold) и не
 			// программа из исключений - там движок всё равно ничего не исправит, а игра, которая не принимает
 			// отправленных нажатий, потеряла бы придержанное. Последним: это поход за именем программы.
-			auto canHold = [&] { return KeyHold::CanHold() && !cfg->IsSkipProgramTop(); };
+			auto canHold = [&] { return KeyHold::CanHold(&cfg->autoswitch_console) && !cfg->IsSkipProgramTop(); };
 			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
 				const auto end = KeyHold::EndWord();
 				// Модификатор вместе с ней - сочетание, не конец слова; кроме Shift+Enter (новая строка в мессенджерах) и

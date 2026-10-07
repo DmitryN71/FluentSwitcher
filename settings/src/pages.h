@@ -97,6 +97,7 @@ private:
     struct WordListOnPage
     {
         const char* key;
+        WordKind kind;
         wxArrayString defaults;
         wxString about;
         wxStaticText* label; // the card's description: what the list is for and how many words it has

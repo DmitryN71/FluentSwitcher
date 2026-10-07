@@ -18,7 +18,7 @@ free and open source under GPL-3.0.
   ("njkm" - "толь"): the beginnings of words come from built-in lists of frequent words (Russian, English and Ukrainian). Short words go by their
   neighbours: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
   too: "нфдлштп" - "yalking". Words with digits, abbreviations, a word typed again after the layout was switched by
-  hand right after a fix, a word after Backspace, passwords and the console are left alone; fixed
+  hand right after a fix, a word after Backspace, passwords and the console are left alone (but for the console apps listed in Advanced, such as far.exe); fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word
   you keep fixing by hand goes to "Always switch" the third time. The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked. The journal
   of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the
@@ -48,6 +48,7 @@ free and open source under GPL-3.0.
 - **The layout with one Shift**, as in Punto: "Next layout" on a single Shift (left, right or either) fires on
   release, not with a letter, and gets along with "Shift twice".
 - **Commands**: run programs and paste text with a hotkey.
+- **Lists of apps** in Advanced: where FluentSwitcher does not work at all (games) and in which console apps the automatic switch works.
 - **Works in apps run as administrator**: Windows asks once, after that FluentSwitcher starts through the Task
   Scheduler without asking.
 - **Remote desktops and virtual machines** (Remote Desktop Connection, Windows App, Hyper-V, VMware, VirtualBox,

@@ -17,11 +17,12 @@ falls between pixels is soft and the stripes of one flag come out of different w
 полосок справа и слева не выровнены"): the US has 13 stripes in 15 rows at 20 px. Coats of arms, stars, circles and
 diagonals stay smooth.
 
-The left and the right edge - a light grey point in every row (SIDE). An LCD point is three stripes, red - green - blue
-from left to right: a red point shines on its left third, a blue one on its right third, so at the flag's sides the
-stripes looked shifted by a third of a point (Dmitry at 125 %: white and red stick out on the left, white on the right;
-a zoomed screenshot does not show it). A grey point shines on all three alike: the sides are straight. Dmitry chose
-this of four variants (tools/flags-compare/edges.png in the work folder, 07.10.2026).
+The left and the right edge - in every row a point halfway between its own colour and light grey (SIDE, SIDE_TINT). An
+LCD point is three stripes, red - green - blue from left to right: a red point shines on its left third, a blue one on
+its right third, so at the flag's sides the stripes looked shifted by a third of a point (Dmitry at 125 %: white and
+red stick out on the left, white on the right; a zoomed screenshot does not show it). A grey point shines on all three
+alike: the sides are straight. Dmitry chose a light grey side of four variants (tools/flags-compare/edges.png in the
+work folder), then, as "thinner", the half-grey one of six (edges2.png, 07.10.2026).
 
     python tools/make_flagpack_flags.py [--preview preview.png]
 """
@@ -119,18 +120,20 @@ const SOURCES = %s, JOBS = %s;
     return out
 
 
-SIDE = (200, 200, 200)
+SIDE = 200        # light grey
+SIDE_TINT = 0.5   # how much of the point's own colour stays in it
 
 
 def sides(flag):
-    """The flag with the first and the last point of every row light grey (SIDE)."""
+    """The flag with the first and the last point of every row halfway to light grey (SIDE, SIDE_TINT)."""
     flag = flag.copy()
     px = flag.load()
     w, h = flag.size
     for y in range(h):
         xs = [x for x in range(w) if px[x, y][3] > 0]
         for x in {xs[0], xs[-1]} if xs else ():
-            px[x, y] = SIDE + (px[x, y][3],)
+            r, g, b, a = px[x, y]
+            px[x, y] = tuple(round(SIDE + (v - SIDE) * SIDE_TINT) for v in (r, g, b)) + (a,)
     return flag
 
 

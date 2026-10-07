@@ -522,6 +522,9 @@ bool WorkerImplement::AutoSwitchAtSign() {
         if (other == lay) continue;
         const std::wstring there = InputSender::KeyText(last, other, false);
         sign = sign || (there.size() == 1 && there != here && wcschr(L".,;:?!\"'", there[0]));
+        // ... или знак, который в обеих раскладках один и тот же и кончает слово: Shift+1 - "!", Shift+0 - ")"
+        // ("Щщзы!" после щелчка ждало пробела, Дмитрий 07.10).
+        sign = sign || (there.size() == 1 && there == here && wcschr(L"!)", there[0]));
     }
     if (!sign) return false;
     std::wstring typed;
@@ -565,8 +568,17 @@ void WorkerImplement::AutoSwitchEarly() {
     const auto forced = AutoSwitchForced();
     bool fixedBefore = false;
     const auto tail = m_cycleList.TailWords(false, 6, &fixedBefore);
-    // После щелчка или стрелок в том же окне могли дописывать середину слова: на букву позже.
-    const size_t minLetters = AutoSwitch::kEarlyMin + (m_autoWord.moved ? 1 : 0);
+    // После щелчка или стрелок в том же окне могли дописывать середину слова: на букву позже - если только поле не
+    // говорит, что перед словом пробел, начало строки или знак (Дмитрий 07.10: вернулся в окно, щёлкнул в пустое поле,
+    // "Щщзы" - четыре буквы - не стало "Oops"). Поле спрашиваем, пока оно не ответит, ответ - на всё слово.
+    size_t minLetters = AutoSwitch::kEarlyMin;
+    if (m_autoWord.moved) {
+        if (m_autoWord.boundary < 0) {
+            m_autoWord.boundary = StartedAfterBoundary(typed);
+            LOG_ANY(L"autoswitch early: {} after a click or arrows, before it in the field: {}", typed, m_autoWord.boundary);
+        }
+        if (m_autoWord.boundary != 1) minLetters++;
+    }
     const std::wstring lang = Utils::GetNameForHKL_simple(lay);
     bool later = false;
     for (HKL other : cfg->layouts_info.EnabledLayouts()) {
@@ -827,6 +839,7 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
 void WorkerImplement::AutoWordEnd() {
     m_wordEnds++;
     m_autoWord.backspace = m_autoWord.moved = m_autoWord.undone = false;
+    m_autoWord.boundary = -1;
     if (!conf_get_unsafe()->autoswitch) return;
     CheckCurLay();
     m_autoWord.lay = CurLay();

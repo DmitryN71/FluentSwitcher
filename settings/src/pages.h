@@ -40,6 +40,7 @@ private:
                       const wxArrayString& defaults = wxArrayString());
 
     void BuildGeneral();
+    void BuildAutoSwitch();
     void BuildTyping();
     void BuildHotkeys();
     void BuildLayouts();

@@ -12,7 +12,7 @@ free and open source under GPL-3.0.
 
 - **Fixes the last word** typed in the wrong layout: erases it, types it in the other layout and switches to it.
 - **Fixes the selected text** in any app.
-- **Automatic layout switch** (turned on in Typing): a word typed in the wrong layout is fixed by itself after a
+- **Automatic layout switch** (turned on in Auto switch): a word typed in the wrong layout is fixed by itself after a
   space, Enter (Shift+Enter, Ctrl+Enter too) or Tab, and at once when its last key is a sign after a word in the other
   layout ("ПшеРгию" - "GitHub.", "b xnj&" - "и что?") - by the Windows dictionaries, as in LangBar++, and a long one already from the fourth letter
   ("njkm" - "толь"): the beginnings of words come from built-in lists of frequent words. Short words go by their

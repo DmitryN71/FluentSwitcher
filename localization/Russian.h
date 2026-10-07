@@ -100,9 +100,9 @@ constexpr std::array<std::pair<const char*, const char*>, 104> _Localization_Rus
     {"\"{}\" will not be fixed any more", "«{}» больше не исправляется"},
     {"It is in the exceptions of TWo INitial CApitals: Settings, Typing", "Слово – в исключениях ДВух ЗАглавных: Настройки, Набор текста"},
     {"\"{}\" will not be switched any more", "«{}» больше не переключается"},
-    {"It is in the exceptions of the layout auto switch: Settings, Typing", "Слово – в исключениях автопереключения: Настройки, Набор текста"},
+    {"It is in the exceptions of the layout auto switch: Settings, Auto switch", "Слово – в исключениях автопереключения: Настройки, Автопереключение"},
     {"\"{}\" will always be switched", "«{}» теперь переключается всегда"},
-    {"It is in \"Always switch\" of the layout auto switch: Settings, Typing", "Слово – в списке «Переключать всегда»: Настройки, Набор текста"},
+    {"It is in \"Always switch\" of the layout auto switch: Settings, Auto switch", "Слово – в списке «Переключать всегда»: Настройки, Автопереключение"},
     {"switched", "само"},
     {"switched back", "вернули"},
     {"by hand", "вручную"}

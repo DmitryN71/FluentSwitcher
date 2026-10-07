@@ -23,6 +23,14 @@ ICONS = [
     ("kIconDelete", "delete"),
 ]
 
+# Drawn by hand in the same 20 px grid and 1 px strokes, with the arrow of arrow_exit: written after the others.
+HANDMADE = [
+    # "Автопереключение": two arrows, to the right above and to the left below.
+    ("kIconAutoSwitch", "M14.15 3.15a.5.5 0 0 1 .7 0l2.5 2.5a.5.5 0 0 1 0 .7l-2.5 2.5a.5.5 0 0 1-.7-.7l1.64-1.65H3.5a.5.5 0 "
+                        "0 1 0-1h12.29l-1.64-1.65a.5.5 0 0 1 0-.7m-8.3 8a.5.5 0 0 0-.7 0l-2.5 2.5a.5.5 0 0 0 0 .7l2.5 "
+                        "2.5a.5.5 0 0 0 .7-.7L4.21 14.5H16.5a.5.5 0 0 0 0-1H4.21l1.64-1.65a.5.5 0 0 0 0-.7"),
+]
+
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -40,9 +48,11 @@ def main():
         if len(paths) != 1:
             raise SystemExit(f"{name}: {len(paths)} paths")
         lines.append(f'static const char* const {const} = "{paths[0]}"; // {name}')
+    for const, path in HANDMADE:
+        lines.append(f'static const char* const {const} = "{path}"; // drawn by hand (make_icons.py, HANDMADE)')
     out = os.path.join(HERE, "src", "icons.h")
     open(out, "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
-    print(f"{len(ICONS)} icons -> {out}")
+    print(f"{len(ICONS) + len(HANDMADE)} icons -> {out}")
 
 
 if __name__ == "__main__":

@@ -153,7 +153,7 @@ void StartGui() {
 				LOG_ANY(L"autoswitch: {} switched back", *word);
 				countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, *word,
 				            "\"{}\" will not be switched any more",
-				            "It is in the exceptions of the layout auto switch: Settings, Typing");
+				            "It is in the exceptions of the layout auto switch: Settings, Auto switch");
 				SaveApplyGuiConfig();
 				return 0;
 			}
@@ -175,7 +175,7 @@ void StartGui() {
 				}
 				LOG_ANY(L"autoswitch: {} fixed by hand", *word);
 				const bool learned = countToList(counts, conf_gui()->autoswitch_force, *word, "\"{}\" will always be switched",
-				                                 "It is in \"Always switch\" of the layout auto switch: Settings, Typing");
+				                                 "It is in \"Always switch\" of the layout auto switch: Settings, Auto switch");
 				if (counts.size() > 300) std::erase_if(counts, [](const auto& c) { return c.second < 2; });
 				if (learned) {
 					fixCountsChanged = false;

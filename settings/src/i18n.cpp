@@ -124,9 +124,9 @@ const std::unordered_map<std::string, const char*>& English()
         { "Обычный", "Normal" },
         { "Крупный", "Large" },
         { "Очень крупный", "Extra large" },
-        { "Размер флажка у курсора", "Size of the flag at the cursor" },
-        { "Флажки", "Flags" },
-        { "Флажок у текстового курсора", "Flag at the text cursor" },
+        { "Размер флага у курсора", "Size of the flag at the cursor" },
+        { "Флаги и звуки", "Flags and sounds" },
+        { "Флаг у текстового курсора", "Flag at the text cursor" },
         { "Показывает раскладку там, где вы печатаете", "Shows the layout where you type" },
         { "Сколько показывать «ненадолго»", "How long \"for a moment\" is" },
         { "После смены раскладки, окна или поля ввода", "After a change of the layout, the window or the input field" },
@@ -135,11 +135,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "3 секунды", "3 seconds" },
         { "5 секунд", "5 seconds" },
         { "10 секунд", "10 seconds" },
-        { "Где флажок", "Where the flag is" },
+        { "Где показывать флаг у курсора", "Where to show the flag at the cursor" },
         { "Если у края экрана места нет – с другой стороны строки", "No room at the screen's edge: on the other side of the line" },
         { "Под курсором", "Below the cursor" },
         { "Над курсором", "Above the cursor" },
-        { "Прозрачность флажка у курсора", "Transparency of the flag at the cursor" },
+        { "Прозрачность флага у курсора", "Transparency of the flag at the cursor" },
         { "Чтобы не отвлекал от текста", "So that it does not distract from the text" },
         { "Нет", "None" },
         { "Ничего", "Nothing" },
@@ -204,6 +204,7 @@ const std::unordered_map<std::string, const char*>& English()
 
         // Typing
         { "Набор текста", "Typing" },
+        { "Автопереключение", "Auto switch" },
         { "Автопереключение раскладки", "Switch the layout automatically" },
         { "Слово не в той раскладке исправляется само после пробела, Enter или Tab: ghbdtn – «привет»",
           "A word in the wrong layout is fixed by itself after a space, Enter or Tab: ghbdtn - \"привет\"" },
@@ -418,7 +419,7 @@ const std::unordered_map<std::string, const char*>& English()
           "Fixes text typed in the wrong keyboard layout and switches layouts" },
         { "Основан на SimpleSwitcher", "Based on SimpleSwitcher" },
         { "Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: окно настроек и флаги в стиле "
-          "Windows 11, флажок у курсора, исправление с начала строки, запуск от администратора без "
+          "Windows 11, флаг у курсора, исправление с начала строки, запуск от администратора без "
           "вопросов и другие исправления",
           "The original is by Aegel5. FluentSwitcher is a modified version: a settings window and flags in the "
           "Windows 11 style, the flag at the cursor, fixing from the start of the line, running as administrator "

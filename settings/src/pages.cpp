@@ -16,6 +16,8 @@
 #include <wx/utils.h>
 
 #include "../../src/Update.h" // after wxWidgets: Windows headers of its own
+#include <shlwapi.h>          // SHLoadIndirectString: the names of keyboards
+#pragma comment(lib, "shlwapi.lib")
 
 namespace
 {
@@ -360,20 +362,93 @@ void ReportDialog(wxWindow* parent, const wxString& report)
     dialog.ShowModal();
 }
 
-// "English (United States)", "русский (Россия)": the language of a layout, in that language.
-wxString LayoutName(const wxString& hkl)
+// "English (United States)", "Русский (Россия)": a language in that language. Empty - Windows has no name for it.
+wxString LanguageName(unsigned langid)
 {
-    unsigned long value = 0;
-    if (!hkl.ToULong(&value, 16))
-        return hkl;
     wchar_t locale[LOCALE_NAME_MAX_LENGTH] = {};
-    if (!LCIDToLocaleName(MAKELCID(LOWORD(value), SORT_DEFAULT), locale, LOCALE_NAME_MAX_LENGTH, 0))
-        return hkl;
+    if (!LCIDToLocaleName(MAKELCID(langid, SORT_DEFAULT), locale, LOCALE_NAME_MAX_LENGTH, 0))
+        return wxString();
     wchar_t name[256] = {};
     if (!GetLocaleInfoEx(locale, LOCALE_SNATIVEDISPLAYNAME, name, 256))
         return wxString(locale);
-    wxString s(name);
-    return s.Left(1).Upper() + s.Mid(1);
+    CharUpperBuffW(name, 1); // wxString::Upper left "русский" as it was: the C library's towupper knows Latin only
+    return wxString(name);
+}
+
+const wchar_t* const kKeyboardLayouts = L"SYSTEM\\CurrentControlSet\\Control\\Keyboard Layouts";
+
+// The keyboard of a layout as the registry names it: "00000409", "00010419". The high word of the layout is the
+// keyboard: a language's own ("0409", "0419"), an IME's (E...: the whole layout is its name) or, with F in front, the
+// "Layout Id" of a variant - Dvorak, the typewriter, the layouts made in Microsoft Keyboard Layout Creator (Birman's).
+// Empty - not found.
+wxString KeyboardId(unsigned layout)
+{
+    const unsigned keyboard = HIWORD(layout);
+    if ((keyboard & 0xF000) == 0xE000)
+        return wxString::Format("%08X", layout);
+    if ((keyboard & 0xF000) != 0xF000)
+        return wxString::Format("%08X", keyboard);
+    HKEY all = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, kKeyboardLayouts, 0, KEY_READ, &all) != ERROR_SUCCESS)
+        return wxString();
+    const wxString id = wxString::Format("%04X", keyboard & 0x0FFF);
+    wxString found;
+    wchar_t name[256];
+    for (DWORD i = 0; found.empty(); i++)
+    {
+        DWORD length = 256;
+        if (RegEnumKeyExW(all, i, name, &length, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS)
+            break;
+        wchar_t value[32] = {};
+        DWORD size = sizeof(value);
+        if (RegGetValueW(all, name, L"Layout Id", RRF_RT_REG_SZ, nullptr, value, &size) == ERROR_SUCCESS &&
+            id.IsSameAs(value, false)) // "001A" and "00a8" both occur
+            found = name;
+    }
+    RegCloseKey(all);
+    return found;
+}
+
+// "США", "Русская (машинопись)": a keyboard by the name Windows shows, in the language of Windows. Empty - not found.
+wxString KeyboardName(const wxString& id)
+{
+    HKEY key = nullptr;
+    if (id.empty() || RegOpenKeyExW(HKEY_LOCAL_MACHINE, (wxString(kKeyboardLayouts) + "\\" + id).wc_str(), 0, KEY_READ,
+                                    &key) != ERROR_SUCCESS)
+        return wxString();
+    // "@%SystemRoot%\system32\input.dll,-5056" - the name in the language of Windows; RegLoadMUIStringW does not find
+    // it there (ERROR_FILE_NOT_FOUND), SHLoadIndirectString does. "Layout Text" - in English.
+    wchar_t source[MAX_PATH] = {}, name[256] = {};
+    DWORD size = sizeof(source);
+    wxString found;
+    if (RegGetValueW(key, nullptr, L"Layout Display Name", RRF_RT_REG_SZ, nullptr, source, &size) == ERROR_SUCCESS &&
+        SUCCEEDED(SHLoadIndirectString(source, name, 256, nullptr)))
+        found = name;
+    size = sizeof(name);
+    if (found.empty() && RegGetValueW(key, nullptr, L"Layout Text", RRF_RT_REG_SZ, nullptr, name, &size) == ERROR_SUCCESS)
+        found = name;
+    RegCloseKey(key);
+    return found;
+}
+
+// The title of a layout's card: its language, and when its keyboard is not the language's own, the keyboard too -
+// "English (United States) – США (Дворак)": two layouts of one language differ. A language Windows has no name for -
+// the keyboard alone. 64-bit Windows widens a layout with the high bit set: the engine saves F0080419 (a variant) as
+// 0xFFFFFFFFF0080419, and only the low half counts (read as 32 bits, it did not fit and showed as that number).
+wxString LayoutName(const wxString& hkl)
+{
+    unsigned long long value = 0;
+    if (!hkl.ToULongLong(&value, 16))
+        return hkl;
+    const unsigned layout = unsigned(value);
+    const wxString language = LanguageName(LOWORD(layout));
+    const wxString keyboard = KeyboardId(layout);
+    if (!language.empty() && keyboard == wxString::Format("%08X", (unsigned)LOWORD(layout)))
+        return language;
+    const wxString name = KeyboardName(keyboard);
+    if (language.empty())
+        return name.empty() ? hkl : name;
+    return name.empty() ? language : language + wxString::FromUTF8(" – ") + name;
 }
 
 void HideCard(wxWindow* card)
@@ -417,6 +492,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     HotkeyEditor::s_doubleMs = (unsigned long)m_edit.GetInt("quick_press_ms", 280);
     RefreshEngine();
     BuildGeneral();
+    BuildAutoSwitch();
     BuildTyping();
     BuildHotkeys();
     BuildLayouts();
@@ -510,7 +586,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
         SetStatus(T("Не удалось прочитать FluentSwitcher.json: ") + loadError, true);
     ShowSection(section);
     SetSize(FromDIP(wxSize(860, 660)));
-    SetMinSize(FromDIP(wxSize(720, 440)));
+    SetMinSize(FromDIP(wxSize(720, 480))); // the nine sections and "Закрыть FluentSwitcher" under them
     CentreOnScreen();
 }
 
@@ -675,34 +751,9 @@ void SettingsFrame::WordListCard(const char* key, const wxString& title, const w
         CardTip(this->*label, tip);
 }
 
-void SettingsFrame::BuildTyping()
+void SettingsFrame::BuildAutoSwitch()
 {
-    Section(kIconTyping, T("Набор текста"));
-
-    // Saved as numbers (the engine's SeparateExtMode): Symbol 0, PossibleSymb_SeveralW 1, PossibleSymb_Always 2, Disabled 3.
-    static const int modes[] = { 0, 3, 1, 2 };
-    const wxArrayString names = { T("По пробелам и знакам препинания"), T("Только по пробелам"),
-                                  T("По пробелам, знакам и «возможным знакам» – при исправлении нескольких слов"),
-                                  T("По пробелам, знакам и «возможным знакам» – всегда") };
-    const int mode = m_edit.GetInt("separate_ext_mode", 0);
-    int selection = 0;
-    for (int i = 0; i < 4; i++)
-        if (modes[i] == mode)
-            selection = i;
-    Choice(T("Где кончается слово"),
-           T("Что исправлять как последнее слово. Знаки в конце слова исправляются вместе с ним: «cnjg?» – «стоп,». "
-             "«Возможный знак» – клавиша, которая в одной раскладке буква, а в другой знак, например б и ,"),
-           names, selection, [this](int i) { m_edit.SetInt("separate_ext_mode", modes[i]); }, true);
-
-    TextField* letters = nullptr;
-    AddSettingsCard(m_page, m_column, T("Считать буквами"),
-                    T("Эти знаки не разделяют слова: some_name, кто-то"), [&](wxWindow* card) {
-                        return letters = new TextField(card, m_edit.GetString("treat_as_letters", "_-"), 120);
-                    });
-    letters->onChange = [this, letters] {
-        m_edit.SetString("treat_as_letters", letters->Value());
-        Changed();
-    };
+    Section(kIconAutoSwitch, T("Автопереключение"));
 
     // The automatic layout switch (the engine's AutoSwitch.h): autoswitch, and in the middle of a word, autoswitch_early;
     // the words never switched, autoswitch_exceptions, and always switched, autoswitch_force; the journal,
@@ -782,6 +833,37 @@ void SettingsFrame::BuildTyping()
                         });
                         return make;
                     });
+    FinishPage();
+}
+
+void SettingsFrame::BuildTyping()
+{
+    Section(kIconTyping, T("Набор текста"));
+
+    // Saved as numbers (the engine's SeparateExtMode): Symbol 0, PossibleSymb_SeveralW 1, PossibleSymb_Always 2, Disabled 3.
+    static const int modes[] = { 0, 3, 1, 2 };
+    const wxArrayString names = { T("По пробелам и знакам препинания"), T("Только по пробелам"),
+                                  T("По пробелам, знакам и «возможным знакам» – при исправлении нескольких слов"),
+                                  T("По пробелам, знакам и «возможным знакам» – всегда") };
+    const int mode = m_edit.GetInt("separate_ext_mode", 0);
+    int selection = 0;
+    for (int i = 0; i < 4; i++)
+        if (modes[i] == mode)
+            selection = i;
+    Choice(T("Где кончается слово"),
+           T("Что исправлять как последнее слово. Знаки в конце слова исправляются вместе с ним: «cnjg?» – «стоп,». "
+             "«Возможный знак» – клавиша, которая в одной раскладке буква, а в другой знак, например б и ,"),
+           names, selection, [this](int i) { m_edit.SetInt("separate_ext_mode", modes[i]); }, true);
+
+    TextField* letters = nullptr;
+    AddSettingsCard(m_page, m_column, T("Считать буквами"),
+                    T("Эти знаки не разделяют слова: some_name, кто-то"), [&](wxWindow* card) {
+                        return letters = new TextField(card, m_edit.GetString("treat_as_letters", "_-"), 120);
+                    });
+    letters->onChange = [this, letters] {
+        m_edit.SetString("treat_as_letters", letters->Value());
+        Changed();
+    };
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
     CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух» после пробела, Enter или Tab"),
@@ -800,25 +882,6 @@ void SettingsFrame::BuildTyping()
             T("Только в английской раскладке и не в консоли или редакторе кода (VS Code, Visual Studio, JetBrains, "
               "Notepad++): там i – переменная. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): "
               "вернётся «i», а на третий раз оно попадёт в исключения ДВух ЗАглавных"));
-
-    const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
-    Choice(T("Как переключать раскладку"),
-           T("Если в каком-то приложении раскладка после исправления не переключается, выберите второй способ: "
-             "FluentSwitcher нажмёт то сочетание, которым раскладка переключается в Windows"),
-           { T("Обычный"), T("Нажимать сочетание Windows") }, alternative ? 1 : 0,
-           [this](int i) { m_edit.SetBool("AlternativeLayoutChange", i == 1); });
-
-    HotkeyEditor* windows = nullptr;
-    AddSettingsCard(m_page, m_column, T("Сочетание, которым раскладка переключается в Windows"),
-                    T("FluentSwitcher нажимает его сам при втором способе. Обычно Alt + Shift или Win + Пробел"),
-                    [&](wxWindow* card) {
-                        return windows = new HotkeyEditor(card, m_edit.GetString("win_hotkey_cycle_lang", "LAlt + Shift"),
-                                                          1, true, true);
-                    }, true);
-    windows->onChange = [this, windows] {
-        m_edit.SetString("win_hotkey_cycle_lang", windows->Value());
-        Changed();
-    };
     FinishPage();
 }
 
@@ -855,6 +918,25 @@ void SettingsFrame::BuildHotkeys()
         if (sides->IsOn())
             SetStatus(T("Запишите нужное сочетание заново: теперь левые и правые клавиши различаются"), false);
     };
+
+    // How keys are pressed, below the hotkeys: the double press (the hotkeys "дважды"; the recording here counts by it
+    // too) and the shortcuts of Windows that many presses of Shift open.
+    NumberField* quick = nullptr;
+    AddSettingsCard(m_page, m_column, T("Интервал двойного нажатия, мс"),
+                    T("Два нажатия быстрее этого считаются двойным – для сочетаний «дважды». Обычно 250–350"),
+                    [&](wxWindow* card) { return quick = new NumberField(card, m_edit.GetInt("quick_press_ms", 280)); });
+    quick->onChange = [this, quick] {
+        const int value = quick->Value();
+        if (value > 0 && value <= 1000)
+        {
+            m_edit.SetInt("quick_press_ms", value);
+            HotkeyEditor::s_doubleMs = (unsigned long)value;
+            Changed();
+        }
+    };
+    Toggle(T("Отключить залипание клавиш"),
+           T("Пять нажатий Shift и другие сочетания специальных возможностей Windows не будут открывать их окна"),
+           "disableAccessebility", false);
     FinishPage();
 }
 
@@ -875,34 +957,13 @@ void SettingsFrame::BuildLayouts()
 {
     Section(kIconLayouts, T("Раскладки"));
 
-    // Sounds (the engine's LayoutSound.h): sound_switch, sound_fix - per cent, 0 - none.
-    auto sound = [this](const wxString& title, const wxString& description, const char* key) {
-        const std::vector<int> volumes = { 0, 30, 60, 100 };
-        const wxArrayString names = { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") };
-        const int now = m_edit.GetInt(key, 0);
-        int index = 0;
-        for (size_t i = 0; i < volumes.size(); i++)
-            if (std::abs(volumes[i] - now) < std::abs(volumes[index] - now))
-                index = (int)i;
-        Choice(title, description, names, index, [this, volumes, key](int i) { m_edit.SetInt(key, volumes[i]); });
-    };
-    sound(T("Звук при переключении раскладки"),
-          T("Сочетанием FluentSwitcher или Windows, щелчком по флагу. Звук – switch.wav в папке sounds рядом с "
-            "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
-          "sound_switch");
-    sound(T("Звук при исправлении текста"),
-          T("Когда FluentSwitcher исправляет слово или выделенный текст. Звук – fix.wav в папке sounds"), "sound_fix");
-
+    // The layouts of Windows first; how FluentSwitcher switches between them below.
     auto& layouts = m_edit.Json()["layouts_info"];
     if (!layouts.is_array() || layouts.empty())
-    {
         AddSettingsCard(m_page, m_column, T("Раскладок пока нет"),
                         T("FluentSwitcher заполнит список раскладками Windows при запуске"),
                         [](wxWindow*) { return nullptr; });
-        FinishPage();
-        return;
-    }
-    for (size_t i = 0; i < layouts.size(); i++)
+    for (size_t i = 0; layouts.is_array() && i < layouts.size(); i++)
     {
         const auto& layout = layouts[i];
         const wxString hkl = layout.contains("layout") ? FromUtf8(layout["layout"].get<std::string>()) : wxString();
@@ -934,12 +995,32 @@ void SettingsFrame::BuildLayouts()
             Changed();
         };
     }
+
+    const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
+    Choice(T("Как переключать раскладку"),
+           T("Если в каком-то приложении раскладка после исправления не переключается, выберите второй способ: "
+             "FluentSwitcher нажмёт то сочетание, которым раскладка переключается в Windows"),
+           { T("Обычный"), T("Нажимать сочетание Windows") }, alternative ? 1 : 0,
+           [this](int i) { m_edit.SetBool("AlternativeLayoutChange", i == 1); });
+
+    HotkeyEditor* windows = nullptr;
+    AddSettingsCard(m_page, m_column, T("Сочетание, которым раскладка переключается в Windows"),
+                    T("FluentSwitcher нажимает его сам при втором способе. Обычно Alt + Shift или Win + Пробел"),
+                    [&](wxWindow* card) {
+                        return windows = new HotkeyEditor(card, m_edit.GetString("win_hotkey_cycle_lang", "LAlt + Shift"),
+                                                          1, true, true);
+                    }, true);
+    windows->onChange = [this, windows] {
+        m_edit.SetString("win_hotkey_cycle_lang", windows->Value());
+        Changed();
+    };
     FinishPage();
 }
 
 void SettingsFrame::BuildFlags()
 {
-    Section(kIconFlags, T("Флажки"));
+    // What shows and tells the layout: the flag by the clock (or letters), the flag at the text cursor, the sounds.
+    Section(kIconFlags, T("Флаги и звуки"));
 
     // The flag in the tray: the sets are the folders in "flags" next to the program.
     wxArrayString values, names;
@@ -1008,18 +1089,27 @@ void SettingsFrame::BuildFlags()
         Choice(title, description, itemNames, at,
                [this, key, numbers](int i) { m_edit.SetInt(key, numbers[i]); });
     };
-    numbers(T("Флажок у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
+    numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
             { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") });
     numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"), "caret_flag_brief_ms",
             2000, { 1000, 2000, 3000, 5000, 10000 }, { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"),
             T("10 секунд") });
-    numbers(T("Где флажок"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
-            { 0, 1 }, { T("Под курсором"), T("Над курсором") });
-    numbers(T("Размер флажка у курсора"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"),
+    numbers(T("Где показывать флаг у курсора"), T("Если у края экрана места нет – с другой стороны строки"),
+            "caret_flag_place", 0, { 0, 1 }, { T("Под курсором"), T("Над курсором") });
+    numbers(T("Размер флага у курсора"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"),
             "caret_flag_size", 20, { 16, 20, 24, 32 }, { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") });
-    numbers(T("Прозрачность флажка у курсора"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
+    numbers(T("Прозрачность флага у курсора"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
             { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
             T("Максимальная") });
+
+    // Sounds (the engine's LayoutSound.h): sound_switch, sound_fix - per cent, 0 - none.
+    numbers(T("Звук при переключении раскладки"),
+            T("Сочетанием FluentSwitcher или Windows, щелчком по флагу. Звук – switch.wav в папке sounds рядом с "
+              "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
+            "sound_switch", 0, { 0, 30, 60, 100 }, { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") });
+    numbers(T("Звук при исправлении текста"),
+            T("Когда FluentSwitcher исправляет слово или выделенный текст. Звук – fix.wav в папке sounds"), "sound_fix", 0,
+            { 0, 30, 60, 100 }, { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") });
     FinishPage();
 }
 
@@ -1185,9 +1275,6 @@ void SettingsFrame::BuildAdvanced()
 {
     Section(kIconAdvanced, T("Дополнительно"));
 
-    Toggle(T("Отключить залипание клавиш"),
-           T("Пять нажатий Shift и другие сочетания специальных возможностей Windows не будут открывать их окна"),
-           "disableAccessebility", false);
     Toggle(T("Сочетания с Ctrl + Alt в раскладках с AltGr"),
            T("Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "
              "польской раскладке, в русской – ₽ на Ctrl + Alt + 8. FluentSwitcher на миг переключает раскладку, и "
@@ -1207,19 +1294,6 @@ void SettingsFrame::BuildAdvanced()
         if (value > 0 && value <= 100)
         {
             m_edit.SetInt("retype_delay_ms", value);
-            Changed();
-        }
-    };
-
-    NumberField* quick = nullptr;
-    AddSettingsCard(m_page, m_column, T("Интервал двойного нажатия, мс"),
-                    T("Два нажатия быстрее этого считаются двойным – для сочетаний «дважды». Обычно 250–350"),
-                    [&](wxWindow* card) { return quick = new NumberField(card, m_edit.GetInt("quick_press_ms", 280)); });
-    quick->onChange = [this, quick] {
-        const int value = quick->Value();
-        if (value > 0 && value <= 1000)
-        {
-            m_edit.SetInt("quick_press_ms", value);
             Changed();
         }
     };
@@ -1285,7 +1359,7 @@ void SettingsFrame::BuildAbout()
                                     });
     AddSettingsCard(m_page, m_column, T("Основан на SimpleSwitcher"),
                     T("Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: окно настроек и флаги в стиле "
-                      "Windows 11, флажок у курсора, исправление с начала строки, запуск от администратора без "
+                      "Windows 11, флаг у курсора, исправление с начала строки, запуск от администратора без "
                       "вопросов и другие исправления"),
                     [this](wxWindow* card) {
                         FluentButton* open = new FluentButton(card, wxID_ANY, T("Открыть на GitHub"));

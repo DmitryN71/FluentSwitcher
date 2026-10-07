@@ -154,6 +154,27 @@ void StartGui() {
 				return 0;
 			}
 
+			if (msg == WM_AutoSwitchLearnForce) {
+				// Слово исправили вручную ("Исправить последнее слово"), автопереключение его не тронуло. Как отмены: счёт - в
+				// настройках, на третий раз слово уходит в "Переключать всегда" (в нужном виде), о чём говорит
+				// уведомление у флага. (Maz на форуме, 07.10: "будет ли программа предлагать ... как Пунто?")
+				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
+				const std::string utf8 = StrUtils::Convert(*word);
+				auto& counts = conf_gui()->autoswitch_fix;
+				const int times = ++counts[utf8];
+				LOG_ANY(L"autoswitch: {} fixed by hand {} times", *word, times);
+				if (times >= 3) {
+					counts.erase(utf8);
+					auto& list = conf_gui()->autoswitch_force;
+					if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
+					trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("\"{}\" will always be switched"), std::make_format_args(utf8))),
+						StrUtils::Convert(std::string(LOC("It is in \"Always switch\" of the layout auto switch: Settings, Typing"))),
+						[] { show_main_wind(); });
+				}
+				SaveApplyGuiConfig();
+				return 0;
+			}
+
 			if (msg == WM_JournalLine) {
 				std::unique_ptr<std::string> line(reinterpret_cast<std::string*>(lParam));
 				WriteJournalLine(*line);

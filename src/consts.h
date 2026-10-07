@@ -15,6 +15,8 @@ static const UINT WM_TwoCapsLearn = 0xBFFF - 24; // lParam - std::wstring*: сл
 static const UINT WM_AutoSwitchLearn = 0xBFFF - 23; // lParam - std::wstring*: автопереключение отменили (AutoSwitch.h)
 static const UINT WM_AutoSwitchUnlearn = 0xBFFF - 22; // lParam - std::wstring*: ... и тут же исправили снова - не в счёт
 static const UINT WM_JournalLine = 0xBFFF - 21; // lParam - std::string* (UTF-8): строка журнала автопереключения - в файл
+static const UINT WM_AutoSwitchLearnForce = 0xBFFF - 20; // lParam - std::wstring*: слово исправили вручную - в счёт
+                                                         // "Переключать всегда" (на третий раз - туда)
 
 static const UINT c_timerKeyloggerDefence = 12;
 static const TChar c_sArgAutostart[] = L"/autostart";

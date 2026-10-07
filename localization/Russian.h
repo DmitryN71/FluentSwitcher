@@ -1,7 +1,7 @@
 #include <utility>
 #include <array>
 
-constexpr std::array<std::pair<const char*, const char*>, 102> _Localization_Russian = {{
+constexpr std::array<std::pair<const char*, const char*>, 104> _Localization_Russian = {{
     {"More info:", "Подробнее:"},
     {"❤ Support ❤", "❤ Поддержать ❤"},
     {"The program develops only thanks to your support! 🤝", "Приложение развивается только благодаря вашей поддержке! 🤝"},
@@ -101,6 +101,8 @@ constexpr std::array<std::pair<const char*, const char*>, 102> _Localization_Rus
     {"It is in the exceptions of TWo INitial CApitals: Settings, Typing", "Слово – в исключениях ДВух ЗАглавных: Настройки, Набор текста"},
     {"\"{}\" will not be switched any more", "«{}» больше не переключается"},
     {"It is in the exceptions of the layout auto switch: Settings, Typing", "Слово – в исключениях автопереключения: Настройки, Набор текста"},
+    {"\"{}\" will always be switched", "«{}» теперь переключается всегда"},
+    {"It is in \"Always switch\" of the layout auto switch: Settings, Typing", "Слово – в списке «Переключать всегда»: Настройки, Набор текста"},
     {"switched", "само"},
     {"switched back", "вернули"},
     {"by hand", "вручную"}

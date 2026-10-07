@@ -241,9 +241,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Даже если словарь их не знает или это одна буква: the, a",
           "Even when the dictionary does not know them or it is one letter: the, a" },
         { "Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "
-          "другом виде (еру) переключало бы правильно набранное",
+          "другом виде (еру) переключало бы правильно набранное. Слово попадает сюда и само – после третьего "
+          "исправления вручную («Исправить последнее слово»)",
           "Write the word as it should be: the - and \"еру\" typed becomes the, a - and \"ф\" becomes a. A word in "
-          "the other form (еру) would switch what is typed right" },
+          "the other form (еру) would switch what is typed right. A word gets here by itself too - after it is fixed "
+          "by hand (\"Fix the last word\") the third time" },
         { "По слову в строке – в том виде, какой нужен: the, a", "One word per line, as it should be: the, a" },
         { "Журнал автопереключения", "Journal of the automatic switch" },
         { "Что переключилось само, что вернули и что исправили вручную",

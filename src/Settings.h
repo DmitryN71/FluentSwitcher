@@ -140,8 +140,10 @@ public:
 	std::vector<std::string> autoswitch_exceptions;
 	std::map<std::string, int> autoswitch_undo;
 	// Переключать всегда (в нужном виде): слова, которые словарь не знает или знает в другом языке ("еру" - the), и
-	// одиночные буквы ("ф" - a).
+	// одиночные буквы ("ф" - a). Слово попадает сюда и само: исправленное вручную ("Исправить последнее слово") в
+	// третий раз - счёт в autoswitch_fix (в нужном виде, строчными).
 	std::vector<std::string> autoswitch_force = { "the", "a" };
+	std::map<std::string, int> autoswitch_fix;
 	// Журнал автопереключения (log\autoswitch.log): что переключилось само, что вернули, что исправили вручную.
 	bool autoswitch_journal = false;
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.

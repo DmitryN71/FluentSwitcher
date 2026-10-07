@@ -687,7 +687,8 @@ void SettingsFrame::BuildTyping()
     WordListCard("autoswitch_force", T("Переключать всегда"),
                  T("Даже если словарь их не знает или это одна буква: the, a"),
                  T("Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "
-                   "другом виде (еру) переключало бы правильно набранное"),
+                   "другом виде (еру) переключало бы правильно набранное. Слово попадает сюда и само – после третьего "
+                   "исправления вручную («Исправить последнее слово»)"),
                  T("По слову в строке – в том виде, какой нужен: the, a"), &SettingsFrame::m_autoSwitchForce,
                  { wxString("the"), wxString("a") }); // as autoswitch_force in the engine's Settings.h
     // The journal: on / off and "Открыть" (the file, in the folder of the debug log) on one card.

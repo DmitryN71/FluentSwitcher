@@ -681,8 +681,19 @@ void WorkerImplement::JournalHandFix() {
     const bool again = !undone.word.empty() && GetTickCount64() - undone.at < 10000 &&
         AutoSwitch::Lower(AutoSwitch::Letters(typed).core) == undone.word;
     if (again) PostMessageW(g_guiHandle, WM_AutoSwitchUnlearn, 0, (LPARAM)new std::wstring(undone.word));
+    if (IsPasswordFocus() || IsPasswordUia()) return; // пароль, исправленный вручную, - ни в счёт, ни в журнал
+    // Слово, которое автопереключение не тронуло, исправили вручную: в счёт "Переключать всегда" (на третий раз - туда,
+    // gui2/main.cpp) - в нужном виде, строчными. Не в счёт: одна буква, знак внутри или цифры (адрес, код), слово из
+    // "Не переключать", слово, которое и так в "Переключать всегда".
+    if (!again) {
+        const auto part = AutoSwitch::Letters(fixed);
+        const std::wstring word = AutoSwitch::Lower(part.core);
+        const bool digits = std::ranges::any_of(typed, [](wchar_t c) { return iswdigit(c) != 0; });
+        if (word.size() >= 2 && !part.inner && !digits && !AutoSwitch::Excepted(typed, fixed, AutoSwitchExceptions()) &&
+            !AutoSwitch::Forced(typed, fixed, AutoSwitchForced()))
+            PostMessageW(g_guiHandle, WM_AutoSwitchLearnForce, 0, (LPARAM)new std::wstring(word));
+    }
     if (!cfg->autoswitch_journal) return;
-    if (IsPasswordFocus() || IsPasswordUia()) return; // пароль, исправленный вручную, - не в журнал
     // Почему автопереключение его не тронуло: проверяло это слово - его причина; нет - до проверки не дошло (быстрый
     // набор во время другой проверки, окно от администратора, отключено).
     Journal("by hand", typed, fixed,

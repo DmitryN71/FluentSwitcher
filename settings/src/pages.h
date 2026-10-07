@@ -32,12 +32,14 @@ private:
     wxWindow* Toggle(const wxString& title, const wxString& description, const char* key, bool def);
     wxWindow* Choice(const wxString& title, const wxString& description, const wxArrayString& items, int selection,
                      std::function<void(int)> picked, bool below = false);
-    // A list of words (the lists of the automatic switch, the exceptions of ДВе ЗАглавные) on a card that opens in place
-    // (wordlist.h). key - the array in the file; tip - the details, the tooltip of the title; defaults - the list while
-    // the file has none (the engine's own defaults, Settings.h).
-    void WordList(const char* key, WordListCard::Kind kind, const wxString& title, const wxString& about,
+    // A card with a list of words (the lists of the automatic switch, the exceptions of ДВе ЗАглавные): what it is for
+    // and how many words it has; "Изменить…" opens the list in a window of its own (wordlist.h). key - the array in the
+    // file; help - the text of that window; tip - the details, the tooltip of the title; defaults - the list while the
+    // file has none (the engine's own defaults, Settings.h).
+    void WordList(const char* key, WordKind kind, const wxString& title, const wxString& about, const wxString& help,
                   const wxString& tip, const wxArrayString& defaults = wxArrayString());
-    // The words of the lists from m_edit on their cards again (Apply took the words the engine learned meanwhile).
+    // The counts of the lists' cards from m_edit again (after the window of a list, after Apply took the words the
+    // engine learned meanwhile).
     void RefillWordLists();
 
     void BuildGeneral();
@@ -96,7 +98,8 @@ private:
     {
         const char* key;
         wxArrayString defaults;
-        WordListCard* card;
+        wxString about;
+        wxStaticText* label; // the card's description: what the list is for and how many words it has
     };
     std::vector<WordListOnPage> m_wordLists;
     wxString m_updatePage;

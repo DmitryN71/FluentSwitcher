@@ -164,7 +164,25 @@ const std::unordered_map<std::string, const char*>& English()
         { "выучено", "learned" },
         { "«%s»", "\"%s\"" },
         { "и %s", "and %s" },
-        { "набрано как %s", "typed as %s" },
+        { "набранное %s станет %s", "typed %s becomes %s" },
+        { "Теперь %s", "Now %s" },
+        { "Наоборот: %s", "The other way: %s" },
+        { "Enter добавит: %s", "Enter adds: %s" },
+        { "Введите слово – как оно должно быть или как набирается по ошибке: Enter добавит его",
+          "Type a word - as it should be or as it gets typed by mistake: Enter adds it" },
+        { "Изменить…", "Edit…" },
+        { "Слова, которые автопереключение не трогает. Одно слово – в обеих раскладках: cv закрывает и «см»",
+          "Words the automatic switch leaves alone. One word stands for both layouts: cv covers \"см\" too" },
+        { "Слова, которые переключаются сразу, как набраны целиком, даже если словарь их не знает. Слева – что "
+          "набрано, справа – что получится. Вводить можно любое из двух: приложение само поймёт, что из них "
+          "слово; не так – ⇄ на строке меняет направление",
+          "Words switched as soon as they are typed whole, even when the dictionary does not know them. On the left - "
+          "what is typed, on the right - what it becomes. Either of the two can be typed in: the app works out which of "
+          "them is the word; if it guesses wrong, ⇄ on the row turns the direction" },
+        { "Слова, которые так и пишутся: VMware, IPsec. Слово от четырёх букв закрывает и те, что с него "
+          "начинаются: IPsec – и IPsecs. Регистр букв важен",
+          "Words that are written so on purpose: VMware, IPsec. A word of four letters or more also covers the words "
+          "that start with it: IPsec - and IPsecs. Letter case matters" },
         { "Не найдено", "Nothing found" },
         { "Уже в списке", "Already in the list" },
         { "Уже в списке: %s", "Already in the list: %s" },

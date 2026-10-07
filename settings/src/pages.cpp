@@ -671,41 +671,54 @@ static std::vector<HKL> SwitchLayouts(const Config& config)
     return layouts;
 }
 
-void SettingsFrame::WordList(const char* key, WordListCard::Kind kind, const wxString& title, const wxString& about,
-                             const wxString& tip, const wxArrayString& defaults)
+static wxString WordCountText(const wxString& about, size_t n)
 {
-    WordListCard* card = new WordListCard(m_page, kind, WithTip(title), about, SwitchLayouts(m_edit));
-    m_column->Add(card, 0, wxEXPAND | wxBOTTOM, FromDIP(4)); // as AddSettingsCard
-    CardTip(card, tip);
-    card->onChange = [this, key, card] {
-        nlohmann::json words = nlohmann::json::array(), learned = nlohmann::json::array();
-        for (const wxString& w : card->Words())
-            words.push_back(w.utf8_string());
-        for (const wxString& w : card->Learned())
-            learned.push_back(w.utf8_string());
-        nlohmann::json& file = m_edit.Json();
-        file[key] = words;
-        // "learned" only while it has marks: the file stays as it was when the window changed nothing in it.
-        if (!learned.empty())
-            file["learned"][key] = learned;
-        else if (file.contains("learned") && file["learned"].is_object())
-        {
-            file["learned"].erase(key);
-            if (file["learned"].empty())
-                file.erase("learned");
-        }
-        Changed();
-    };
-    m_wordLists.push_back({ key, defaults, card });
-    const nlohmann::json& file = std::as_const(m_edit).Json();
-    card->SetWords(JsonWords(file, key, defaults), LearnedWords(file, key));
+    return about + "\n" + (n == 0 ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), n));
+}
+
+void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& title, const wxString& about,
+                             const wxString& help, const wxString& tip, const wxArrayString& defaults)
+{
+    const nlohmann::json& now = std::as_const(m_edit).Json();
+    wxStaticText* label = AddSettingsCard(
+        m_page, m_column, WithTip(title), WordCountText(about, JsonWords(now, key, defaults).size()),
+        [this, key, kind, title, help, defaults](wxWindow* card) {
+            FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
+            edit->Bind(wxEVT_BUTTON, [this, key, kind, title, help, defaults](wxCommandEvent&) {
+                const nlohmann::json& file = std::as_const(m_edit).Json();
+                WordListWords list{ JsonWords(file, key, defaults), LearnedWords(file, key) };
+                if (!EditWordList(this, kind, title, help, SwitchLayouts(m_edit), &list))
+                    return;
+                nlohmann::json words = nlohmann::json::array(), learned = nlohmann::json::array();
+                for (const wxString& w : list.words)
+                    words.push_back(w.utf8_string());
+                for (const wxString& w : list.learned)
+                    learned.push_back(w.utf8_string());
+                nlohmann::json& out = m_edit.Json();
+                out[key] = words;
+                // "learned" only while it has marks: the file stays as it was when the window changed nothing in it.
+                if (!learned.empty())
+                    out["learned"][key] = learned;
+                else if (out.contains("learned") && out["learned"].is_object())
+                {
+                    out["learned"].erase(key);
+                    if (out["learned"].empty())
+                        out.erase("learned");
+                }
+                Changed();
+                RefillWordLists();
+            });
+            return edit;
+        });
+    CardTip(label, tip);
+    m_wordLists.push_back({ key, defaults, about, label });
 }
 
 void SettingsFrame::RefillWordLists()
 {
     const nlohmann::json& file = std::as_const(m_edit).Json();
     for (const WordListOnPage& list : m_wordLists)
-        list.card->SetWords(JsonWords(file, list.key, list.defaults), LearnedWords(file, list.key));
+        SetCardDescription(list.label, WordCountText(list.about, JsonWords(file, list.key, list.defaults).size()));
 }
 
 void SettingsFrame::BuildAutoSwitch()
@@ -731,11 +744,15 @@ void SettingsFrame::BuildAutoSwitch()
               "русских и 150 тысяч английских форм), и по списку «Переключать всегда». В конце слова оно проверяется "
               "ещё раз по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
               "третий раз его начало попадёт в «Не переключать»"));
-    WordList("autoswitch_exceptions", WordListCard::Never, T("Не переключать"),
+    WordList("autoswitch_exceptions", WordKind::Never, T("Не переключать"),
              T("Например, cv или см – в любой раскладке"),
+             T("Слова, которые автопереключение не трогает. Одно слово – в обеих раскладках: cv закрывает и «см»"),
              T("Слово попадает сюда и само – после третьей отмены автопереключения, с отметкой «выучено»"));
-    WordList("autoswitch_force", WordListCard::Always, T("Переключать всегда"),
+    WordList("autoswitch_force", WordKind::Always, T("Переключать всегда"),
              T("Даже если словарь их не знает или это одна буква: the, a"),
+             T("Слова, которые переключаются сразу, как набраны целиком, даже если словарь их не знает. Слева – что "
+               "набрано, справа – что получится. Вводить можно любое из двух: приложение само поймёт, что из них "
+               "слово; не так – ⇄ на строке меняет направление"),
              T("Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "
                "другом виде (еру) переключало бы правильно набранное. Слово попадает сюда и само – после третьего "
                "исправления вручную («Исправить последнее слово»), с отметкой «выучено»"),
@@ -828,8 +845,10 @@ void SettingsFrame::BuildTyping()
               "последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – "
               "Двух"));
     // The exceptions: in a window of their own, one per line; the card says how many.
-    WordList("two_caps_exceptions", WordListCard::Caps, T("Исключения для ДВух ЗАглавных"),
+    WordList("two_caps_exceptions", WordKind::Caps, T("Исключения для ДВух ЗАглавных"),
              T("Слова, которые так и пишутся: VMware, IPsec"),
+             T("Слова, которые так и пишутся: VMware, IPsec. Слово от четырёх букв закрывает и те, что с него "
+               "начинаются: IPsec – и IPsecs. Регистр букв важен"),
              T("Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само слово попадает сюда после "
                "третьей отмены, с отметкой «выучено»"));
     // The English i alone - I (the engine's TwoCaps::LoneI): fix_lone_i.

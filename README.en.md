@@ -20,7 +20,7 @@ free and open source under GPL-3.0.
   too: "нфдлштп" - "yalking". Words with digits, abbreviations, a word typed again after the layout was switched by
   hand right after a fix, a word after Backspace, passwords and the console are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word
-  you keep fixing by hand goes to "Always switch" the third time. The lists are edited right in the settings window: one field adds and finds a word, each shows how it looks in the other layout ("http" - typed as "реез"), the words the app learned are marked. The journal
+  you keep fixing by hand goes to "Always switch" the third time. The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked. The journal
   of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the
   reason; its mistakes make a report for the forum topic - you see and can edit the text, the app sends nothing.
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab. PCs, IDs, GHz, eM, iPhone are left alone, and there

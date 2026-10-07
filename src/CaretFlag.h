@@ -335,6 +335,59 @@ private:
 		return true;
 	}
 
+	// PowerShell ISE (его редактор - из Visual Studio 2010, WpfTextView): UI Automation отдаёт прямоугольники текста в
+	// координатах самого редактора - точки (1/96 дюйма) от левого верхнего угла его видимой части, а не экрана, - и только
+	// строки целиком, даже для одного символа (флажок стоял на меню, форум 07.10). Каретка там: её строка, перенесённая на
+	// экран, а в строке - номер символа, умноженный на ширину символа (шрифт редактора моноширинный, Lucida Console).
+	// Редактор, который отдаёт координаты экрана (первая видимая строка - там, где он сам на экране), - как обычно.
+	static bool EditorCaret(IUIAutomationElement* el, IUIAutomationTextPattern* tp, IUIAutomationTextRange* caret, RECT& rc) {
+		CComBSTR cls;
+		if (FAILED(el->get_CurrentClassName(&cls)) || !cls || wcscmp(cls, L"WpfTextView") != 0) return false;
+		RECT box{}, first{}, line{};
+		CComPtr<IUIAutomationTextRangeArray> visible;
+		CComPtr<IUIAutomationTextRange> top;
+		int n = 0;
+		if (FAILED(el->get_CurrentBoundingRectangle(&box)) || box.right <= box.left ||
+			FAILED(tp->GetVisibleRanges(&visible)) || !visible || FAILED(visible->get_Length(&n)) || n < 1 ||
+			FAILED(visible->GetElement(0, &top)) || !top || !Rects(top, first)) {
+			return false;
+		}
+		// Первая видимая строка: у своих координат - у нуля (сверху бывает видна только её часть), у экранных - у края
+		// редактора. Прокрутка вбок сдвигает строки влево.
+		const LONG h = first.bottom - first.top;
+		const bool own = first.left <= 8 && std::abs(first.top) <= h + 2;
+		const bool screen = std::abs(first.left - box.left) <= 8 && std::abs(first.top - box.top) <= h + 2;
+		if (!own || screen) return false;
+
+		// Строка каретки и сколько символов в ней до каретки.
+		CComPtr<IUIAutomationTextRange> ln, head, doc;
+		CComBSTR text, before;
+		if (FAILED(caret->Clone(&ln)) || !ln || FAILED(ln->ExpandToEnclosingUnit(TextUnit_Line)) || !Rects(ln, line) ||
+			FAILED(ln->Clone(&head)) || !head ||
+			FAILED(head->MoveEndpointByRange(TextPatternRangeEndpoint_End, caret, TextPatternRangeEndpoint_Start)) ||
+			FAILED(ln->GetText(-1, &text)) || FAILED(head->GetText(-1, &before))) {
+			return false;
+		}
+		auto chars = [](const CComBSTR& s) {
+			UINT len = s.Length();
+			while (len > 0 && (s[len - 1] == L'\r' || s[len - 1] == L'\n')) len--;
+			return len;
+		};
+		const UINT len = chars(text), col = std::min(chars(before), len);
+		// Прямоугольник строки с переводом строки в конце шире на символ; у последней строки текста его нет.
+		int end = 0;
+		const bool last = SUCCEEDED(tp->get_DocumentRange(&doc)) && doc &&
+			SUCCEEDED(ln->CompareEndpoints(TextPatternRangeEndpoint_End, doc, TextPatternRangeEndpoint_End, &end)) && end >= 0;
+		const UINT cells = len + (last ? 0 : 1);
+		const double x = line.left + (cells ? double(line.right - line.left) * col / cells : 0);
+		UINT dpiX = 96, dpiY = 96;
+		GetDpiForMonitor(MonitorFromRect(&box, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+		const double k = dpiX / 96.0;
+		const LONG cx = box.left + std::lround(x * k);
+		rc = { cx, box.top + std::lround(line.top * k), cx + 1, box.top + std::lround(line.bottom * k) };
+		return rc.bottom > rc.top;
+	}
+
 	// Каретка в текстовом элементе UI Automation. editable - элемент уже проверен как поле ввода (браузер): без
 	// символов у каретки - у края поля, какого бы типа он ни был.
 	static bool UiaCaret(IUIAutomationElement* el, RECT& rc, bool editable = false) {
@@ -358,6 +411,8 @@ private:
 				range->MoveEndpointByRange(TextPatternRangeEndpoint_Start, range, TextPatternRangeEndpoint_End);
 			}
 		}
+
+		if (range && tp && EditorCaret(el, tp, range, rc)) return true;
 
 		RECT r{};
 		if (range) {

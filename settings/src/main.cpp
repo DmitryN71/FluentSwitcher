@@ -112,7 +112,7 @@ public:
         Config config;
         wxString error;
         config.Load(configPath, &error);
-        SetEnglish(EnglishFor(config.GetString("gui_lang", wxString())));
+        SetLanguage(LanguageFor(config.GetString("gui_lang", wxString())));
 
         // The theme (ui_theme): as Windows, or light or dark whatever Windows has. Dark mode also gives the
         // scroll bars and the frame; it must be on before the first window.

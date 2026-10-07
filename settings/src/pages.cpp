@@ -138,7 +138,9 @@ wxString LayoutList()
 // are; -1 - no journal.
 wxString JournalReport(const wxString& folder, const Config& config, int* errors)
 {
-    const wxString back = wxString::FromUTF8("вернули"), hand = wxString::FromUTF8("вручную"); // the journal in Russian
+    // The journal in Russian or Ukrainian ("вручну" begins "вручную" too).
+    const wxString back = wxString::FromUTF8("вернули"), backUk = wxString::FromUTF8("повернули"),
+                   hand = wxString::FromUTF8("вручну");
     wxArrayString found;
     wxString first, last;
     int switched = 0, backs = 0, hands = 0;
@@ -161,7 +163,7 @@ wxString JournalReport(const wxString& folder, const Config& config, int* errors
             if (line.length() < 22)
                 continue;
             const wxString kind = line.Mid(21);
-            const bool isBack = kind.StartsWith("switched back") || kind.StartsWith(back);
+            const bool isBack = kind.StartsWith("switched back") || kind.StartsWith(back) || kind.StartsWith(backUk);
             const bool isHand = kind.StartsWith("by hand") || kind.StartsWith(hand);
             (isBack ? backs : isHand ? hands : switched)++;
             if (first.empty())
@@ -583,11 +585,12 @@ void SettingsFrame::BuildGeneral()
              "он запускается через планировщик заданий без вопросов"),
            "isMonitorAdmin", false);
 
-    // Each language by its own name, in either language of the window.
-    const wxArrayString langValues = { "English", "Russian" };
-    const wxArrayString langNames = { wxString("English"), wxString::FromUTF8("Русский") };
+    // Each language by its own name, in any language of the window; in the order of Language.
+    const wxArrayString langValues = { "Russian", "English", "Ukrainian" };
+    const wxArrayString langNames = { wxString::FromUTF8("Русский"), wxString("English"),
+                                      wxString::FromUTF8("Українська") };
     Choice(T("Язык"), T("Этого окна и меню у флага. Окно откроется на новом языке после сохранения"), langNames,
-           IsEnglish() ? 0 : 1, [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
+           (int)CurrentLanguage(), [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
 
     // "" - as Windows; main.cpp reads it when the window starts.
     const wxArrayString themeValues = { wxString(), wxString("Light"), wxString("Dark") };
@@ -741,7 +744,8 @@ void SettingsFrame::BuildAutoSwitch()
                    "autoswitch_early", true),
             T("Переключает посреди слова, когда так не начинается ни одно слово своего языка, а те же клавиши в другой "
               "раскладке – начало слова. Начала слов – по спискам частых слов, встроенным в приложение (330 тысяч "
-              "русских и 150 тысяч английских форм), и по списку «Переключать всегда». В конце слова оно проверяется "
+              "русских, 150 тысяч английских и 98 тысяч украинских форм), и по списку «Переключать всегда». В конце "
+              "слова оно проверяется "
               "ещё раз по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
               "третий раз его начало попадёт в «Не переключать»"));
     WordList("autoswitch_exceptions", WordKind::Never, T("Не переключать"),
@@ -1137,7 +1141,7 @@ void SettingsFrame::FillCommands()
             wxPanel* panel = new wxPanel(card);
             panel->SetBackgroundColour(card->GetBackgroundColour());
             wxBoxSizer* rows = new wxBoxSizer(wxVERTICAL);
-            auto label = [panel](const char* text) { return FluentText(panel, T(text), 9, g.text2); };
+            auto label = [panel](const char* text) { return FluentText(panel, T(text), 9, g.text2); }; // text: N_("...")
 
             // What it does, on or off, remove.
             wxBoxSizer* top = new wxBoxSizer(wxHORIZONTAL);
@@ -1184,7 +1188,7 @@ void SettingsFrame::FillCommands()
                 m_edit.Json()["run_programs"][i]["cmd"] = ToUtf8(what->Value());
                 Changed();
             };
-            rows->Add(label(snippet ? "Текст" : "Приложение"), 0, wxTOP, FromDIP(10));
+            rows->Add(label(snippet ? N_("Текст") : N_("Приложение")), 0, wxTOP, FromDIP(10));
             wxBoxSizer* whatRow = new wxBoxSizer(wxHORIZONTAL);
             whatRow->Add(what, 0, wxALIGN_CENTER_VERTICAL);
             if (!snippet)
@@ -1221,15 +1225,15 @@ void SettingsFrame::FillCommands()
                     }
                 };
                 wxFlexGridSizer* more = new wxFlexGridSizer(2, FromDIP(4), FromDIP(16));
-                more->Add(label("Аргументы"));
-                more->Add(label("Пауза, мс"));
+                more->Add(label(N_("Аргументы")));
+                more->Add(label(N_("Пауза, мс")));
                 more->Add(args);
                 more->Add(delay);
                 rows->Add(more, 0, wxTOP, FromDIP(10));
             }
 
             // Its hotkeys, and running it now.
-            rows->Add(label("Сочетание"), 0, wxTOP, FromDIP(10));
+            rows->Add(label(N_("Сочетание")), 0, wxTOP, FromDIP(10));
             wxBoxSizer* keysRow = new wxBoxSizer(wxHORIZONTAL);
             HotkeyEditor* keys = new HotkeyEditor(panel, FromUtf8(command.value("hotkey", std::string())), 2, false);
             keys->onChange = [this, keys, i] {

@@ -6,9 +6,11 @@
 #include <string>
 #include <unordered_map>
 
+const std::unordered_map<std::string, const char*>& UkrainianTexts(); // i18n_uk.cpp
+
 namespace
 {
-bool g_english = false;
+Language g_language = Language::Russian;
 
 // Russian (as in the code) -> English. American spelling; "app", not "program".
 // tools/extract_strings.py lists the texts of the code that are not here yet.
@@ -261,12 +263,13 @@ const std::unordered_map<std::string, const char*>& English()
           "Switch from the fourth letter: njkm becomes \"толь\", ыщьу - some" },
         { "Переключает посреди слова, когда так не начинается ни одно слово своего языка, а те же клавиши в другой "
           "раскладке – начало слова. Начала слов – по спискам частых слов, встроенным в приложение (330 тысяч "
-          "русских и 150 тысяч английских форм), и по списку «Переключать всегда». В конце слова оно проверяется "
+          "русских, 150 тысяч английских и 98 тысяч украинских форм), и по списку «Переключать всегда». В конце "
+          "слова оно проверяется "
           "ещё раз по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
           "третий раз его начало попадёт в «Не переключать»",
           "Switches in the middle of a word when no word of its language begins like that while the same keys in the "
           "other layout are the beginning of a word. The beginnings come from lists of frequent words built into the "
-          "program (330 thousand Russian and 150 thousand English forms) and from \"Always switch\". At the end "
+          "app (330 thousand Russian, 150 thousand English and 98 thousand Ukrainian forms) and from \"Always switch\". At the end "
           "of the word it is checked once more by the dictionary.\nSwitched by mistake - press \"Fix the last word\" (Shift "
           "twice): the word comes back, and the third time its beginning goes to \"Never switch\"" },
         { "Не переключать", "Never switch" },
@@ -490,30 +493,42 @@ const std::unordered_map<std::string, const char*>& English()
 }
 }
 
-void SetEnglish(bool english)
+void SetLanguage(Language language)
 {
-    g_english = english;
+    g_language = language;
+}
+
+Language CurrentLanguage()
+{
+    return g_language;
 }
 
 bool IsEnglish()
 {
-    return g_english;
+    return g_language == Language::English;
 }
 
-bool EnglishFor(const wxString& guiLang)
+Language LanguageFor(const wxString& guiLang)
 {
     if (guiLang == "Russian")
-        return false;
+        return Language::Russian;
+    if (guiLang == "Ukrainian")
+        return Language::Ukrainian;
     if (!guiLang.empty())
-        return true;
-    return PRIMARYLANGID(GetUserDefaultUILanguage()) != LANG_RUSSIAN;
+        return Language::English;
+    switch (PRIMARYLANGID(GetUserDefaultUILanguage()))
+    {
+    case LANG_RUSSIAN: return Language::Russian;
+    case LANG_UKRAINIAN: return Language::Ukrainian;
+    default: return Language::English;
+    }
 }
 
 wxString T(const char* utf8)
 {
-    if (g_english)
+    if (g_language != Language::Russian)
     {
-        const auto& table = English();
+        const auto& table = g_language == Language::English ? English() : UkrainianTexts();
         auto it = table.find(utf8);
         if (it != table.end())
             return wxString::FromUTF8(it->second);

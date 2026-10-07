@@ -1,4 +1,5 @@
 ﻿#include "../Localization/Russian.h"
+#include "../Localization/Ukrainian.h"
 
 namespace Localization {
 
@@ -9,6 +10,9 @@ namespace Localization {
 		std::span<const std::pair<const char*, const char*>> arr = {};
 		if (language == "Russian") {
 			arr = _Localization_Russian;
+		}
+		if (language == "Ukrainian") {
+			arr = _Localization_Ukrainian;
 		}
 		if (!arr.empty()){
 			lookup.reserve(arr.size());

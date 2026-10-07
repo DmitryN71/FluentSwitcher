@@ -15,7 +15,7 @@ free and open source under GPL-3.0.
 - **Automatic layout switch** (turned on in Auto switch): a word typed in the wrong layout is fixed by itself after a
   space, Enter (Shift+Enter, Ctrl+Enter too) or Tab, and at once when its last key is a sign after a word in the other
   layout ("ПшеРгию" - "GitHub.", "b xnj&" - "и что?") - by the Windows dictionaries, as in LangBar++, and a long one already from the fourth letter
-  ("njkm" - "толь"): the beginnings of words come from built-in lists of frequent words. Short words go by their
+  ("njkm" - "толь"): the beginnings of words come from built-in lists of frequent words (Russian, English and Ukrainian). Short words go by their
   neighbours: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
   too: "нфдлштп" - "yalking". Words with digits, abbreviations, a word typed again after the layout was switched by
   hand right after a fix, a word after Backspace, passwords and the console are left alone; fixed
@@ -53,7 +53,7 @@ free and open source under GPL-3.0.
 - **Remote desktops and virtual machines** (Remote Desktop Connection, Windows App, Hyper-V, VMware, VirtualBox,
   TeamViewer, AnyDesk, RustDesk, Parsec, VNC): in their windows FluentSwitcher of this computer stays out – the
   text and the layout there belong to the other computer. To fix text there too, install FluentSwitcher on it.
-- The settings window is in English and Russian, its theme as in Windows, light or dark.
+- The settings window and the flag's menu are in English, Russian and Ukrainian, the theme as in Windows, light or dark.
 - **Update check**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
   it tells about a new version with a notification by the clock, whether to download and install it is up to
   you. Turned off in "About", where "Check now" is too.

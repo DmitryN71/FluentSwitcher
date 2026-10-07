@@ -1,0 +1,36 @@
+#include <utility>
+#include <array>
+
+constexpr std::array<std::pair<const char*, const char*>, 31> _Localization_Ukrainian = {{
+    {"Enabled", "Увімкнено"},
+    {"Settings", "Налаштування"},
+    {"Change layout for last word", "Змінити розкладку останнього слова"},
+    {"Change layout for last several words", "Змінити розкладку кількох останніх слів"},
+    {"Change layout for all recent text", "Змінити розкладку всього набраного тексту"},
+    {"Change layout for selected text", "Змінити розкладку виділеного тексту"},
+    {"Cyclic layout change", "Циклічна зміна розкладки"},
+    {"Generate CapsLock", "Імітувати CapsLock"},
+    {"Selected text to UPPER/lower", "Виділений текст ВЕЛИКИМИ/малими"},
+    {"iNVERT cASE for selected text", "іНВЕРТУВАТИ рЕГІСТР виділеного тексту"},
+    {"Enable/Disable", "Увімкнути/Вимкнути"},
+    {"Show/hide main window", "Показати/сховати головне вікно"},
+    {"Show/hide Reminder", "Показати/сховати нагадування"},
+    {"Paste text without formatting", "Вставити текст без форматування"},
+    {"Show", "Показати"},
+    {"Enable", "Увімкнути"},
+    {"Exit", "Вихід"},
+    {"Delete", "Видалити"},
+    {"FluentSwitcher {} is out", "Вийшов FluentSwitcher {}"},
+    {"Click to open the download page", "Натисніть, щоб відкрити сторінку завантаження"},
+    {"You have the latest version", "У вас остання версія"},
+    {"Could not reach GitHub", "Не вдалося з'єднатися з GitHub"},
+    {"\"{}\" will not be fixed any more", "«{}» більше не виправляється"},
+    {"It is in the exceptions of TWo INitial CApitals: Settings, Typing", "Слово – у винятках ДВох ВЕликих: Налаштування, Набір тексту"},
+    {"\"{}\" will not be switched any more", "«{}» більше не перемикається"},
+    {"It is in the exceptions of the layout auto switch: Settings, Auto switch", "Слово – у винятках автоперемикання: Налаштування, Автоперемикання"},
+    {"\"{}\" will always be switched", "«{}» тепер перемикається завжди"},
+    {"It is in \"Always switch\" of the layout auto switch: Settings, Auto switch", "Слово – у списку «Перемикати завжди»: Налаштування, Автоперемикання"},
+    {"switched", "само"},
+    {"switched back", "повернули"},
+    {"by hand", "вручну"}
+}};

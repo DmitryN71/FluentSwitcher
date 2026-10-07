@@ -151,8 +151,9 @@ public:
 	std::map<std::string, std::vector<std::string>> learned;
 	// Журнал автопереключения (log\autoswitch.log): что переключилось само, что вернули, что исправили вручную.
 	bool autoswitch_journal = false;
-	// Язык меню у флага (и окна настроек); без настройки - как у Windows.
-	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian" : "English";
+	// Язык меню у флага (и окна настроек): "Russian", "English", "Ukrainian"; без настройки - как у Windows.
+	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian"
+		: PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_UKRAINIAN ? "Ukrainian" : "English";
 	bool useBritishFlag = false;
 	string treat_as_letters = "_-";
 	// Перепечатывать исправленное клавишами (как в SimpleSwitcher), а не готовыми символами.

@@ -21,6 +21,7 @@ ICONS = [
     ("kIconFolder", "folder_open"),
     ("kIconQuit", "arrow_exit"),
     ("kIconDelete", "delete"),
+    ("kIconDismiss", "dismiss"),
 ]
 
 # Drawn by hand in the same 20 px grid and 1 px strokes, with the arrow of arrow_exit: written after the others.

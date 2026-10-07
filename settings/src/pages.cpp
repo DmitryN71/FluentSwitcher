@@ -4,6 +4,8 @@
 #include "engine.h"
 #include "hotkeys.h"
 #include "icons.h"
+#include "textfield.h"
+#include "wordlist.h"
 
 #include <wx/clipbrd.h>
 #include <wx/datetime.h>
@@ -22,118 +24,6 @@
 namespace
 {
 const char* const kVersion = FS_VERSION; // fs_version.h, made by CMake: the same as the program's
-
-// A one-line text box in the Windows 11 look (the kit has one for numbers only).
-class TextField : public wxPanel
-{
-public:
-    std::function<void()> onChange;
-
-    TextField(wxWindow* parent, const wxString& value, int width) : wxPanel(parent)
-    {
-        SetBackgroundStyle(wxBG_STYLE_PAINT);
-        SetMinSize(FromDIP(wxSize(width, 32)));
-        m_text = new wxTextCtrl(this, wxID_ANY, value, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
-        m_text->SetFont(UiFont(10));
-        m_text->SetBackgroundColour(g.input);
-        m_text->SetForegroundColour(g.text);
-        m_text->SetMaxLength(64);
-        m_text->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { if (onChange) onChange(); });
-        m_text->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& e) { Refresh(); e.Skip(); });
-        m_text->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) { Refresh(); e.Skip(); });
-        Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
-            wxAutoBufferedPaintDC dc(this);
-            dc.SetBackground(wxBrush(GetParent()->GetBackgroundColour()));
-            dc.Clear();
-            FillInput(dc, wxRect(GetClientSize()), FromDIP(4), g.input, m_text->HasFocus() ? &g.accent : nullptr,
-                      FromDIP(2));
-        });
-        Bind(wxEVT_SIZE, [this](wxSizeEvent& e) {
-            const wxSize size = GetClientSize();
-            const int h = m_text->GetBestSize().y;
-            m_text->SetSize(FromDIP(10), (size.y - h) / 2, size.x - FromDIP(20), h);
-            e.Skip();
-        });
-        Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) { m_text->SetFocus(); });
-    }
-
-    wxString Value() const { return m_text->GetValue(); }
-    void SetHint(const wxString& hint) { m_text->SetHint(hint); }
-
-private:
-    wxTextCtrl* m_text;
-};
-
-// A list of words in a window of its own, one per line (the exceptions of ДВе ЗАглавные). True - "Готово":
-// *words is the new list, without empty lines and repeats.
-bool EditWordList(wxWindow* parent, const wxString& title, const wxString& description, wxArrayString* words)
-{
-    wxDialog dialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
-    dialog.SetBackgroundColour(g.bg);
-    ApplyDwm(&dialog, false, &g.bg);
-    const int pad = dialog.FromDIP(20);
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    wxStaticText* label = new wxStaticText(&dialog, wxID_ANY, wxString());
-    label->SetFont(UiFont(10));
-    label->SetForegroundColour(g.text);
-    SetWrappedLabel(label, description, dialog.FromDIP(380));
-    sizer->Add(label, 0, wxLEFT | wxRIGHT | wxTOP, pad);
-
-    // The box of the list: drawn like the kit's text boxes, a multi-line text control inside.
-    wxPanel* box = new wxPanel(&dialog);
-    box->SetBackgroundStyle(wxBG_STYLE_PAINT);
-    box->SetMinSize(dialog.FromDIP(wxSize(380, 260)));
-    wxTextCtrl* text = new wxTextCtrl(box, wxID_ANY, wxJoin(*words, '\n'), wxDefaultPosition, wxDefaultSize,
-                                      wxTE_MULTILINE | wxBORDER_NONE);
-    text->SetFont(UiFont(10));
-    text->SetBackgroundColour(g.input);
-    text->SetForegroundColour(g.text);
-    text->Bind(wxEVT_SET_FOCUS, [box](wxFocusEvent& e) { box->Refresh(); e.Skip(); });
-    text->Bind(wxEVT_KILL_FOCUS, [box](wxFocusEvent& e) { box->Refresh(); e.Skip(); });
-    box->Bind(wxEVT_PAINT, [box, text](wxPaintEvent&) {
-        wxAutoBufferedPaintDC dc(box);
-        dc.SetBackground(wxBrush(g.bg));
-        dc.Clear();
-        FillInput(dc, wxRect(box->GetClientSize()), box->FromDIP(4), g.input, text->HasFocus() ? &g.accent : nullptr,
-                  box->FromDIP(2));
-    });
-    box->Bind(wxEVT_SIZE, [box, text](wxSizeEvent& e) {
-        const wxSize size = box->GetClientSize();
-        text->SetSize(box->FromDIP(10), box->FromDIP(8), size.x - box->FromDIP(20), size.y - box->FromDIP(16));
-        e.Skip();
-    });
-    sizer->Add(box, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, pad);
-
-    wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
-    buttons->AddStretchSpacer();
-    buttons->Add(new FluentButton(&dialog, wxID_OK, T("Готово"), true));
-    buttons->Add(new FluentButton(&dialog, wxID_CANCEL, T("Отмена")), 0, wxLEFT, dialog.FromDIP(8));
-    sizer->Add(buttons, 0, wxEXPAND | wxALL, pad);
-    dialog.SetSizerAndFit(sizer);
-    // Esc - cancel; Enter is a new line here, Ctrl+Enter - done.
-    dialog.Bind(wxEVT_CHAR_HOOK, [&dialog](wxKeyEvent& e) {
-        if (e.GetKeyCode() == WXK_ESCAPE)
-            dialog.EndModal(wxID_CANCEL);
-        else if ((e.GetKeyCode() == WXK_RETURN || e.GetKeyCode() == WXK_NUMPAD_ENTER) && e.ControlDown())
-            dialog.EndModal(wxID_OK);
-        else
-            e.Skip();
-    });
-    dialog.CentreOnParent();
-    text->SetFocus();
-    text->SetInsertionPointEnd();
-    if (dialog.ShowModal() != wxID_OK)
-        return false;
-    wxArrayString result;
-    for (wxString w : wxSplit(text->GetValue(), '\n'))
-    {
-        w.Trim(true).Trim(false);
-        if (!w.empty() && result.Index(w) == wxNOT_FOUND)
-            result.Add(w);
-    }
-    *words = result;
-    return true;
-}
 
 // The engine learns words while this window is open - the third undo puts a word into "Не переключать" or the
 // exceptions of ДВе ЗАглавные, the third fix by hand into "Переключать всегда" - and writes them to the file; the
@@ -175,6 +65,29 @@ void TakeEngineLearned(Config& edit, const Config& saved)
         else
             out.erase(key);
     }
+    // The words the engine learned ("выучено" in the lists), as it has them: those still in the lists, and not the ones
+    // removed here and added again by hand (the window had the mark, it has not now).
+    auto marks = [](const nlohmann::json& json, const char* key) {
+        const auto all = json.find("learned");
+        if (all == json.end() || !all->is_object() || !all->contains(key) || !(*all)[key].is_array())
+            return nlohmann::json::array();
+        return (*all)[key];
+    };
+    auto has = [](const nlohmann::json& list, const nlohmann::json& word) {
+        return list.is_array() && std::find(list.begin(), list.end(), word) != list.end();
+    };
+    nlohmann::json learned = nlohmann::json::object();
+    for (const char* key : { "autoswitch_exceptions", "autoswitch_force", "two_caps_exceptions" })
+    {
+        const nlohmann::json engine = marks(now, key), was = marks(before, key), is = marks(out, key);
+        for (const auto& word : engine)
+            if (out.contains(key) && has(out[key], word) && (has(is, word) || !has(was, word)))
+                learned[key].push_back(word);
+    }
+    if (learned.empty())
+        out.erase("learned");
+    else
+        out["learned"] = learned;
 }
 
 // ----- The report for the forum: the errors of the journal of the automatic switch -----
@@ -711,44 +624,88 @@ static wxString WithTip(const wxString& title)
     return title + wxString::FromUTF8(" \u24D8");
 }
 
-void SettingsFrame::WordListCard(const char* key, const wxString& title, const wxString& about, const wxString& tip,
-                                 const wxString& editAbout, wxStaticText* SettingsFrame::*label,
-                                 const wxArrayString& defaults)
+// The words of a list in the file; `defaults` while the file has none (the engine's own defaults, Settings.h).
+static wxArrayString JsonWords(const nlohmann::json& file, const char* key, const wxArrayString& defaults)
 {
-    auto words = [this, key, defaults] {
-        wxArrayString list;
-        const nlohmann::json& file = std::as_const(m_edit).Json();
-        auto it = file.find(key);
-        if (it == file.end())
-            return defaults;
-        if (it->is_array())
-            for (const auto& w : *it)
-                if (w.is_string())
-                    list.Add(wxString::FromUTF8(w.get<std::string>()));
-        return list;
+    const auto it = file.find(key);
+    if (it == file.end())
+        return defaults;
+    wxArrayString list;
+    if (it->is_array())
+        for (const auto& w : *it)
+            if (w.is_string())
+                list.Add(wxString::FromUTF8(w.get<std::string>()));
+    return list;
+}
+
+// The words of a list that the engine added itself ("learned": { list: [...] }, Settings.h).
+static wxArrayString LearnedWords(const nlohmann::json& file, const char* key)
+{
+    const auto all = file.find("learned");
+    if (all == file.end() || !all->is_object())
+        return wxArrayString();
+    return JsonWords(*all, key, wxArrayString());
+}
+
+// The layouts that take part in the switch (layouts_info, as the engine saved them: 0xFFFFFFFFF0080419 is a 64-bit
+// HKL as it is), for the other forms of the words; while the engine has not filled the list - the layouts of Windows.
+static std::vector<HKL> SwitchLayouts(const Config& config)
+{
+    std::vector<HKL> layouts;
+    const nlohmann::json& file = config.Json();
+    const auto list = file.find("layouts_info");
+    if (list != file.end() && list->is_array())
+        for (const auto& layout : *list)
+        {
+            unsigned long long value = 0;
+            if (layout.is_object() && layout.value("enabled", true) && layout.contains("layout") &&
+                layout["layout"].is_string() && FromUtf8(layout["layout"].get<std::string>()).ToULongLong(&value, 16))
+                layouts.push_back((HKL)(UINT_PTR)value);
+        }
+    if (layouts.size() < 2)
+    {
+        HKL all[32];
+        const int n = GetKeyboardLayoutList(32, all);
+        layouts.assign(all, all + wxMax(n, 0));
+    }
+    return layouts;
+}
+
+void SettingsFrame::WordList(const char* key, WordListCard::Kind kind, const wxString& title, const wxString& about,
+                             const wxString& tip, const wxArrayString& defaults)
+{
+    WordListCard* card = new WordListCard(m_page, kind, WithTip(title), about, SwitchLayouts(m_edit));
+    m_column->Add(card, 0, wxEXPAND | wxBOTTOM, FromDIP(4)); // as AddSettingsCard
+    CardTip(card, tip);
+    card->onChange = [this, key, card] {
+        nlohmann::json words = nlohmann::json::array(), learned = nlohmann::json::array();
+        for (const wxString& w : card->Words())
+            words.push_back(w.utf8_string());
+        for (const wxString& w : card->Learned())
+            learned.push_back(w.utf8_string());
+        nlohmann::json& file = m_edit.Json();
+        file[key] = words;
+        // "learned" only while it has marks: the file stays as it was when the window changed nothing in it.
+        if (!learned.empty())
+            file["learned"][key] = learned;
+        else if (file.contains("learned") && file["learned"].is_object())
+        {
+            file["learned"].erase(key);
+            if (file["learned"].empty())
+                file.erase("learned");
+        }
+        Changed();
     };
-    auto text = [about](const wxArrayString& list) {
-        return about + "\n" + (list.empty() ? T("Пока пусто") : wxString::Format(T("Слов в списке: %zu"), list.size()));
-    };
-    this->*label = AddSettingsCard(
-        m_page, m_column, tip.empty() ? title : WithTip(title), text(words()),
-        [this, key, title, editAbout, label, words, text](wxWindow* card) {
-            FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
-            edit->Bind(wxEVT_BUTTON, [this, key, title, editAbout, label, words, text](wxCommandEvent&) {
-                wxArrayString list = words();
-                if (!EditWordList(this, title, editAbout, &list))
-                    return;
-                nlohmann::json json = nlohmann::json::array();
-                for (const wxString& w : list)
-                    json.push_back(w.utf8_string());
-                m_edit.Json()[key] = json;
-                Changed();
-                SetCardDescription(this->*label, text(list));
-            });
-            return edit;
-        });
-    if (!tip.empty())
-        CardTip(this->*label, tip);
+    m_wordLists.push_back({ key, defaults, card });
+    const nlohmann::json& file = std::as_const(m_edit).Json();
+    card->SetWords(JsonWords(file, key, defaults), LearnedWords(file, key));
+}
+
+void SettingsFrame::RefillWordLists()
+{
+    const nlohmann::json& file = std::as_const(m_edit).Json();
+    for (const WordListOnPage& list : m_wordLists)
+        list.card->SetWords(JsonWords(file, list.key, list.defaults), LearnedWords(file, list.key));
 }
 
 void SettingsFrame::BuildAutoSwitch()
@@ -774,16 +731,15 @@ void SettingsFrame::BuildAutoSwitch()
               "русских и 150 тысяч английских форм), и по списку «Переключать всегда». В конце слова оно проверяется "
               "ещё раз по словарю.\nПереключилось зря – нажмите «Исправить последнее слово» (Shift дважды): слово вернётся, а на "
               "третий раз его начало попадёт в «Не переключать»"));
-    WordListCard("autoswitch_exceptions", T("Не переключать"), T("Например, cv или см – в любой раскладке"),
-                 T("Слово попадает сюда и само – после третьей отмены автопереключения"),
-                 T("По слову в строке, в любой раскладке"), &SettingsFrame::m_autoSwitchExceptions);
-    WordListCard("autoswitch_force", T("Переключать всегда"),
-                 T("Даже если словарь их не знает или это одна буква: the, a"),
-                 T("Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "
-                   "другом виде (еру) переключало бы правильно набранное. Слово попадает сюда и само – после третьего "
-                   "исправления вручную («Исправить последнее слово»)"),
-                 T("По слову в строке – в том виде, какой нужен: the, a"), &SettingsFrame::m_autoSwitchForce,
-                 { wxString("the"), wxString("a") }); // as autoswitch_force in the engine's Settings.h
+    WordList("autoswitch_exceptions", WordListCard::Never, T("Не переключать"),
+             T("Например, cv или см – в любой раскладке"),
+             T("Слово попадает сюда и само – после третьей отмены автопереключения, с отметкой «выучено»"));
+    WordList("autoswitch_force", WordListCard::Always, T("Переключать всегда"),
+             T("Даже если словарь их не знает или это одна буква: the, a"),
+             T("Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "
+               "другом виде (еру) переключало бы правильно набранное. Слово попадает сюда и само – после третьего "
+               "исправления вручную («Исправить последнее слово»), с отметкой «выучено»"),
+             { wxString("the"), wxString("a") }); // as autoswitch_force in the engine's Settings.h
     // The journal: on / off and "Открыть" (the file, in the folder of the debug log) on one card.
     {
         ToggleSwitch* journal = nullptr;
@@ -872,10 +828,10 @@ void SettingsFrame::BuildTyping()
               "последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – "
               "Двух"));
     // The exceptions: in a window of their own, one per line; the card says how many.
-    WordListCard("two_caps_exceptions", T("Исключения для ДВух ЗАглавных"), T("Слова, которые так и пишутся: VMware, IPsec"),
-                 T("Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само слово попадает сюда после "
-                   "третьей отмены"),
-                 T("По слову в строке. Слово закрывает и те, что с него начинаются"), &SettingsFrame::m_twoCapsExceptions);
+    WordList("two_caps_exceptions", WordListCard::Caps, T("Исключения для ДВух ЗАглавных"),
+             T("Слова, которые так и пишутся: VMware, IPsec"),
+             T("Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само слово попадает сюда после "
+               "третьей отмены, с отметкой «выучено»"));
     // The English i alone - I (the engine's TwoCaps::LoneI): fix_lone_i.
     CardTip(Toggle(WithTip(T("Исправлять i на I")), T("Английское «i» отдельным словом станет «I»: i am – I am, i'm – I'm"),
                    "fix_lone_i", true),
@@ -1519,6 +1475,7 @@ bool SettingsFrame::Apply()
     if (m_edit != m_saved)
     {
         TakeEngineLearned(m_edit, m_saved);
+        RefillWordLists(); // with the words the engine learned meanwhile
         wxString error;
         if (!m_edit.Save(&error))
         {

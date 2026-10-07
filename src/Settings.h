@@ -146,6 +146,9 @@ public:
 	// третий раз - счёт в autoswitch_fix (в нужном виде, строчными).
 	std::vector<std::string> autoswitch_force = { "the", "a" };
 	std::map<std::string, int> autoswitch_fix;
+	// Слова, которые приложение добавило в списки само (третья отмена, третье исправление вручную): по спискам -
+	// "autoswitch_exceptions", "autoswitch_force", "two_caps_exceptions". Окно настроек отмечает их "выучено".
+	std::map<std::string, std::vector<std::string>> learned;
 	// Журнал автопереключения (log\autoswitch.log): что переключилось само, что вернули, что исправили вручную.
 	bool autoswitch_journal = false;
 	// Язык меню у флага (и окна настроек); без настройки - как у Windows.

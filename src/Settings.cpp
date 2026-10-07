@@ -126,6 +126,7 @@ namespace nlohmann {
 			autoswitch_undo,
 			autoswitch_force,
 			autoswitch_fix,
+			learned,
 			autoswitch_journal,
 			gui_lang,
 			ShowLangsInTrayMenu,

@@ -26,12 +26,15 @@ void StartGui() {
 
 	// Счёт до трёх - отмены ДВух ЗАглавных и автопереключения, исправления вручную: на третий раз слово уходит в список
 	// (исключения или "Переключать всегда"), о чём говорит уведомление у флага. true - ушло.
-	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const std::wstring& word,
-	                       const char* title, const char* text) {
+	// name - имя списка в настройках: слово отмечается выученным (learned), окно настроек так его и показывает.
+	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const char* name,
+	                       const std::wstring& word, const char* title, const char* text) {
 		const std::string utf8 = StrUtils::Convert(word);
 		if (++counts[utf8] < 3) return false;
 		counts.erase(utf8);
 		if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
+		auto& learned = conf_gui()->learned[name];
+		if (std::ranges::find(learned, utf8) == learned.end()) learned.push_back(utf8);
 		trayIcon.Notify(StrUtils::Convert(std::vformat(LOC(title), std::make_format_args(utf8))),
 		                StrUtils::Convert(std::string(LOC(text))), [] { show_main_wind(); });
 		return true;
@@ -139,7 +142,7 @@ void StartGui() {
 				// на третий раз слово уходит в исключения.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
 				LOG_ANY(L"two caps: {} brought back", *word);
-				countToList(conf_gui()->two_caps_undo, conf_gui()->two_caps_exceptions, *word,
+				countToList(conf_gui()->two_caps_undo, conf_gui()->two_caps_exceptions, "two_caps_exceptions", *word,
 				            "\"{}\" will not be fixed any more",
 				            "It is in the exceptions of TWo INitial CApitals: Settings, Typing");
 				SaveApplyGuiConfig();
@@ -151,7 +154,7 @@ void StartGui() {
 				// автопереключения.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
 				LOG_ANY(L"autoswitch: {} switched back", *word);
-				countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, *word,
+				countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions", *word,
 				            "\"{}\" will not be switched any more",
 				            "It is in the exceptions of the layout auto switch: Settings, Auto switch");
 				SaveApplyGuiConfig();
@@ -174,7 +177,8 @@ void StartGui() {
 					return 0;
 				}
 				LOG_ANY(L"autoswitch: {} fixed by hand", *word);
-				const bool learned = countToList(counts, conf_gui()->autoswitch_force, *word, "\"{}\" will always be switched",
+				const bool learned = countToList(counts, conf_gui()->autoswitch_force, "autoswitch_force", *word,
+				                                 "\"{}\" will always be switched",
 				                                 "It is in \"Always switch\" of the layout auto switch: Settings, Auto switch");
 				if (counts.size() > 300) std::erase_if(counts, [](const auto& c) { return c.second < 2; });
 				if (learned) {

@@ -47,10 +47,11 @@ Hermit Dave, https://github.com/hermitdave/FrequencyWords
 ------------------------------------------------------------------------------
 
 The lists of words built into FluentSwitcher.exe (the beginnings of words for the automatic layout switch in
-the middle of a word; source: src/data/words_ru.txt, words_en.txt) are adapted from the 2018 Russian and
-English frequency lists of FrequencyWords, made from OpenSubtitles 2018 (http://opus.nlpl.eu/OpenSubtitles2018.php):
-lower case, "ё" as "е", words of three letters and more met at least three times and known to the Windows
-dictionary of the language (tools/corpus/make_wordlist.cmd in the project). The lists are licensed under the
+the middle of a word; source: src/data/words_ru.txt, words_en.txt, words_uk.txt) are adapted from the 2018
+Russian, English and Ukrainian frequency lists of FrequencyWords, made from OpenSubtitles 2018
+(http://opus.nlpl.eu/OpenSubtitles2018.php): lower case, "ё" as "е", words of three letters and more met at least
+three times and known to the Windows dictionary of the language; Ukrainian - met at least twice, without the
+Russian words of its subtitles and the words without a vowel (tools/corpus/make_wordlist.cmd in the project). The lists are licensed under the
 Creative Commons Attribution-ShareAlike 4.0 International License
 (https://creativecommons.org/licenses/by-sa/4.0/), and so are the adapted ones. CC BY-SA 4.0 is one-way
 compatible with the GNU General Public License, version 3.

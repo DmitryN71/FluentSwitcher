@@ -1,9 +1,9 @@
-// Частые короткие слова (две-три буквы) русского и английского - автопереключению коротких слов (AutoSwitch.h:
+// Частые короткие слова (две-три буквы) русского, украинского и английского - автопереключению коротких слов (AutoSwitch.h:
 // ShortWord, Retro, ContextOf). Словари Windows считают словом любую букву и многие сокращения (ns, vs, tot; ин, ща),
 // поэтому по ним не понять, обычное ли это слово языка; здесь - обычные, с частотой: 3 - очень частое, 2 - частое,
 // 1 - обычное (и сокращения, которые пишут строчными: ок, тк, шт; ok, vs, pc).
 // Списки составлены по частотным словарям (НКРЯ, Ляшевская-Шаров; COCA, BNC, OpenSubtitles), проверены отдельно и на
-// текстах (tools/test_autoswitch.cmd).
+// текстах (tools/test_autoswitch.cmd); украинский - по частотам OpenSubtitles (tools/corpus/make_shortwords.py, UK).
 // Другие языки - пусто: короткие слова там решает только словарь.
 #pragma once
 
@@ -22,6 +22,7 @@ struct Entry {
 // Однобуквенные слова.
 inline const wchar_t* const kRuOne[] = { L"а", L"и", L"в", L"к", L"с", L"у", L"о", L"я" };
 inline const wchar_t* const kEnOne[] = { L"a", L"i", L"u" }; // u - "you" в переписке
+inline const wchar_t* const kUkOne[] = { L"а", L"і", L"й", L"в", L"у", L"з", L"о", L"я", L"є" };
 
 inline const Entry kRu[] = {
 	{ L"без", 3 }, { L"бы", 3 }, { L"был", 3 }, { L"во", 3 }, { L"вот", 3 }, { L"все", 3 }, { L"всё", 3 }, { L"вы", 3 },
@@ -184,6 +185,32 @@ inline const Entry kEn[] = {
 	{ L"zip", 1 }, { L"zoo", 1 },
 };
 
+inline const Entry kUk[] = {
+	{ L"але", 3 }, { L"без", 3 }, { L"бо", 3 }, { L"був", 3 }, { L"вам", 3 }, { L"вас", 3 }, { L"вже", 3 },
+	{ L"ви", 3 }, { L"все", 3 }, { L"всі", 3 }, { L"від", 3 }, { L"він", 3 }, { L"де", 3 }, { L"для", 3 }, { L"до", 3 },
+	{ L"за", 3 }, { L"ми", 3 }, { L"моя", 3 }, { L"мій", 3 }, { L"на", 3 }, { L"нам", 3 }, { L"нас", 3 }, { L"не", 3 },
+	{ L"ну", 3 }, { L"ні", 3 }, { L"ось", 3 }, { L"по", 3 }, { L"про", 3 }, { L"раз", 3 }, { L"та", 3 }, { L"так", 3 },
+	{ L"там", 3 }, { L"те", 3 }, { L"ти", 3 }, { L"то", 3 }, { L"тут", 3 }, { L"хто", 3 }, { L"це", 3 }, { L"час", 3 },
+	{ L"чи", 3 }, { L"ще", 3 }, { L"що", 3 }, { L"щоб", 3 }, { L"як", 3 }, { L"їх", 3 }, { L"її", 3 }, { L"аби", 2 },
+	{ L"або", 2 }, { L"ага", 2 }, { L"аж", 2 }, { L"ах", 2 }, { L"би", 2 }, { L"бог", 2 }, { L"ваш", 2 }, { L"всю", 2 },
+	{ L"вся", 2 }, { L"дав", 2 }, { L"дай", 2 }, { L"дам", 2 }, { L"два", 2 }, { L"дві", 2 }, { L"дня", 2 },
+	{ L"дні", 2 }, { L"дім", 2 }, { L"зі", 2 }, { L"йде", 2 }, { L"йди", 2 }, { L"йду", 2 }, { L"йти", 2 },
+	{ L"ким", 2 }, { L"лиш", 2 }, { L"мав", 2 }, { L"маю", 2 }, { L"має", 2 }, { L"мою", 2 }, { L"моє", 2 },
+	{ L"мої", 2 }, { L"міг", 2 }, { L"між", 2 }, { L"над", 2 }, { L"наш", 2 }, { L"нею", 2 }, { L"неї", 2 },
+	{ L"ним", 2 }, { L"них", 2 }, { L"ніж", 2 }, { L"ніч", 2 }, { L"ого", 2 }, { L"ой", 2 }, { L"ох", 2 },
+	{ L"оце", 2 }, { L"очі", 2 }, { L"пан", 2 }, { L"при", 2 }, { L"під", 2 }, { L"рік", 2 }, { L"річ", 2 },
+	{ L"сам", 2 }, { L"син", 2 }, { L"сон", 2 }, { L"теж", 2 }, { L"тим", 2 }, { L"тих", 2 }, { L"тож", 2 },
+	{ L"той", 2 }, { L"три", 2 }, { L"ту", 2 }, { L"ті", 2 }, { L"усе", 2 }, { L"усі", 2 }, { L"хай", 2 },
+	{ L"хоч", 2 }, { L"цей", 2 }, { L"цим", 2 }, { L"цих", 2 }, { L"цю", 2 }, { L"ця", 2 }, { L"ці", 2 }, { L"цій", 2 },
+	{ L"чим", 2 }, { L"чув", 2 }, { L"яка", 2 }, { L"яке", 2 }, { L"яку", 2 }, { L"які", 2 }, { L"іди", 2 },
+	{ L"із", 2 }, { L"ім", 2 }, { L"їй", 2 }, { L"їм", 2 }, { L"ані", 1 }, { L"бою", 1 }, { L"вид", 1 }, { L"га", 1 },
+	{ L"гей", 1 }, { L"гм", 1 }, { L"гра", 1 }, { L"гру", 1 }, { L"даю", 1 }, { L"дає", 1 }, { L"еге", 1 },
+	{ L"ей", 1 }, { L"жив", 1 }, { L"код", 1 }, { L"мам", 1 }, { L"міс", 1 }, { L"ній", 1 }, { L"ок", 1 },
+	{ L"пес", 1 }, { L"рот", 1 }, { L"рук", 1 }, { L"сер", 1 }, { L"сил", 1 }, { L"сто", 1 }, { L"суд", 1 },
+	{ L"сша", 1 }, { L"сім", 1 }, { L"угу", 1 }, { L"ух", 1 }, { L"ха", 1 }, { L"хм", 1 }, { L"чай", 1 }, { L"чаю", 1 },
+	{ L"чую", 1 }, { L"шоу", 1 }, { L"їжу", 1 },
+};
+
 inline bool Is(const std::wstring& lang, const wchar_t* code) {
 	return lang.size() >= 2 && towlower(lang[0]) == code[0] && towlower(lang[1]) == code[1];
 }
@@ -195,8 +222,8 @@ inline int Band(const std::wstring& word, const std::wstring& lang) {
 		for (const auto& e : list) m.emplace(e.word, e.band);
 		return m;
 	};
-	static const auto ru = build(kRu), en = build(kEn);
-	const auto* m = Is(lang, L"ru") ? &ru : Is(lang, L"en") ? &en : nullptr;
+	static const auto ru = build(kRu), en = build(kEn), uk = build(kUk);
+	const auto* m = Is(lang, L"ru") ? &ru : Is(lang, L"en") ? &en : Is(lang, L"uk") ? &uk : nullptr;
 	if (!m) return 0;
 	const auto it = m->find(word);
 	return it == m->end() ? 0 : it->second;
@@ -208,9 +235,10 @@ inline bool Frequent(const std::wstring& word, const std::wstring& lang) {
 
 inline bool OneLetter(const std::wstring& letter, const std::wstring& lang) {
 	static const std::unordered_set<std::wstring> ru(std::begin(kRuOne), std::end(kRuOne)),
-		en(std::begin(kEnOne), std::end(kEnOne));
+		en(std::begin(kEnOne), std::end(kEnOne)), uk(std::begin(kUkOne), std::end(kUkOne));
 	if (Is(lang, L"ru")) return ru.contains(letter);
 	if (Is(lang, L"en")) return en.contains(letter);
+	if (Is(lang, L"uk")) return uk.contains(letter);
 	return false;
 }
 
@@ -222,17 +250,17 @@ inline bool Neutral(const std::wstring& word, const std::wstring& lang) {
 }
 
 // Слова, которые знает словарь, которому можно верить, но так не пишут: английские короткие слова в русской раскладке
-// (the - "еру", by - "ин", but - "иге", put - "зге").
+// (the - "еру", by - "ин", but - "иге", put - "зге"); в украинской эти клавиши дают те же буквы.
 inline bool NotWord(const std::wstring& word, const std::wstring& lang) {
 	static const std::unordered_set<std::wstring> ru = { L"еру", L"ин", L"иге", L"вшу", L"пгн", L"шу", L"ль", L"дув",
 	                                                     L"дуп", L"туе", L"зуе", L"зге", L"ен" };
-	return Is(lang, L"ru") && ru.contains(word);
+	return (Is(lang, L"ru") || Is(lang, L"uk")) && ru.contains(word);
 }
 
 // Словарю языка можно верить в коротких словах: слово из двух-трёх букв, которое он знает, - настоящее ("учу", "лун").
-// Английскому - нельзя: он знает и сокращения ns, vs, pf, kb, tot, ult.
+// Английскому - нельзя: он знает и сокращения ns, vs, pf, kb, tot, ult. Украинскому - как русскому.
 inline bool TrustDictionary(const std::wstring& lang) {
-	return Is(lang, L"ru");
+	return Is(lang, L"ru") || Is(lang, L"uk");
 }
 
 }

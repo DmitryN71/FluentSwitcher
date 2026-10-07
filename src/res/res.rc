@@ -10,6 +10,8 @@ WORDS_RU RCDATA "../data/words_ru.txt"
 WORDS_EN RCDATA "../data/words_en.txt"
 WORDS_RU_COMMON RCDATA "../data/words_ru_common.txt"
 WORDS_EN_COMMON RCDATA "../data/words_en_common.txt"
+WORDS_UK RCDATA "../data/words_uk.txt"
+WORDS_UK_COMMON RCDATA "../data/words_uk_common.txt"
 
 // The name Task Manager and the file's properties show.
 1 VERSIONINFO

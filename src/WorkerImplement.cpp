@@ -436,6 +436,9 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
             there += c;
         }
         if (there.empty()) continue;
+        // Те же буквы и там (русская и украинская раскладки - почти одни клавиши): переключить значило бы сменить только
+        // раскладку посреди текста.
+        if (AutoSwitch::Lower(there) == AutoSwitch::Lower(typed)) continue;
         // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a.
         const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
@@ -578,6 +581,11 @@ void WorkerImplement::AutoSwitchEarly() {
             there += c;
         }
         if (there.empty()) continue;
+        // Те же буквы и там (русская и украинская раскладки): ждать буквы, которая их различит (ы - і).
+        if (AutoSwitch::Lower(there) == AutoSwitch::Lower(typed)) {
+            later = true;
+            continue;
+        }
         const std::wstring otherLang = Utils::GetNameForHKL_simple(other);
         // Свои слова ("Переключать всегда", в нужном виде: mofii) - тоже начала слов: "ьщаш" - mofi…
         auto forcedStarts = [&](const std::wstring& w) {

@@ -580,8 +580,7 @@ void WorkerImplement::AutoSwitchEarly() {
         if (there.empty()) continue;
         const std::wstring otherLang = Utils::GetNameForHKL_simple(other);
         // Свои слова ("Переключать всегда", в нужном виде: mofii) - тоже начала слов: "ьщаш" - mofi…
-        auto thereStarts = [&](const std::wstring& w) {
-            if (WordStart::There(w, otherLang)) return true;
+        auto forcedStarts = [&](const std::wstring& w) {
             const std::wstring l = WordStart::Lower(w);
             for (const auto& f : forced) {
                 const std::wstring fl = WordStart::Lower(f);
@@ -589,14 +588,20 @@ void WorkerImplement::AutoSwitchEarly() {
             }
             return false;
         };
+        auto thereStarts = [&](const std::wstring& w) { return WordStart::There(w, otherLang) || forcedStarts(w); };
         // Слово из "Переключать всегда" набрано целиком - сейчас, не дожидаясь пробела, если так не начинается ни одно
         // слово своего языка. Правило ниже смотрит и на букву раньше, а "рее" - начало "реестр": выученное "http"
         // ("реез") переключалось только на пробеле (Дмитрий 07.10).
         const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
             !AutoSwitch::Excepted(typed, there, exceptions) && !WordStart::Typed(AutoSwitch::Letters(typed).core, lang);
-        const auto verdict = forcedWhole ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
+        auto verdict = forcedWhole ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
             : AutoSwitch::DecideEarly(typed, there, minLetters, exceptions,
                                       [&](const std::wstring& w) { return WordStart::Typed(w, lang); }, thereStarts);
+        // "Не в этом слове" (заглавная внутри, аббревиатура) - но там начало слова из "Переключать всегда": ждать его
+        // целиком. "ЬЩАш" - заглавная внутри, решение "никогда" на четвёртой букве, и "ЬЩАшш" - MOFii переключалось только
+        // на пробеле, а "реез" - http сразу (Дмитрий 07.10).
+        if (verdict.what == AutoSwitch::Early::Never && forcedStarts(there) && !AutoSwitch::Excepted(typed, there, exceptions))
+            verdict = { AutoSwitch::Early::NotYet, "a beginning of a word of Always switch" };
         if (verdict.what != AutoSwitch::Early::Switch) {
             later = later || verdict.what == AutoSwitch::Early::NotYet;
             LOG_ANY(L"autoswitch early: {} / {}: {}, {}", typed, there,

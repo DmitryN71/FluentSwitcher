@@ -794,6 +794,12 @@ void SettingsFrame::BuildTyping()
                  T("Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само слово попадает сюда после "
                    "третьей отмены"),
                  T("По слову в строке. Слово закрывает и те, что с него начинаются"), &SettingsFrame::m_twoCapsExceptions);
+    // The English i alone - I (the engine's TwoCaps::LoneI): fix_lone_i.
+    CardTip(Toggle(WithTip(T("Исправлять i на I")), T("Английское «i» отдельным словом станет «I»: i am – I am, i'm – I'm"),
+                   "fix_lone_i", true),
+            T("Только в английской раскладке и не в консоли или редакторе кода (VS Code, Visual Studio, JetBrains, "
+              "Notepad++): там i – переменная. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): "
+              "вернётся «i», а на третий раз оно попадёт в исключения ДВух ЗАглавных"));
 
     const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
     Choice(T("Как переключать раскладку"),

@@ -117,6 +117,7 @@ namespace nlohmann {
 			sound_switch,
 			sound_fix,
 			two_caps,
+			fix_lone_i,
 			two_caps_exceptions,
 			two_caps_undo,
 			autoswitch,

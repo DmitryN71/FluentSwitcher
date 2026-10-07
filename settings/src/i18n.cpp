@@ -257,6 +257,15 @@ const std::unordered_map<std::string, const char*>& English()
           "ошибается и что пропускает. Пароли туда не попадают – в их полях оно не работает",
           "The file autoswitch.log in the log folder next to the program: it shows where the automatic switch is "
           "wrong and what it misses. Passwords do not get there - it does not work in their fields" },
+        { "Исправлять i на I", "Fix i to I" },
+        { "Английское «i» отдельным словом станет «I»: i am – I am, i'm – I'm",
+          "The English \"i\" on its own becomes \"I\": i am - I am, i'm - I'm" },
+        { "Только в английской раскладке и не в консоли или редакторе кода (VS Code, Visual Studio, JetBrains, "
+          "Notepad++): там i – переменная. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): "
+          "вернётся «i», а на третий раз оно попадёт в исключения ДВух ЗАглавных",
+          "Only in the English layout and not in a console or a code editor (VS Code, Visual Studio, JetBrains, "
+          "Notepad++): there i is a variable. Fixed by mistake - press \"Fix the last word\" (Shift twice) at once: \"i\" "
+          "comes back, and the third time it goes to the exceptions of TWo INitial CApitals" },
         { "Отчёт об ошибках для форума", "A report of the mistakes for the forum" },
         { "Что вы вернули и что исправили вручную – из журнала. Текст видно до отправки",
           "What you switched back and what you fixed by hand - from the journal. You see the text before sending" },

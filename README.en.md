@@ -27,6 +27,8 @@ free and open source under GPL-3.0.
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives
   "Попытка" at once. Turned on in Typing.
+- **i → I**: the English "i" on its own becomes "I" (i'm - I'm), except in consoles and code editors, where i
+  is a variable. Turned on in Typing.
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after

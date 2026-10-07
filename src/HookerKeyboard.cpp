@@ -342,8 +342,10 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					else if (key != vkCode && (key != end.lastLetter || end.size < 2)) otherKey = true;
 				}
 				const bool modEnter = vkCode == VK_RETURN && mods == 1 && (curk.HasMod(VK_SHIFT) || curk.HasMod(VK_CONTROL));
+				// Слово до четырёх букв - может быть i, i'm, i've (fix_lone_i): решает движок.
 				const bool check = KeyHold::CanStart() && !otherKey && (mods == 0 || modEnter) && g_enabled.IsEnabled() &&
-					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch)) && canHold();
+					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch) ||
+					 (end.letters && end.size <= 4 && cfg->fix_lone_i)) && canHold();
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
 					// поле), поэтому ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе

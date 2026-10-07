@@ -63,7 +63,37 @@ struct Fix {
 	size_t from = 0;     // с этого символа набранного текста он меняется (вторая буква слова)
 	std::wstring tail;   // чем заменить text.substr(from)
 	std::wstring word;   // само слово, как набрано (для исключений)
+	bool upper = false;  // меняемая буква станет заглавной (i - I, LoneI); иначе - строчной (ДВе ЗАглавные)
 };
+
+// Английское местоимение i отдельным словом - I, и i'm, i've, i'll, i'd - I'm, I've... (fix_lone_i; Дмитрий 07.10). text -
+// набранное после прошлого пробела; знаки по краям ("(i", "i,") не мешают, цифры - мешают. "i" в исключениях - не
+// исправлять (туда его кладёт третья отмена). Что раскладка английская и это не редактор кода - решает движок.
+inline Fix LoneI(const std::wstring& text, const std::vector<std::wstring>& exceptions) {
+	size_t begin = 0, end = text.size();
+	while (begin < end && !IsLetter(text[begin])) begin++;
+	while (end > begin && !IsLetter(text[end - 1])) end--;
+	if (end <= begin || text[begin] != L'i') return {};
+	// По краям - только знаки, какие бывают у слова в тексте: "(i", "i," - да; "i++", "i=0", "[i" - код.
+	for (size_t i = 0; i < begin; i++)
+		if (!wcschr(L"(\"'«“", text[i])) return {};
+	for (size_t i = end; i < text.size(); i++)
+		if (!wcschr(L".,!?;:)\"'»”…", text[i])) return {};
+	const std::wstring word = text.substr(begin, end - begin);
+	bool form = false;
+	for (const wchar_t* f : { L"i", L"i'm", L"i've", L"i'll", L"i'd" })
+		form = form || word == f;
+	if (!form) return {};
+	for (const auto& e : exceptions)
+		if (e == L"i" || e == L"I") return {};
+	Fix fix;
+	fix.from = begin;
+	fix.tail = text.substr(begin);
+	fix.tail[0] = L'I';
+	fix.word = L"i";
+	fix.upper = true;
+	return fix;
+}
 
 // text - всё, что набрано после прошлого пробела. Нечего исправлять - from = 0 и tail пустой.
 inline Fix Analyze(const std::wstring& text, const std::vector<std::wstring>& exceptions) {

@@ -224,6 +224,20 @@ std::wstring ForegroundProgram() {
 
 // Консоль (командная строка, Windows Terminal, ConEmu, mintty): там команды и пути, а не слова.
 bool IsConsole() { return KeyHold::IsConsoleWindow(GetForegroundWindow()); }
+
+// Редактор кода впереди: там i - переменная (for i in, int i = 0), а не местоимение (fix_lone_i).
+bool IsCodeEditor() {
+    static const wchar_t* const editors[] = {
+        L"code.exe", L"code - insiders.exe", L"cursor.exe", L"windsurf.exe", L"devenv.exe", L"idea64.exe",
+        L"pycharm64.exe", L"clion64.exe", L"rider64.exe", L"webstorm64.exe", L"goland64.exe", L"phpstorm64.exe",
+        L"rubymine64.exe", L"datagrip64.exe", L"studio64.exe", L"fleet.exe", L"sublime_text.exe", L"notepad++.exe",
+        L"zed.exe", L"atom.exe",
+    };
+    const std::wstring name = ForegroundProgram();
+    for (const wchar_t* e : editors)
+        if (name == e) return true;
+    return false;
+}
 }
 
 namespace {
@@ -575,9 +589,14 @@ void WorkerImplement::AutoSwitchEarly() {
             }
             return false;
         };
-        const auto verdict = AutoSwitch::DecideEarly(
-            typed, there, minLetters, exceptions, [&](const std::wstring& w) { return WordStart::Typed(w, lang); },
-            thereStarts);
+        // Слово из "Переключать всегда" набрано целиком - сейчас, не дожидаясь пробела, если так не начинается ни одно
+        // слово своего языка. Правило ниже смотрит и на букву раньше, а "рее" - начало "реестр": выученное "http"
+        // ("реез") переключалось только на пробеле (Дмитрий 07.10).
+        const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
+            !AutoSwitch::Excepted(typed, there, exceptions) && !WordStart::Typed(AutoSwitch::Letters(typed).core, lang);
+        const auto verdict = forcedWhole ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
+            : AutoSwitch::DecideEarly(typed, there, minLetters, exceptions,
+                                      [&](const std::wstring& w) { return WordStart::Typed(w, lang); }, thereStarts);
         if (verdict.what != AutoSwitch::Early::Switch) {
             later = later || verdict.what == AutoSwitch::Early::NotYet;
             LOG_ANY(L"autoswitch early: {} / {}: {}, {}", typed, there,
@@ -802,7 +821,8 @@ void WorkerImplement::AutoWordEnd() {
 
 void WorkerImplement::FixTwoCaps(bool afterSpace) {
     GETCONF;
-    if (!cfg->two_caps || !KeyHold::Allowed(m_holdId) || cfg->IsSkipProgramTop() || IsPasswordFocus()) return;
+    if ((!cfg->two_caps && !cfg->fix_lone_i) || !KeyHold::Allowed(m_holdId) || cfg->IsSkipProgramTop() || IsPasswordFocus())
+        return;
     auto keys = afterSpace ? m_cycleList.LastWordKeys() : m_cycleList.TrailingWordKeys();
     if (keys.empty()) return;
     const HKL lay = CurLay();
@@ -813,12 +833,17 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
         if (c.size() != 1) return; // клавиша = один символ, иначе не сосчитать, что стирать
         text += c;
     }
-    const auto fix = TwoCaps::Analyze(text, TwoCapsExceptions());
+    auto fix = cfg->two_caps ? TwoCaps::Analyze(text, TwoCapsExceptions()) : TwoCaps::Fix{};
+    // Английское i отдельным словом - I; только в английской раскладке и не в консоли или редакторе кода (там i -
+    // переменная: for i in, int i = 0).
+    if (fix.tail.empty() && cfg->fix_lone_i && Utils::GetNameForHKL_simple(lay).starts_with(L"en") && !IsConsole() &&
+        !IsCodeEditor())
+        fix = TwoCaps::LoneI(text, TwoCapsExceptions());
     if (fix.tail.empty()) return;
     // Слово, набранное в чужой раскладке ("GJgsnrf" - не английское, "попытка" - русское): правило его не трогает, его
     // исправит перевод раскладки, и сразу с заглавными ("Попытка"). Словари - Windows (WinDictionary.h); нет словаря -
     // как раньше.
-    if (SpellCheck::Check(fix.word, Utils::GetNameForHKL_simple(lay)) == SpellCheck::Result::NotWord) {
+    if (!fix.upper && SpellCheck::Check(fix.word, Utils::GetNameForHKL_simple(lay)) == SpellCheck::Result::NotWord) {
         for (HKL other : cfg->layouts_info.EnabledLayouts()) {
             if (other == lay) continue;
             std::wstring there;
@@ -850,10 +875,11 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
         m_twoCaps = {};
         return;
     }
-    keys[fix.from]->is_shift = false; // и в буфере слов вторая буква теперь строчная
+    keys[fix.from]->is_shift = fix.upper; // и в буфере слов: вторая буква теперь строчная (i - заглавная)
     // Отмена - только после пробела: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
     if (afterSpace)
-        m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from], m_cycleList.Total() };
+        m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from], m_cycleList.Total(),
+                      fix.upper };
     else
         m_twoCaps = {};
 }
@@ -896,7 +922,7 @@ bool WorkerImplement::UndoTwoCaps() {
     Sleep(c_afterErase);
     InputSender::SendTextPaced(last.typed + L" ", delay, stop);
     if (stop()) return true; // курсор переехал: бросили, не в счёт
-    last.key->is_shift = true;
+    last.key->is_shift = !last.upper;
     PostMessageW(g_guiHandle, WM_TwoCapsLearn, 0, (LPARAM)new std::wstring(last.word));
     return true;
 }

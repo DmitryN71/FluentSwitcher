@@ -128,6 +128,8 @@ public:
 	int sound_fix = 0;
 	// ДВе ЗАглавные (TwoCaps.h): исправлять после пробела; свои исключения (UTF-8).
 	bool two_caps = false;
+	// Английское i отдельным словом - I (TwoCaps::LoneI; не в консоли и не в редакторах кода).
+	bool fix_lone_i = true;
 	std::vector<std::string> two_caps_exceptions;
 	// Сколько раз слово возвращали сразу после исправления; на третий - в исключения.
 	std::map<std::string, int> two_caps_undo;

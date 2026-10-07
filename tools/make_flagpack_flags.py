@@ -17,6 +17,12 @@ falls between pixels is soft and the stripes of one flag come out of different w
 полосок справа и слева не выровнены"): the US has 13 stripes in 15 rows at 20 px. Coats of arms, stars, circles and
 diagonals stay smooth.
 
+The left and the right edge - a light grey point in every row (SIDE). An LCD point is three stripes, red - green - blue
+from left to right: a red point shines on its left third, a blue one on its right third, so at the flag's sides the
+stripes looked shifted by a third of a point (Dmitry at 125 %: white and red stick out on the left, white on the right;
+a zoomed screenshot does not show it). A grey point shines on all three alike: the sides are straight. Dmitry chose
+this of four variants (tools/flags-compare/edges.png in the work folder, 07.10.2026).
+
     python tools/make_flagpack_flags.py [--preview preview.png]
 """
 import argparse
@@ -113,9 +119,24 @@ const SOURCES = %s, JOBS = %s;
     return out
 
 
+SIDE = (200, 200, 200)
+
+
+def sides(flag):
+    """The flag with the first and the last point of every row light grey (SIDE)."""
+    flag = flag.copy()
+    px = flag.load()
+    w, h = flag.size
+    for y in range(h):
+        xs = [x for x in range(w) if px[x, y][3] > 0]
+        for x in {xs[0], xs[-1]} if xs else ():
+            px[x, y] = SIDE + (px[x, y][3],)
+    return flag
+
+
 def square(flag, size):
     out = Image.new("RGBA", (size, size))
-    out.paste(flag, (0, (size - flag.height) // 2))
+    out.paste(sides(flag), (0, (size - flag.height) // 2))
     return out
 
 

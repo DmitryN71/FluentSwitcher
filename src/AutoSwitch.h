@@ -525,10 +525,15 @@ inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring
 	// Одна строчная буква, которая в своём языке словом не бывает, а там - частое слово из одной буквы ("d" - "в", "f" -
 	// "а", "b" - "и"): перед переключаемым словом это оно, и после слова своего языка или исправленного ("GitHub d
 	// if,kjyf[" - "GitHub в шаблонах": оставалось "d шаблонах", Дмитрий 07.10). Заглавная - обозначение ("plan B",
-	// "type C", "vitamin D"), она остаётся.
-	auto letterThere = [&](const RetroWord& w) {
+	// "type C", "vitamin D"), она остаётся - кроме начала предложения: перед ней . ! ? … ("North west. B gjnjve" - "North
+	// west. И потому", Дмитрий 07.10).
+	auto endsSentence = [](const std::wstring& s) {
+		const size_t last = s.find_last_not_of(L" \t");
+		return last != std::wstring::npos && wcschr(L".!?…", s[last]) != nullptr;
+	};
+	auto letterThere = [&](const RetroWord& w, bool sentenceStart) {
 		const Part t = Letters(w.typed), a = Letters(w.there);
-		return t.core.size() == 1 && a.core.size() == 1 && !TwoCaps::IsUpper(t.core[0]) &&
+		return t.core.size() == 1 && a.core.size() == 1 && (sentenceStart || !TwoCaps::IsUpper(t.core[0])) &&
 			!ShortWords::OneLetter(Lower(t.core), typedLang) && ShortWords::OneLetter(Lower(a.core), otherLang);
 	};
 	size_t count = 0;
@@ -550,11 +555,11 @@ inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring
 			if (!before.sameLayout) break;
 			const Part b = Letters(before.typed);
 			if (b.core.empty() && hasDigit(before.typed)) break;
-			if (p.core.size() == 1 && !b.core.empty() && !candidate(before) && !letterThere(w) &&
+			if (p.core.size() == 1 && !b.core.empty() && !candidate(before) && !letterThere(w, endsSentence(before.typed)) &&
 			    ContextOf(before.typed, typedLang, spellTyped) == Context::Same)
 				break;
 		}
-		else if (w.fixedAfter && p.core.size() == 1 && !letterThere(w))
+		else if (w.fixedAfter && p.core.size() == 1 && !letterThere(w, false))
 			break;
 		count = i + 1;
 	}

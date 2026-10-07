@@ -511,6 +511,14 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
 bool WorkerImplement::AutoSwitchAtSign() {
     GETCONF;
     if (!cfg->autoswitch || !KeyHold::Allowed(m_holdId)) return false;
+    // Знак, одинаковый во всех раскладках и не буква ни в одной (Shift+1 - "!", Shift+0 - ")"), буфер считает границей
+    // слова, как пробел: слово перед ним - в конце, проверить как перед пробелом. Здесь оно искалось бы за знаком, где
+    // ничего нет, а пробел после знака кончал уже пустое слово: "Щщзы!" после щелчка (посреди слова - буквой позже) не
+    // проверялось вовсе (Дмитрий 07.10, журнал отладки).
+    if (m_cycleList.EndsWithBoundary()) {
+        LOG_ANY("autoswitch: a sign that ends a word in every layout: checked as at its end");
+        return AutoSwitchLastWord(true);
+    }
     auto keys = m_cycleList.TrailingWordKeys();
     if (keys.size() < 3) return false;
     CheckCurLay();
@@ -522,9 +530,6 @@ bool WorkerImplement::AutoSwitchAtSign() {
         if (other == lay) continue;
         const std::wstring there = InputSender::KeyText(last, other, false);
         sign = sign || (there.size() == 1 && there != here && wcschr(L".,;:?!\"'", there[0]));
-        // ... или знак, который в обеих раскладках один и тот же и кончает слово: Shift+1 - "!", Shift+0 - ")"
-        // ("Щщзы!" после щелчка ждало пробела, Дмитрий 07.10).
-        sign = sign || (there.size() == 1 && there == here && wcschr(L"!)", there[0]));
     }
     if (!sign) return false;
     std::wstring typed;

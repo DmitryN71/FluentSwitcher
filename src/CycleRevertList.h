@@ -246,6 +246,10 @@ public: std::vector<TKeyBaseInfo*> LastWordKeys() {
 	std::reverse(keys.begin(), keys.end());
 	return keys;
 }
+// Последнее набранное - граница слова: пробел или знак, одинаковый во всех раскладках (AnalyzeTyped: "!", ")").
+public: bool EndsWithBoundary() const {
+	return !m_symbolList.empty() && m_symbolList.back().key.type == KEYTYPE_SPACE;
+}
 // Клавиши слова в самом конце набранного (за ним ещё ничего): Enter / Tab придержан и в буфер не попал.
 public: std::vector<TKeyBaseInfo*> TrailingWordKeys() {
 	std::vector<TKeyBaseInfo*> keys;

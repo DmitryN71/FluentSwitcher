@@ -94,6 +94,8 @@ namespace nlohmann {
 			fClipboardClearFormat,
 			disableAccessebility,
 			flagsSet,
+			tray_icon,
+			caret_flag_set,
 			disableInPrograms,
 			autoswitch_console,
 			logLevel,
@@ -175,6 +177,7 @@ namespace cfg_details {
 			}
 
 			cfg.NormalizePaths();
+			cfg.NormalizeFlags(data.contains("caret_flag_set"));
 
 			if (cfg.force_DbgMode) {
 				SetLogLevel_print_info(cfg.logLevel);

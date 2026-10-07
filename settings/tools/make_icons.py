@@ -15,6 +15,8 @@ ICONS = [
     ("kIconHotkeys", "keyboard"),
     ("kIconLayouts", "local_language"),
     ("kIconFlags", "flag"),
+    ("kIconTray", "panel_bottom"),
+    ("kIconSounds", "speaker_2"),
     ("kIconCommands", "flash"),
     ("kIconAdvanced", "wrench"),
     ("kIconAbout", "info"),

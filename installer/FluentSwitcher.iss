@@ -69,6 +69,8 @@ Type: files; Name: "{app}\imgui.ini"
 Type: filesandordirs; Name: "{app}\flags\Fluent"
 Type: filesandordirs; Name: "{app}\flags\Round"
 Type: filesandordirs; Name: "{app}\flags\Square"
+; The glossy flags (GoSquared) before 1.5.0: the flags are Flagpack now.
+Type: filesandordirs; Name: "{app}\flags\Glossy"
 
 [Icons]
 Name: "{autoprograms}\FluentSwitcher"; Filename: "{app}\FluentSwitcher.exe"

@@ -722,11 +722,10 @@ private:
 	void Update() {
 		const bool eventDriven = std::exchange(m_eventPoked, false);
 		auto cfg = conf_get_unsafe();
+		// Свой набор и своё "не показывать": значок в трее (скрыт, значок приложения) флаг у курсора не прячет (до
+		// 07.10.2026 прятал - форум: "отключение значка в трее отключает значок у курсора").
 		int mode = cfg->caret_flag;
-		if (mode == 0 || cfg->flagsSet == ProgramConfig::showFlags_Nothing ||
-			cfg->flagsSet == ProgramConfig::showFlags_AppIcon) {
-			return Hide();
-		}
+		if (mode == 0) return Hide();
 		HWND fg = GetForegroundWindow();
 		if (!fg || IsFullscreen(fg)) return Hide();
 
@@ -796,7 +795,7 @@ private:
 		auto id = Utils::GetNameForHKL_simple(m_lay);
 		auto cfg = conf_get_unsafe();
 		const int opacity = std::clamp(cfg->caret_flag_opacity, 10, 100);
-		auto key = std::format(L"{}|{}|{}|{}|{}|{}", id, px, gray, StrUtils::Convert(cfg->flagsSet), cfg->useBritishFlag, opacity);
+		auto key = std::format(L"{}|{}|{}|{}|{}|{}", id, px, gray, StrUtils::Convert(cfg->caret_flag_set), cfg->useBritishFlag, opacity);
 		if (key == m_imgKey) return true;
 		auto img = IconMgr::Inst().GetImage(id.c_str(), px, gray);
 		if (!img || !img->IsOk()) return false;

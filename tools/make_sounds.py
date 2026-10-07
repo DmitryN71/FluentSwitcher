@@ -44,6 +44,13 @@ def normalized(samples: list[float], peak: float = 0.6) -> list[float]:
     return [v / top * peak for v in samples]
 
 
+def dense(samples: list[float], drive: float = 2.0, peak: float = 0.95) -> list[float]:
+    """Louder at the same peak: soft clipping (tanh) - the quiet part of the click rises, the top stays."""
+    top = max(abs(v) for v in samples)
+    t = math.tanh(drive)
+    return [math.tanh(drive * v / top) / t * peak for v in samples]
+
+
 def write(name: str, samples: list[float]) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / name
@@ -55,6 +62,9 @@ def write(name: str, samples: list[float]) -> None:
     print(path, len(samples) * 1000 // RATE, "ms", path.stat().st_size, "bytes")
 
 
-write("switch.wav", normalized(click(2600)))
+# The switch is one click, the fix - two, and a single 40 ms click sounds much quieter at the same peak: Dmitry, with
+# the switch at 100 % and the fix at 60 %, 07.10.2026 - "switch.wav очень тихий по сравнению с fix.wav". Denser and
+# up to 0.95: some 8 dB more sound than before (energy -30 dB against -38; fix.wav -35 dB).
+write("switch.wav", dense(click(2600)))
 gap = [0.0] * int(RATE * 0.045)
 write("fix.wav", normalized(click(1800, seed=2) + gap + click(2600, seed=3)))

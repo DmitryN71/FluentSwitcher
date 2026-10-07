@@ -411,7 +411,9 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     BuildTyping();
     BuildHotkeys();
     BuildLayouts();
-    BuildFlags();
+    BuildTray();
+    BuildCaretFlag();
+    BuildSounds();
     BuildCommands();
     BuildAdvanced();
     BuildAbout();
@@ -501,7 +503,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
         SetStatus(T("Не удалось прочитать FluentSwitcher.json: ") + loadError, true);
     ShowSection(section);
     SetSize(FromDIP(wxSize(860, 660)));
-    SetMinSize(FromDIP(wxSize(720, 480))); // the nine sections and "Закрыть FluentSwitcher" under them
+    SetMinSize(FromDIP(wxSize(720, 560))); // the eleven sections and "Закрыть FluentSwitcher" under them
     CentreOnScreen();
 }
 
@@ -545,6 +547,59 @@ wxWindow* SettingsFrame::Choice(const wxString& title, const wxString& descripti
     return choice;
 }
 
+wxWindow* SettingsFrame::Numbers(const wxString& title, const wxString& description, const char* key, int def,
+                                 const std::vector<int>& numbers, const wxArrayString& names)
+{
+    const int now = m_edit.GetInt(key, def);
+    int at = 0;
+    for (size_t i = 0; i < numbers.size(); i++)
+        if (std::abs(numbers[i] - now) < std::abs(numbers[at] - now))
+            at = int(i);
+    return Choice(title, description, names, at, [this, key, numbers](int i) { m_edit.SetInt(key, numbers[i]); });
+}
+
+wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon)
+{
+    // The sets: the folders in "flags" next to the program - Flagpack, or a folder of the user's own. "Glossy" - the
+    // set before 1.5.0, left by an older version unpacked over: the engine takes Flagpack instead.
+    wxArrayString values, names;
+    wxDir dir(m_folder + "\\flags");
+    if (dir.IsOpened())
+    {
+        wxString name;
+        for (bool more = dir.GetFirst(&name, wxEmptyString, wxDIR_DIRS); more; more = dir.GetNext(&name))
+            if (name != "Glossy")
+                values.Add(name);
+    }
+    if (values.Index("Flagpack") == wxNOT_FOUND)
+        values.Add("Flagpack");
+    values.Sort([](const wxString& a, const wxString& b) {
+        return a == "Flagpack" ? -1 : b == "Flagpack" ? 1 : a.CmpNoCase(b);
+    });
+    for (const wxString& v : values)
+        names.Add(v == "Flagpack" ? T("Флаги") : v);
+    // Letters instead of a flag (the engine's LetterIcons.h); the tray may also show the app's icon.
+    values.Add("Letters");
+    names.Add(T("Буквы: EN, RU"));
+    if (appIcon)
+    {
+        values.Add("Application Icon");
+        names.Add(T("Значок приложения"));
+    }
+    // As the engine reads the file (Settings.h, NormalizeFlags): the flag at the cursor without a look of its own - as
+    // the tray icon; the framed letters (gone) - letters; a set that is gone, and the tray hidden the old way
+    // ("Nothing") - the flags.
+    wxString now = m_edit.GetString(key, wxString());
+    if (!appIcon && now.empty())
+        now = m_edit.GetString("flagsSet", "Flagpack");
+    if (now == "LettersFramed")
+        now = "Letters";
+    if (values.Index(now) == wxNOT_FOUND)
+        now = "Flagpack";
+    return Choice(title, description, names, values.Index(now),
+                  [this, key, values](int i) { m_edit.SetString(key, values[i]); });
+}
+
 void SettingsFrame::BuildGeneral()
 {
     Section(kIconGeneral, T("Основные"));
@@ -574,7 +629,7 @@ void SettingsFrame::BuildGeneral()
         Changed();
     };
     AddSettingsCard(m_page, m_column, T("Запускать вместе с Windows"),
-                    T("Приложение стартует при входе в Windows, видно только флаг у часов"),
+                    T("Приложение стартует при входе в Windows, видно только значок в трее"),
                     [&](wxWindow* card) { return m_autostartSwitch = new ToggleSwitch(card, m_autostart); });
     m_autostartSwitch->onChange = [this] {
         m_autostart = m_autostartSwitch->IsOn();
@@ -589,7 +644,7 @@ void SettingsFrame::BuildGeneral()
     const wxArrayString langValues = { "Russian", "English", "Ukrainian" };
     const wxArrayString langNames = { wxString::FromUTF8("Русский"), wxString("English"),
                                       wxString::FromUTF8("Українська") };
-    Choice(T("Язык"), T("Этого окна и меню у флага. Окно откроется на новом языке после сохранения"), langNames,
+    Choice(T("Язык"), T("Этого окна и меню значка в трее. Окно откроется на новом языке после сохранения"), langNames,
            (int)CurrentLanguage(), [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
 
     // "" - as Windows; main.cpp reads it when the window starts.
@@ -993,52 +1048,35 @@ void SettingsFrame::BuildLayouts()
         m_edit.SetString("win_hotkey_cycle_lang", windows->Value());
         Changed();
     };
+
+    // The flag of English in the tray and at the text cursor (the engine's IconManager.h): the US or the British one.
+    Choice(T("Флаг английской раскладки"), T("В трее и у текстового курсора"), { T("Американский"), T("Британский") },
+           m_edit.GetBool("useBritishFlag", false) ? 1 : 0, [this](int i) { m_edit.SetBool("useBritishFlag", i == 1); });
     FinishPage();
 }
 
-void SettingsFrame::BuildFlags()
+void SettingsFrame::BuildTray()
 {
-    // What shows and tells the layout: the flag by the clock (or letters), the flag at the text cursor, the sounds.
-    Section(kIconFlags, T("Флаги и звуки"));
+    // The icon in the notification area, by the clock (the engine's TrayIcon.h): whether it shows, which, its clicks.
+    // Apart from the flag at the text cursor since 07.10.2026 (forum: hiding the tray icon hid that flag too).
+    Section(kIconTray, T("Значок в трее"));
+    ToggleSwitch* shown = nullptr;
+    AddSettingsCard(m_page, m_column, T("Показывать значок в трее"),
+                    T("В области уведомлений, у часов: раскладка, меню и уведомления FluentSwitcher. Без значка "
+                      "настройки открывает сочетание «Открыть настройки»"),
+                    [&](wxWindow* card) {
+                        return shown = new ToggleSwitch(card, m_edit.GetBool("tray_icon", true) &&
+                                                                  m_edit.GetString("flagsSet", "") != "Nothing");
+                    });
+    shown->onChange = [this, shown] {
+        m_edit.SetBool("tray_icon", shown->IsOn());
+        if (m_edit.GetString("flagsSet", "") == "Nothing") // hidden the old way (before 1.5.0): the flags again
+            m_edit.SetString("flagsSet", "Flagpack");
+        Changed();
+    };
+    FlagLook(T("Вид значка"), T("Флаг раскладки, её буквы или значок FluentSwitcher"), "flagsSet", true);
 
-    // The flag in the tray: the sets are the folders in "flags" next to the program.
-    wxArrayString values, names;
-    wxDir dir(m_folder + "\\flags");
-    if (dir.IsOpened())
-    {
-        wxString name;
-        for (bool more = dir.GetFirst(&name, wxEmptyString, wxDIR_DIRS); more; more = dir.GetNext(&name))
-            values.Add(name);
-    }
-    values.Sort([](const wxString& a, const wxString& b) {
-        return a == "Glossy" ? -1 : b == "Glossy" ? 1 : a.CmpNoCase(b);
-    });
-    for (const wxString& v : values)
-        names.Add(v == "Glossy" ? T("Глянцевые") : v == "Round" ? T("Круглые")
-                  : v == "Square" ? T("Квадратные") : v);
-    // Letters instead of a flag (the engine's LetterIcons.h): as Windows writes them, or in a frame.
-    values.Add("Letters");
-    names.Add(T("Буквы: EN, RU"));
-    values.Add("LettersFramed");
-    names.Add(T("Буквы в рамке: EN, RU"));
-    values.Add("Application Icon");
-    names.Add(T("Значок приложения вместо флага"));
-    values.Add("Nothing");
-    names.Add(T("Не показывать значок у часов"));
-    // A set that is gone (the old "Fluent") shows as the glossy one: the engine does the same.
-    wxString flags = m_edit.GetString("flagsSet", "Glossy");
-    if (values.Index(flags) == wxNOT_FOUND && values.Index("Glossy") != wxNOT_FOUND)
-        flags = "Glossy";
-    if (values.Index(flags) == wxNOT_FOUND)
-    {
-        values.Add(flags);
-        names.Add(flags);
-    }
-    Choice(T("Флаг у часов"), T("Показывает текущую раскладку"), names, values.Index(flags),
-           [this, values](int i) { m_edit.SetString("flagsSet", values[i]); });
-    Toggle(T("Британский флаг для английского"), T("Вместо американского"), "useBritishFlag", false);
-
-    // Clicks on the flag by the clock (the engine's TrayIcon.h): tray_click, tray_double_click.
+    // Clicks on the icon (tray_click, tray_double_click).
     const wxArrayString clickValues = { wxString(), wxString("menu"), wxString("next_layout"), wxString("toggle"),
                                         wxString("settings") };
     const wxArrayString clickNames = { T("Ничего"), T("Меню"), T("Следующая раскладка"), T("Включить / выключить"),
@@ -1047,46 +1085,46 @@ void SettingsFrame::BuildFlags()
         const int i = clickValues.Index(m_edit.GetString(key, byDefault));
         return i == wxNOT_FOUND ? clickValues.Index(byDefault) : i;
     };
-    Choice(T("Щелчок по флагу у часов"),
+    Choice(T("Щелчок по значку"),
            T("«Следующая раскладка» – у окна, где вы печатали, и курсор остаётся там. Если назначен и двойной "
              "щелчок, одиночный срабатывает чуть позже: ждёт, не будет ли второго"),
            clickNames, clickIndex("tray_click", ""),
            [this, clickValues](int i) { m_edit.SetString("tray_click", clickValues[i]); });
-    Choice(T("Двойной щелчок по флагу у часов"), T("Правый щелчок всегда открывает меню"), clickNames,
+    Choice(T("Двойной щелчок по значку"), T("Правый щелчок всегда открывает меню"), clickNames,
            clickIndex("tray_double_click", "settings"),
            [this, clickValues](int i) { m_edit.SetString("tray_double_click", clickValues[i]); });
+    FinishPage();
+}
 
-    // The flag at the text cursor (the engine's CaretFlag.h). Each choice is a number in the file; a number
-    // that is not in the list shows as the nearest one.
-    auto numbers = [this](const wxString& title, const wxString& description, const char* key, int byDefault,
-                          const std::vector<int>& numbers, const wxArrayString& itemNames) {
-        const int now = m_edit.GetInt(key, byDefault);
-        int at = 0;
-        for (size_t i = 0; i < numbers.size(); i++)
-            if (std::abs(numbers[i] - now) < std::abs(numbers[at] - now))
-                at = int(i);
-        Choice(title, description, itemNames, at,
-               [this, key, numbers](int i) { m_edit.SetInt(key, numbers[i]); });
-    };
-    numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
+void SettingsFrame::BuildCaretFlag()
+{
+    // The flag at the text cursor (the engine's CaretFlag.h), with its own look.
+    Section(kIconFlags, T("Флаг у курсора"));
+    Numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
             { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") });
-    numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"), "caret_flag_brief_ms",
+    Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"), "caret_flag_brief_ms",
             2000, { 1000, 2000, 3000, 5000, 10000 }, { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"),
             T("10 секунд") });
-    numbers(T("Где показывать флаг у курсора"), T("Если у края экрана места нет – с другой стороны строки"),
-            "caret_flag_place", 0, { 0, 1 }, { T("Под курсором"), T("Над курсором") });
-    numbers(T("Размер флага у курсора"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"),
-            "caret_flag_size", 20, { 16, 20, 24, 32 }, { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") });
-    numbers(T("Прозрачность флага у курсора"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
+    FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на тёмной плашке"), "caret_flag_set", false);
+    Numbers(T("Где показывать"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
+            { 0, 1 }, { T("Под курсором"), T("Над курсором") });
+    Numbers(T("Размер"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"), "caret_flag_size", 20,
+            { 16, 20, 24, 32 }, { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") });
+    Numbers(T("Прозрачность"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
             { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
             T("Максимальная") });
+    FinishPage();
+}
 
-    // Sounds (the engine's LayoutSound.h): sound_switch, sound_fix - per cent, 0 - none.
-    numbers(T("Звук при переключении раскладки"),
-            T("Сочетанием FluentSwitcher или Windows, щелчком по флагу. Звук – switch.wav в папке sounds рядом с "
-              "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
+void SettingsFrame::BuildSounds()
+{
+    // The engine's LayoutSound.h: sound_switch, sound_fix - per cent, 0 - none.
+    Section(kIconSounds, T("Звуки"));
+    Numbers(T("Звук при переключении раскладки"),
+            T("Сочетанием FluentSwitcher или Windows, щелчком по значку в трее. Звук – switch.wav в папке sounds рядом "
+              "с приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
             "sound_switch", 0, { 0, 30, 60, 100 }, { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") });
-    numbers(T("Звук при исправлении текста"),
+    Numbers(T("Звук при исправлении текста"),
             T("Когда FluentSwitcher исправляет слово или выделенный текст. Звук – fix.wav в папке sounds"), "sound_fix", 0,
             { 0, 30, 60, 100 }, { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") });
     FinishPage();

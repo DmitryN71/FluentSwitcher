@@ -1,8 +1,8 @@
 #pragma once
 
-// Буквы раскладки вместо флага: EN, RU. Значок у часов - буквы цвета текста панели задач на прозрачном фоне, как
-// у Windows, или они же в рамке (контур скруглённого прямоугольника, как у значков Windows у часов); флажок у
-// текстового курсора - буквы на тёмной плашке со светлой каймой, чтобы их было видно на любом фоне. Рисует
+// Буквы раскладки вместо флага: EN, RU. Значок в трее - буквы цвета текста панели задач на прозрачном фоне, как
+// у Windows; флажок у текстового курсора - буквы на тёмной плашке со светлой каймой, чтобы их было видно на любом
+// фоне. Рисует
 // Direct2D / DirectWrite в память (без окна), отдаёт RGBA без умножения на альфу - как картинки флагов
 // (IconManager.h). Буквы ставятся посередине по тому, где легли их точки (метрики шрифта не точны, и на мелком
 // значке промах в полточки виден). Только поток интерфейса движка.
@@ -22,48 +22,19 @@
 
 namespace LetterIcons {
 
-// Наборы в настройке flagsSet: буквы и буквы в рамке.
+// Буквы в настройках flagsSet (значок в трее) и caret_flag_set (флаг у курсора). Буквы в рамке ("LettersFramed")
+// убраны 07.10.2026 (Дмитрий: "флаги в рамке вообще удалим"); в старых настройках они - эти буквы (Settings.cpp).
 inline constexpr const char* kPlain = "Letters";
-inline constexpr const char* kFramed = "LettersFramed";
 
-inline bool Is(const std::string& set) { return set == kPlain || set == kFramed; }
+inline bool Is(const std::string& set) { return set == kPlain; }
 
-enum class Style { Plain, Frame, Badge };
+enum class Style { Plain, Badge };
 
 // "en-US" -> "EN".
 inline std::wstring Text(const std::wstring& locale) {
 	std::wstring lang = locale.substr(0, locale.find(L'-'));
 	for (auto& c : lang) c = (wchar_t)(UINT_PTR)CharUpperW((LPWSTR)(UINT_PTR)c);
 	return lang;
-}
-
-// Цвет языка - для черты под буквами в рамке, с его флага: английский - синий (США, Британия), русский - красный,
-// украинский - жёлтый и т. д.; цвет, который уже занят, - соседний оттенок. Незнакомый язык - из запасных по коду.
-// Цвета - средней яркости: видны и на тёмной панели задач, и на светлой. 0xRRGGBB.
-inline UINT32 Accent(const std::wstring& text) {
-	static const std::pair<const wchar_t*, UINT32> known[] = {
-		{ L"EN", 0x3B82F6 }, // синий
-		{ L"RU", 0xEF4444 }, // красный - нижняя полоса
-		{ L"UK", 0xFACC15 }, // жёлтый
-		{ L"BE", 0x22C55E }, // зелёный
-		{ L"KK", 0x06B6D4 }, // голубой
-		{ L"DE", 0xF59E0B }, // золотой
-		{ L"FR", 0x6366F1 }, // синий потемнее (синий - у английского)
-		{ L"ES", 0xF97316 }, // оранжевый - красный с жёлтым
-		{ L"IT", 0x10B981 }, // зелёный потемнее
-		{ L"PL", 0xEC4899 }, // розовый - белый с красным
-		{ L"TR", 0xDC2626 }, // красный потемнее
-		{ L"HY", 0xFB923C }, // оранжевый посветлее - нижняя полоса
-		{ L"KA", 0xF43F5E }, // малиновый - кресты
-		{ L"AZ", 0x0EA5E9 }, // голубой посветлее
-		{ L"UZ", 0x38BDF8 }, // небесный
-	};
-	for (const auto& [code, color] : known)
-		if (text == code) return color;
-	static const UINT32 spare[] = { 0xA855F7, 0x14B8A6, 0x84CC16, 0xE879F9, 0x22D3EE, 0xFB7185 };
-	unsigned hash = 0;
-	for (wchar_t c : text) hash = hash * 31 + c;
-	return spare[hash % std::size(spare)];
 }
 
 struct Picture {
@@ -116,7 +87,7 @@ namespace details {
 	}
 }
 
-// Буквы в картинке w x h. Plain и Frame - значок у часов, цветом текста панели задач: dark - тёмная панель (белые).
+// Буквы в картинке w x h. Plain - значок в трее, цветом текста панели задач: dark - тёмная панель (белые).
 // Badge - флажок у курсора, на плашке. gray - программа выключена: всё бледное.
 inline Picture Render(const std::wstring& text, int w, int h, Style style, bool dark, bool gray) {
 	using Microsoft::WRL::ComPtr;
@@ -139,33 +110,14 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 	HGDIOBJ old = SelectObject(mem, bmp);
 	const auto* px = (const unsigned char*)bits;
 
-	// Рамка: во всю ширину, высотой в семь восьмых, ровно посередине (поля сверху и снизу равны); толщина - точка
-	// (на 200 % - две). Внутри - буквы и под ними черта цвета языка (Accent). Плашка у курсора - вся картинка.
-	// (Было: рамка в три четверти высоты и поля шире, без черты; Дмитрий 06.10: "иконки немного побольше" и
-	// "подчеркнуть черточкой разного цвета".)
-	const bool frame = style == Style::Frame;
-	const float stroke = frame ? (float)(std::max)(1, (int)std::floor(h / 16.0f + 0.25f)) : 1.0f;
-	float frameTop = 0, frameBottom = (float)h;
-	if (frame) {
-		int fh = (int)std::lround(h * 0.875f);
-		if ((h - fh) % 2) fh++;
-		frameTop = (h - fh) / 2.0f;
-		frameBottom = frameTop + fh;
-	}
-	const float frameH = frameBottom - frameTop;
-	const int barH = (int)stroke, barGap = (std::max)(1, (int)std::lround(h / 16.0f));
-
-	// Кегль: заглавные не выше 62 % высоты (в рамке - внутренней части без черты, на плашке - 58 %), и буквы не шире
+	// Кегль: заглавные не выше 62 % высоты (на плашке - 58 % её внутренней части, без каймы в точку), и буквы не шире
 	// места.
+	const float stroke = 1.0f;
 	const DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
 	const float capShare = details::CapHeight(weight);
-	const float inner = style == Style::Plain ? (float)h
-		: frame ? frameH - 2 * stroke - barH - barGap
-		: frameH - 2 * stroke;
-	const float padX = style == Style::Plain ? 0
-		: frame ? stroke + (std::max)(1.0f, std::round(h * 0.09f))
-		: stroke + (std::max)(1.0f, std::round(h * 0.14f));
-	float size = inner * (style == Style::Badge ? 0.58f : frame ? 0.72f : 0.62f) / capShare;
+	const float inner = style == Style::Plain ? (float)h : h - 2 * stroke;
+	const float padX = style == Style::Plain ? 0 : stroke + (std::max)(1.0f, std::round(h * 0.14f));
+	float size = inner * (style == Style::Badge ? 0.58f : 0.62f) / capShare;
 	ComPtr<IDWriteTextFormat> format;
 	ComPtr<IDWriteTextLayout> layout;
 	auto measure = [&](const std::wstring& t, float s) {
@@ -209,8 +161,6 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 
 		D2D1_COLOR_F ink = style == Style::Badge || dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
 		const float alpha = gray ? 0.45f : 1.0f;
-		D2D1_RECT_F bar{}; // черта под буквами в рамке: где - после того, как встали буквы
-		bool hasBar = false;
 		auto draw = [&](bool shape) {
 			rt->BeginDraw();
 			rt->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -222,23 +172,10 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 				brush->SetColor(D2D1::ColorF(0xffffff, 0.28f));
 				rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get(), 1.0f);
 			}
-			if (shape && style == Style::Frame) {
-				const float half = stroke / 2, r = frameH * 0.3f;
-				D2D1_COLOR_F edge = ink;
-				edge.a = alpha;
-				brush->SetColor(edge);
-				rt->DrawRoundedRectangle({ { half, frameTop + half, w - half, frameBottom - half }, r - half, r - half },
-				                         brush.Get(), stroke);
-			}
 			D2D1_COLOR_F letters = ink;
 			letters.a = alpha;
 			brush->SetColor(letters);
 			rt->DrawTextLayout({ x, y }, layout.Get(), brush.Get());
-			if (shape && hasBar) {
-				brush->SetColor(D2D1::ColorF(Accent(text), alpha));
-				const float r = (bar.bottom - bar.top) / 2;
-				rt->FillRoundedRectangle({ bar, r, r }, brush.Get());
-			}
 			const bool done = SUCCEEDED(rt->EndDraw());
 			GdiFlush(); // точки - в памяти картинки, прежде чем их читать
 			return done;
@@ -290,21 +227,9 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			x = bestX;
 			y = bestY;
 			if (bottom >= 0) {
-				const int inkW = right - left + 1, inkH = bottom - top + 1, newLeft = (w - inkW) / 2;
-				x += (float)(newLeft - left);
-				if (frame) {
-					// Буквы с чертой под ними - посередине рамки; черта - в две трети ширины букв, посередине под ними.
-					const int innerTop = (int)(frameTop + stroke), innerH = (int)(frameH - 2 * stroke);
-					const int blockTop = innerTop + (innerH - (inkH + barGap + barH)) / 2;
-					y += (float)(blockTop - top);
-					int barW = (std::max)(3, (int)std::lround(inkW * 0.66));
-					if ((inkW - barW) % 2) barW++;
-					const float barLeft = (float)(newLeft + (inkW - barW) / 2), barTop = (float)(blockTop + inkH + barGap);
-					bar = { barLeft, barTop, barLeft + barW, barTop + barH };
-					hasBar = true;
-				}
-				else
-					y += (float)((h - inkH) / 2 - top);
+				const int inkW = right - left + 1, inkH = bottom - top + 1;
+				x += (float)((w - inkW) / 2 - left);
+				y += (float)((h - inkH) / 2 - top);
 			}
 			ok = draw(true);
 		}

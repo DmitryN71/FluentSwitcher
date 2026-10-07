@@ -8,9 +8,6 @@ class IconMgr {
 	using Bundle = std::vector<Images::ImageIcon>;
 	std::map<wstring, Bundle> icons;
 
-	// Буквы вместо флага (LetterIcons.h): наборы "Letters" (EN, RU) и "LettersFramed" (они же в рамке).
-	static bool Letters() { return LetterIcons::Is(conf_get_unsafe()->flagsSet); }
-	static bool Framed() { return conf_get_unsafe()->flagsSet == LetterIcons::kFramed; }
 	static Images::Image ToImage(LetterIcons::Picture&& pic) {
 		Images::Image img = std::make_shared<Images::details::ImageImpl>();
 		if (pic.rgba.empty()) return img;
@@ -22,26 +19,25 @@ class IconMgr {
 		img->channels = 4;
 		return img;
 	}
-	// Значок у часов буквами: цвет - как текст панели задач (её тема - в ключе: сменилась - новый значок).
+	// Значок в трее буквами (LetterIcons.h): цвет - как текст панели задач (её тема - в ключе: сменилась - новый значок).
 	Images::ImageIcon LetterIcon(TStr locale, Vec_i2 size, bool is_gray) {
 		const bool dark = FluentMenu::TaskbarDark();
 		const auto text = LetterIcons::Text(locale);
-		const bool framed = Framed();
-		const auto key = std::format(L"letters|{}|{}x{}|{}|{}|{}", text, size.x, size.y, dark, is_gray, framed);
+		const auto key = std::format(L"letters|{}|{}x{}|{}|{}", text, size.x, size.y, dark, is_gray);
 		auto it = icons.find(key);
 		if (it != icons.end() && !it->second.empty()) return it->second.front();
-		const auto style = framed ? LetterIcons::Style::Frame : LetterIcons::Style::Plain;
-		auto icon = Images::ImageToIconConsume(ToImage(LetterIcons::Render(text, size.x, size.y, style, dark, is_gray)));
+		auto icon = Images::ImageToIconConsume(ToImage(
+			LetterIcons::Render(text, size.x, size.y, LetterIcons::Style::Plain, dark, is_gray)));
 		icons[key] = { icon };
 		return icon;
 	}
 
-	// Папка набора флагов. Набора нет (удалён, как прежний "Fluent") - глянцевый.
-	wstring FolderName() {
-		GETCONF;
-		auto folder_name = StrUtils::Convert(cfg->flagsSet);
-		if (cfg->flagsSet != ProgramConfig::showFlags_AppIcon && !std::filesystem::is_directory(flagFold / folder_name)) {
-			folder_name = L"Glossy";
+	// Папка набора флагов set (flagsSet - значок в трее, caret_flag_set - флаг у курсора). Набора нет (удалён, как прежние
+	// глянцевые) - Flagpack. Значок приложения - без папки: флагов нет, трей показывает значок приложения.
+	wstring FolderName(const string& set) {
+		auto folder_name = StrUtils::Convert(set);
+		if (set != ProgramConfig::showFlags_AppIcon && !std::filesystem::is_directory(flagFold / folder_name)) {
+			folder_name = StrUtils::Convert(string(ProgramConfig::flags_Default));
 		}
 		return folder_name;
 	}
@@ -53,7 +49,7 @@ class IconMgr {
 
 		GETCONF;
 
-		auto folder_name = FolderName();
+		auto folder_name = FolderName(cfg->flagsSet);
 		// Британский флаг - в ключе: без него после включения настройки из кэша брался прежний, американский.
 		wstring key = std::format(L"{}$&{}{}{}", local_id, folder_name, is_gray ? L"$%^&!" : L"",
 			cfg->useBritishFlag ? L"$gb" : L"");
@@ -152,8 +148,9 @@ public:
 		return inst;
 	}
 
+	// Значок в трее (flagsSet).
 	Images::ImageIcon GetIcon(TStr contry_id, Vec_i2 size, bool is_gray = false) {
-		if (Letters()) return LetterIcon(contry_id, size, is_gray);
+		if (LetterIcons::Is(conf_get_unsafe()->flagsSet)) return LetterIcon(contry_id, size, is_gray);
 
 		// приоритет: 1) все границы равны. 2) 1 граница равна, другая меньше 3) самый большой размер
 		const auto& bndl = GetBundle(contry_id, is_gray);
@@ -182,10 +179,11 @@ public:
 		return std::make_shared<Images::ImageIcon::element_type>(); // empty
 	}
 
-	// Картинка флага (RGBA) для флажка у текстового курсора: ближайшего к size размера (поровну - больший).
-	// Пусто - флага нет. Не кэшируется: флажок у курсора держит свою последнюю картинку сам.
+	// Картинка флага (RGBA) для флажка у текстового курсора, его набора (caret_flag_set): ближайшего к size размера
+	// (поровну - больший). Пусто - флага нет. Не кэшируется: флажок у курсора держит свою последнюю картинку сам.
 	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false) {
-		if (Letters()) { // буквы на плашке, высотой в три четверти размера
+		const string set = conf_get_unsafe()->caret_flag_set;
+		if (LetterIcons::Is(set)) { // буквы на плашке, высотой в три четверти размера
 			return ToImage(LetterIcons::Render(LetterIcons::Text(contry_id), size, (int)std::lround(size * 0.75),
 			                                   LetterIcons::Style::Badge, true, is_gray));
 		}
@@ -198,7 +196,7 @@ public:
 			int da = std::abs(a->width - size), db = std::abs(b->width - size);
 			return da != db ? da < db : a->width > b->width;
 		};
-		for (auto& it : LoadImages(local_id, FolderName(), is_gray)) {
+		for (auto& it : LoadImages(local_id, FolderName(set), is_gray)) {
 			if (better(it, best)) best = it;
 		}
 		return best;

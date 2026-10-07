@@ -72,22 +72,25 @@ def main():
         ("SimpleSwitcher", "Aegel5, https://github.com/Aegel5/SimpleSwitcher",
          "FluentSwitcher is a modified version of SimpleSwitcher. Both are licensed under the GNU General Public\n"
          "License, version 3: see LICENSE next to this file."),
-        ("LangBar++ (LangBarXX)", "Krot66, https://github.com/Krot66/LangBarXX - ideas and rules, rewritten",
+        ("LangBar++ (LangBarXX)", "Krot66, https://github.com/Krot66/LangBarXX",
          "No code of LangBar++ (an AutoHotkey script) is included. Two of its ideas are rewritten in C++: converting\n"
          "selected text as a whole, by the layout of the whole line, and the rule of the automatic layout switch - a\n"
          "word that is not a word of its language while the same keys in the other layout are one (and in the middle\n"
          "of a word: not the beginning of a word while there it is), with its exceptions (single letters, words with digits, abbreviations, a word after the layout was switched by hand,\n"
          "after a mouse click or after Backspace). LangBar++ is licensed under the GNU Lesser General Public License,\n"
-         "version 3, which allows its use in FluentSwitcher under the GNU General Public License, version 3."),
-        ("FrequencyWords", "Hermit Dave, https://github.com/hermitdave/FrequencyWords - word lists, CC BY-SA 4.0",
+         "version 3, which allows its use in FluentSwitcher under the GNU General Public License, version 3.",
+         "LangBar++ (Krot66, https://github.com/Krot66/LangBarXX) - ideas and rules, rewritten"),
+        ("FrequencyWords", "Hermit Dave, https://github.com/hermitdave/FrequencyWords",
          "The lists of words built into FluentSwitcher.exe (the beginnings of words for the automatic layout switch in\n"
-         "the middle of a word; source: src/data/words_ru.txt, words_en.txt) are adapted from the 2018 Russian and\n"
-         "English frequency lists of FrequencyWords, made from OpenSubtitles 2018 (http://opus.nlpl.eu/OpenSubtitles2018.php):\n"
-         "lower case, \"ё\" as \"е\", words of three letters and more met at least three times and known to the Windows\n"
-         "dictionary of the language (tools/corpus/make_wordlist.cmd in the project). The lists are licensed under the\n"
+         "the middle of a word; source: src/data/words_ru.txt, words_en.txt, words_uk.txt) are adapted from the 2018\n"
+         "Russian, English and Ukrainian frequency lists of FrequencyWords, made from OpenSubtitles 2018\n"
+         "(http://opus.nlpl.eu/OpenSubtitles2018.php): lower case, \"ё\" as \"е\", words of three letters and more met at least\n"
+         "three times and known to the Windows dictionary of the language; Ukrainian - met at least twice, without the\n"
+         "Russian words of its subtitles and the words without a vowel (tools/corpus/make_wordlist.cmd in the project). The lists are licensed under the\n"
          "Creative Commons Attribution-ShareAlike 4.0 International License\n"
          "(https://creativecommons.org/licenses/by-sa/4.0/), and so are the adapted ones. CC BY-SA 4.0 is one-way\n"
-         "compatible with the GNU General Public License, version 3."),
+         "compatible with the GNU General Public License, version 3.",
+         "FrequencyWords (Hermit Dave, https://github.com/hermitdave/FrequencyWords) - word lists, CC BY-SA 4.0"),
         ("wxWidgets 3.3", "https://www.wxwidgets.org - the settings window", (wx / "docs" / "licence.txt").read_text(encoding="utf-8", errors="replace")),
         ("zlib (in wxWidgets)", "https://zlib.net", (wx / "src" / "zlib" / "LICENSE").read_text(encoding="utf-8", errors="replace")),
         ("libpng (in wxWidgets)", "http://www.libpng.org", (wx / "src" / "png" / "LICENSE").read_text(encoding="utf-8", errors="replace")),
@@ -97,17 +100,18 @@ def main():
          (ROOT / "settings" / "fluentui" / "LICENSE").read_text(encoding="utf-8")),
         ("Fluent UI System Icons", "Microsoft, https://github.com/microsoft/fluentui-system-icons - the icons",
          (ROOT / "settings" / "fluentui" / "LICENSE-FluentUI-System-Icons.txt").read_text(encoding="utf-8")),
-        ("GoSquared flag icons", "https://github.com/gosquared/flags - the flags (flags\\Glossy)",
-         (ROOT / "bin_files" / "flags" / "Glossy" / "LICENSE-GoSquared.txt").read_text(encoding="utf-8")),
+        ("Flagpack", "Yummygum, https://github.com/Yummygum/flagpack-core - the flags (flags\\Flagpack)",
+         (ROOT / "bin_files" / "flags" / "Flagpack" / "LICENSE-Flagpack.txt").read_text(encoding="utf-8")),
         ("JSON for Modern C++", "Niels Lohmann, https://github.com/nlohmann/json", NLOHMANN_MIT),
         ("stb_image", "Sean Barrett, https://github.com/nothings/stb", stb_licence()),
         ("simple_enum", "Artur Bać, https://github.com/arturbac/simple_enum", BSL),
     ]
     lines = ["FluentSwitcher - third-party notices", "=" * 36, "",
              "FluentSwitcher includes the following parts of others. Each keeps its own licence.", ""]
-    for name, where, _ in parts:
-        lines.append(f"  - {name} ({where.split(' - ')[0]})")
-    for name, where, text in parts:
+    # A part may have its line in the list of its own (the 4th item): what it is for, after its source.
+    for name, where, _, *listed in parts:
+        lines.append(f"  - {listed[0]}" if listed else f"  - {name} ({where.split(' - ')[0]})")
+    for name, where, text, *_ in parts:
         lines += ["", "", "-" * 78, f"{name}", f"{where}", "-" * 78, "", text.replace("\r\n", "\n").strip()]
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\r\n")
     print(f"{len(parts)} parts -> {OUT}")

@@ -112,9 +112,14 @@ public:
 		if (m_fgHook) UnhookWinEvent(m_fgHook);
 		s_inst = nullptr;
 	}
-	// Уведомление у флага, щелчок по нему - onClick. Флаг у часов скрыт ("Nothing") - уведомления нет.
+	// Значок в трее скрыт (tray_icon; до 07.10.2026 - flagsSet "Nothing", Settings.h, NormalizeFlags).
+	static bool Hidden() {
+		auto cfg = conf_get_unsafe();
+		return !cfg->tray_icon || cfg->flagsSet == ProgramConfig::showFlags_Nothing;
+	}
+	// Уведомление у значка, щелчок по нему - onClick. Значок скрыт - уведомления нет.
 	bool Notify(const std::wstring& title, const std::wstring& text, std::function<void()> onClick) {
-		if (conf_get_unsafe()->flagsSet == ProgramConfig::showFlags_Nothing)
+		if (Hidden())
 			return false;
 		tray.OnBalloonClick(std::move(onClick));
 		return tray.ShowBalloon(title, text);
@@ -124,7 +129,7 @@ public:
 		if (lay != 0) {
 			curlay = lay;
 		}
-		if (conf_get_unsafe()->flagsSet == ProgramConfig::showFlags_Nothing) {
+		if (Hidden()) {
 			tray.DeleteIcon();
 			return;
 		}

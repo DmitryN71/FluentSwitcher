@@ -14,6 +14,7 @@ if defined WXDIR for %%I in ("%WXDIR%") do set WXDIR=%%~fI
 if defined WXDIR if exist "%WXDIR%\CMakeLists.txt" set WXARG=-DFLUENTSWITCHER_WX_DIR="%WXDIR:\=/%"
 cmake --preset x64-release %WXARG% || exit /b 1
 cmake --build build\x64-release || exit /b 1
+if exist build\x64-release\flags rmdir /s /q build\x64-release\flags
 xcopy /e /i /y /q bin_files\flags build\x64-release\flags >nul
 if exist build\x64-release\sounds rmdir /s /q build\x64-release\sounds
 xcopy /e /i /y /q bin_files\sounds build\x64-release\sounds >nul

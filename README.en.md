@@ -32,15 +32,16 @@ free and open source under GPL-3.0.
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
-  a mouse click; below or above the cursor, four sizes, transparency. In browsers only in text fields.
-- **A flag by the clock**: glossy flags for 74 languages, the British flag for English if you like, or the letters
-  EN, RU as Windows writes them, plain or in a frame with a line in the language's colour (English blue, Russian
-  red), in the taskbar's text colour. A click and a double click on it
-  do what you choose: the menu, the next layout (of the window you were typing in), on / off, settings.
-- **A Windows 11 style menu by the flag**: rounded corners, icons, an "Enabled" toggle that keeps the menu open; the
+  a mouse click; a flag or the letters on a dark badge, below or above the cursor, four sizes, transparency. In
+  browsers only in text fields. Set apart from the tray icon.
+- **A tray icon**: flags for 74 languages (Flagpack, each size on the screen's pixels), the British flag for English
+  if you like, the letters EN, RU in the taskbar's text colour or the app's icon; it can be hidden. A click and a
+  double click on it do what you choose: the menu, the next layout (of the window you were typing in), on / off,
+  settings.
+- **A Windows 11 style menu by the icon**: rounded corners, icons, an "Enabled" toggle that keeps the menu open; the
   theme follows the taskbar.
 - **Sounds**, as in Punto: a click when the layout is switched (with a hotkey of FluentSwitcher or Windows, with a
-  click on the flag) and a double click when FluentSwitcher fixes text, each with a volume of its own. The sounds
+  click on the tray icon) and a double click when FluentSwitcher fixes text, each with a volume of its own. The sounds
   are the project's own (tools/make_sounds.py) and can be replaced with any WAV files in `sounds`; with `en.wav`,
   `ru.wav` each language gets a sound of its own.
 - **Hotkeys on any keys**: left and right Ctrl, Shift, Alt, Win apart, double presses ("Shift twice"), firing on
@@ -115,4 +116,4 @@ powershell -File tools\make_release.ps1
 
 GPL-3.0, see [LICENSE](LICENSE). Parts by others are under their own licenses, their texts are in
 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt): wxWidgets, the FluentClipper UI kit (MIT), Fluent UI System
-Icons (Microsoft, MIT), GoSquared flags (MIT) and more.
+Icons (Microsoft, MIT), Flagpack flags (MIT) and more.

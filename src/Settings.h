@@ -59,6 +59,25 @@ public:
             *list = std::move(res);
         }
     }
+    // Старые значения значка в трее и флага у курсора (до 07.10.2026): "Nothing" - значок скрыт (флаг у курсора теперь
+    // этим не прячется, у него своё "не показывать" - caret_flag); убранные наборы - глянцевые флаги ("Glossy", до них
+    // "Fluent", "Round", "Square") и буквы в рамке - флаги Flagpack и буквы. hadCaretSet - в файле есть caret_flag_set;
+    // нет - флаг у курсора, как было, того же вида, что значок.
+    void NormalizeFlags(bool hadCaretSet) {
+        auto renamed = [](const string& set) -> string {
+            if (set == "LettersFramed") return "Letters";
+            if (set == "Glossy" || set == "Fluent" || set == "Round" || set == "Square" || set.empty()) return flags_Default;
+            return set;
+        };
+        if (flagsSet == showFlags_Nothing) {
+            tray_icon = false;
+            flagsSet = flags_Default;
+        }
+        flagsSet = renamed(flagsSet);
+        if (!hadCaretSet) caret_flag_set = flagsSet;
+        caret_flag_set = renamed(caret_flag_set);
+        if (caret_flag_set == showFlags_AppIcon || caret_flag_set == showFlags_Nothing) caret_flag_set = flags_Default;
+    }
     // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h).
     bool IsSkipProgramTop() const {
 
@@ -108,7 +127,14 @@ public:
     static constexpr UStr showFlags_OriginalFlags = "Original Flags";
     static constexpr UStr showFlags_AppIcon = "Application Icon";
     static constexpr UStr showFlags_Nothing = "Nothing";
-    string flagsSet = "Glossy";
+    static constexpr UStr flags_Default = "Flagpack";
+    // Значок в трее: показывать ли (tray_icon) и какой (flagsSet) - набор флагов (папка в flags рядом с программой,
+    // "Flagpack"), буквы ("Letters") или значок приложения ("Application Icon"). Флаг у текстового курсора - свой набор
+    // (caret_flag_set: папка или "Letters"). До 07.10.2026 флаг у курсора брал набор значка, а значок прятали
+    // flagsSet = "Nothing" - так прятался и флаг у курсора; старые значения переводит NormalizeFlags.
+    string flagsSet = flags_Default;
+    bool tray_icon = true;
+    string caret_flag_set = flags_Default;
     //bool SkipAllInjectKeys = false;
     bool SkipLowLevelInjectKeys = false; // с 1.5.0 не действует (HookerKeyboard.cpp): поле остаётся в файле настроек
     bool AlternativeLayoutChange = false;
@@ -123,7 +149,7 @@ public:
 	bool record_sides = false;
 	// Раз в день спрашивать у GitHub номер последней версии (Update.h).
 	bool check_updates = true;
-	// Щелчки по флагу у часов: "" - ничего, "menu", "next_layout", "toggle", "settings" (TrayIcon.h).
+	// Щелчки по значку в трее: "" - ничего, "menu", "next_layout", "toggle", "settings" (TrayIcon.h).
 	string tray_click = "";
 	string tray_double_click = "settings";
 	// Звуки (LayoutSound.h), громкость в процентах, 0 - без звука: переключение раскладки (сочетанием, щелчком по

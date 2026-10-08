@@ -362,14 +362,23 @@ private:
 	}
 
 	// Браузер: каретка внутри поля в фокусе и внутри видимой части страницы (ближайший документ над полем - страница
-	// или её фрейм; его прямоугольник - то, что видно). Адресная строка в документе не лежит - только поле.
-	static bool Inside(IUIAutomation* uia, IUIAutomationElement* el, const RECT& caret) {
-		const LONG slack = 4, x = caret.left, cy = (caret.top + caret.bottom) / 2;
+	// или её фрейм; его прямоугольник - то, что видно). Адресная строка в документе не лежит - только поле. Каретка
+	// чуть за краем поля - в нём: пустое поле сообщения WhatsApp называет её на 6 точек левее поля и выше и ниже него
+	// (Дмитрий 08.10.2026: флажка не было); запас - полвысоты каретки, и она переносится внутрь.
+	static bool Inside(IUIAutomation* uia, IUIAutomationElement* el, RECT& caret) {
+		const LONG slack = std::max<LONG>(4, (caret.bottom - caret.top) / 2), x = caret.left,
+		           cy = (caret.top + caret.bottom) / 2;
 		auto in = [&](const RECT& r) {
 			return r.right > r.left && x >= r.left - slack && x <= r.right + slack && cy >= r.top - slack && cy <= r.bottom + slack;
 		};
 		RECT box{};
 		if (FAILED(el->get_CurrentBoundingRectangle(&box)) || !in(box)) return false;
+		const RECT was = caret;
+		caret.left = std::clamp(caret.left, box.left, box.right - 1);
+		caret.right = caret.left + 1;
+		caret.top = std::max(caret.top, box.top);
+		caret.bottom = std::min(caret.bottom, box.bottom);
+		if (caret.bottom - caret.top < 4) caret = was; // поле ниже строки: как было
 		CComPtr<IUIAutomationTreeWalker> walker;
 		if (FAILED(uia->get_ControlViewWalker(&walker)) || !walker) return true;
 		CComPtr<IUIAutomationElement> cur = el;

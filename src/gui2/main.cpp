@@ -190,10 +190,18 @@ void StartGui() {
 					std::wstring exe;
 					IFS_LOG(PathUtils::GetPath_exe_noLower(exe));
 					AllowSetForegroundWindow(ASFW_ANY); // окну настроек можно выйти на передний план
-					auto res = (INT_PTR)ShellExecuteW(nullptr, L"open", exe.c_str(), L"--settings",
-						PathUtils::GetPath_folder_noLower2().c_str(), SW_SHOWNORMAL);
-					if (res <= 32) {
-						LOG_WARN(L"can't start {} --settings: {}", exe, (int)res);
+					// Сам процесс, без оболочки Windows (ShellExecute): она подгружала в FluentSwitcher свои библиотеки, и
+					// после первого окна настроек он оставался на 12 МБ больше (gutasiho, форум 08.10.2026).
+					std::wstring line = L"\"" + exe + L"\" --settings";
+					STARTUPINFOW si{ sizeof(si) };
+					PROCESS_INFORMATION pi{};
+					if (CreateProcessW(exe.c_str(), line.data(), nullptr, nullptr, FALSE, 0, nullptr,
+					                   PathUtils::GetPath_folder_noLower2().c_str(), &si, &pi)) {
+						CloseHandle(pi.hThread);
+						CloseHandle(pi.hProcess);
+					}
+					else {
+						LOG_WARN(L"can't start {} --settings: {}", exe, GetLastError());
 					}
 				}
 				return 0;

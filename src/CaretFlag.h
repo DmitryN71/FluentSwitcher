@@ -413,9 +413,12 @@ private:
 	// строки целиком, даже для одного символа (флажок стоял на меню, форум 07.10). Каретка там: её строка, перенесённая на
 	// экран, а в строке - номер символа, умноженный на ширину символа (шрифт редактора моноширинный, Lucida Console).
 	// Редактор, который отдаёт координаты экрана (первая видимая строка - там, где он сам на экране), - как обычно.
-	static bool EditorCaret(IUIAutomationElement* el, IUIAutomationTextPattern* tp, IUIAutomationTextRange* caret, RECT& rc) {
+	// 1 - каретка в rc; 0 - не этот редактор или координаты экрана (пустой текст - тоже: строк не видно) - как обычно;
+	// -1 - этот, в своих координатах, а каретку не найти: как обычно нельзя - его координаты сочлись бы за экранные
+	// (флаг у угла экрана).
+	static int EditorCaret(IUIAutomationElement* el, IUIAutomationTextPattern* tp, IUIAutomationTextRange* caret, RECT& rc) {
 		CComBSTR cls;
-		if (FAILED(el->get_CurrentClassName(&cls)) || !cls || wcscmp(cls, L"WpfTextView") != 0) return false;
+		if (FAILED(el->get_CurrentClassName(&cls)) || !cls || wcscmp(cls, L"WpfTextView") != 0) return 0;
 		RECT box{}, first{}, line{};
 		CComPtr<IUIAutomationTextRangeArray> visible;
 		CComPtr<IUIAutomationTextRange> top;
@@ -423,23 +426,40 @@ private:
 		if (FAILED(el->get_CurrentBoundingRectangle(&box)) || box.right <= box.left ||
 			FAILED(tp->GetVisibleRanges(&visible)) || !visible || FAILED(visible->get_Length(&n)) || n < 1 ||
 			FAILED(visible->GetElement(0, &top)) || !top || !Rects(top, first)) {
-			return false;
+			return 0;
 		}
 		// Первая видимая строка: у своих координат - у нуля (сверху бывает видна только её часть), у экранных - у края
 		// редактора. Прокрутка вбок сдвигает строки влево.
 		const LONG h = first.bottom - first.top;
 		const bool own = first.left <= 8 && std::abs(first.top) <= h + 2;
 		const bool screen = std::abs(first.left - box.left) <= 8 && std::abs(first.top - box.top) <= h + 2;
-		if (!own || screen) return false;
+		if (!own || screen) return 0;
 
-		// Строка каретки и сколько символов в ней до каретки.
+		// Строка каретки и сколько символов в ней до каретки. У пустой строки прямоугольника нет (s1n, форум 08.10: флаг
+		// на пустой строке стоял у угла экрана; проверка - tools\test_ise, ISE на скрытом рабочем столе): посреди текста
+		// он есть у её перевода строки - символа после каретки, в конце текста - строка под предыдущей.
 		CComPtr<IUIAutomationTextRange> ln, head, doc;
 		CComBSTR text, before;
-		if (FAILED(caret->Clone(&ln)) || !ln || FAILED(ln->ExpandToEnclosingUnit(TextUnit_Line)) || !Rects(ln, line) ||
-			FAILED(ln->Clone(&head)) || !head ||
+		auto emptyLine = [&] {
+			RECT r{};
+			CComPtr<IUIAutomationTextRange> ch, prev;
+			if (SUCCEEDED(caret->Clone(&ch)) && ch && SUCCEEDED(ch->ExpandToEnclosingUnit(TextUnit_Character)) && Rects(ch, r)) {
+				line = r;
+				return true;
+			}
+			int moved = 0; // ISE отвечает 1 и на шаг назад
+			if (SUCCEEDED(ln->Clone(&prev)) && prev && SUCCEEDED(prev->Move(TextUnit_Line, -1, &moved)) && moved != 0 &&
+				SUCCEEDED(prev->ExpandToEnclosingUnit(TextUnit_Line)) && Rects(prev, r)) {
+				line = { r.left, r.bottom, r.right, r.bottom + (r.bottom - r.top) };
+				return true;
+			}
+			return false;
+		};
+		if (FAILED(caret->Clone(&ln)) || !ln || FAILED(ln->ExpandToEnclosingUnit(TextUnit_Line)) ||
+			!(Rects(ln, line) || emptyLine()) || FAILED(ln->Clone(&head)) || !head ||
 			FAILED(head->MoveEndpointByRange(TextPatternRangeEndpoint_End, caret, TextPatternRangeEndpoint_Start)) ||
 			FAILED(ln->GetText(-1, &text)) || FAILED(head->GetText(-1, &before))) {
-			return false;
+			return -1;
 		}
 		auto chars = [](const CComBSTR& s) {
 			UINT len = s.Length();
@@ -458,7 +478,7 @@ private:
 		const double k = dpiX / 96.0;
 		const LONG cx = box.left + std::lround(x * k);
 		rc = { cx, box.top + std::lround(line.top * k), cx + 1, box.top + std::lround(line.bottom * k) };
-		return rc.bottom > rc.top;
+		return rc.bottom > rc.top ? 1 : -1;
 	}
 
 	// Каретка в текстовом элементе UI Automation. editable - элемент уже проверен как поле ввода (браузер): без
@@ -485,7 +505,10 @@ private:
 			}
 		}
 
-		if (range && tp && EditorCaret(el, tp, range, rc)) return true;
+		if (range && tp) {
+			const int editor = EditorCaret(el, tp, range, rc);
+			if (editor != 0) return editor > 0;
+		}
 
 		RECT r{};
 		if (range) {

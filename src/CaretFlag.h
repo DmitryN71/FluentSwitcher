@@ -494,6 +494,15 @@ public:
 	void Refresh() {
 		m_imgKey.clear();
 		m_excludedPid = 0; // список "Не работать в приложениях" мог смениться
+		m_report.clear();
+		{
+			auto cfg = conf_get_unsafe();
+			const auto folder = PathUtils::GetPath_folder_noLower2() / L"Flags" / StrUtils::Convert(cfg->caret_flag_set);
+			LOG_ANY("caret flag: settings - {} (caret_flag {}), look {}{}, size {}, place {}, opacity {}",
+				cfg->caret_flag == 1 ? "always" : cfg->caret_flag == 2 ? "for a moment" : "off", cfg->caret_flag,
+				cfg->caret_flag_set, LetterIcons::Is(cfg->caret_flag_set) || std::filesystem::is_directory(folder) ? "" : " (no such folder)",
+				cfg->caret_flag_size, cfg->caret_flag_place, cfg->caret_flag_opacity);
+		}
 		int mode = conf_get_unsafe()->caret_flag;
 		if (mode == 0) {
 			Unhook();
@@ -536,6 +545,7 @@ private:
 	// этих программах все равно продолжает отображаться"). Ответ - на процесс, до смены настроек (Refresh).
 	DWORD m_excludedPid = 0;
 	bool m_excluded = false;
+	std::wstring m_excludedName; // имя exe этого процесса - и для журнала
 	bool Excluded(DWORD pid) {
 		if (pid != m_excludedPid) {
 			m_excludedPid = pid;
@@ -543,6 +553,7 @@ private:
 			auto cfg = conf_get_unsafe();
 			m_excluded = Utils::GetProcLowerNameByPid(pid, path, name) == TStatus::SW_ERR_SUCCESS && !name.empty() &&
 				(cfg->disableInPrograms.contains(name) || cfg->disableInPrograms.contains(path) || RemoteDesktop::IsClient(name));
+			m_excludedName = name.empty() ? L"?" : name;
 		}
 		return m_excluded;
 	}
@@ -553,7 +564,28 @@ private:
 	HKL m_lay = 0;
 	std::wstring m_imgKey;       // какая картинка в окне
 	RECT m_bbox{};               // видимая (непрозрачная) часть картинки
-	const char* m_lastHow = "";
+	// Журнал отладки: что с флажком сейчас - показан (как нашли каретку) или почему спрятан, с программой впереди. Пишется
+	// только при смене, не на каждое движение каретки (форум, 08.10.2026: у gutasiho флажка нет нигде - почему, журнал не
+	// говорил).
+	std::string m_report;
+	void Report(const std::string& key, const std::string& detail = {}) {
+		if (key == m_report) return;
+		m_report = key;
+		LOG_ANY("caret flag: {}{}", key, detail);
+	}
+	// Программа и класс окна впереди - для журнала.
+	std::string Where(HWND fg) {
+		wchar_t cls[96]{};
+		if (fg) GetClassNameW(fg, cls, (int)std::size(cls));
+		DWORD pid = 0;
+		if (fg) GetWindowThreadProcessId(fg, &pid);
+		const std::wstring name = pid && pid == m_excludedPid ? m_excludedName : L"?";
+		return std::format(" in {} [{}]", StrUtils::Convert(name), StrUtils::Convert(std::wstring(cls)));
+	}
+	void HideBecause(const char* why, HWND fg = nullptr) {
+		Report(std::string("hidden - ") + why + (fg ? Where(fg) : std::string()));
+		Hide();
+	}
 
 	enum : UINT_PTR { TimerUpdate = 1, TimerBrief = 2, TimerRecheck = 3 };
 
@@ -694,18 +726,21 @@ private:
 				L"Windows.UI.Input.InputSite.WindowClass" });
 	}
 
-	static bool IsFullscreen(HWND fg) {
+	// Полный экран: почему так решили (для журнала), или nullptr.
+	static const char* IsFullscreen(HWND fg) {
 		QUERY_USER_NOTIFICATION_STATE st{};
-		if (SUCCEEDED(SHQueryUserNotificationState(&st)) &&
-			(st == QUNS_RUNNING_D3D_FULL_SCREEN || st == QUNS_PRESENTATION_MODE || st == QUNS_BUSY)) {
-			return true;
+		if (SUCCEEDED(SHQueryUserNotificationState(&st))) {
+			if (st == QUNS_RUNNING_D3D_FULL_SCREEN) return "full screen: Windows says Direct3D full screen (QUNS_RUNNING_D3D_FULL_SCREEN)";
+			if (st == QUNS_PRESENTATION_MODE) return "full screen: Windows says presentation mode (QUNS_PRESENTATION_MODE)";
+			if (st == QUNS_BUSY) return "full screen: Windows says busy, a full-screen app (QUNS_BUSY)";
 		}
-		if (IsClass(fg, { L"Progman", L"WorkerW" })) return false;
+		if (IsClass(fg, { L"Progman", L"WorkerW" })) return nullptr;
 		RECT wr{};
 		MONITORINFO mi = { sizeof(mi) };
-		if (!GetWindowRect(fg, &wr) || !GetMonitorInfoW(MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST), &mi)) return false;
-		return wr.left <= mi.rcMonitor.left && wr.top <= mi.rcMonitor.top && wr.right >= mi.rcMonitor.right &&
+		if (!GetWindowRect(fg, &wr) || !GetMonitorInfoW(MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST), &mi)) return nullptr;
+		const bool covers = wr.left <= mi.rcMonitor.left && wr.top <= mi.rcMonitor.top && wr.right >= mi.rcMonitor.right &&
 			wr.bottom >= mi.rcMonitor.bottom && !(GetWindowLongW(fg, GWL_STYLE) & WS_CAPTION);
+		return covers ? "full screen: the window covers the whole screen, no title bar" : nullptr;
 	}
 
 	// Системная каретка: клиентские координаты её окна -> экран, как его видит это окно -> физические пиксели.
@@ -742,14 +777,15 @@ private:
 		// Свой набор и своё "не показывать": значок в трее (скрыт, значок приложения) флаг у курсора не прячет (до
 		// 07.10.2026 прятал - форум: "отключение значка в трее отключает значок у курсора").
 		int mode = cfg->caret_flag;
-		if (mode == 0) return Hide();
+		if (mode == 0) return HideBecause("off in the settings");
 		HWND fg = GetForegroundWindow();
-		if (!fg || IsFullscreen(fg)) return Hide();
+		if (!fg) return HideBecause("no window in front");
 
 		DWORD pid = 0;
 		DWORD tid = GetWindowThreadProcessId(fg, &pid);
 		if (pid != m_hookedPid) HookProcess(pid);
-		if (Excluded(pid)) return Hide();
+		if (Excluded(pid)) return HideBecause("an app of \"Don't work in apps\" or a remote desktop", fg);
+		if (const char* full = IsFullscreen(fg)) return HideBecause(full, fg);
 
 		// Раскладка сменилась - в режиме "ненадолго" это повод показаться.
 		HKL lay = Utils::GetFocusedWndInfo().lay;
@@ -757,11 +793,12 @@ private:
 			if (m_lay) Brief();
 			m_lay = lay;
 		}
-		if (mode == 2 && GetTickCount64() > m_showUntil) return Hide();
+		if (mode == 2 && GetTickCount64() > m_showUntil) return HideBecause("for a moment: the time is over", fg);
 
 		GUITHREADINFO gti = { sizeof(gti) };
-		if (!GetGUIThreadInfo(tid, &gti)) return Hide();
-		if (gti.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE | GUI_SYSTEMMENUMODE | GUI_INMOVESIZE)) return Hide();
+		if (!GetGUIThreadInfo(tid, &gti)) return HideBecause("no thread info (GetGUIThreadInfo)", fg);
+		if (gti.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE | GUI_SYSTEMMENUMODE | GUI_INMOVESIZE))
+			return HideBecause("a menu is open or the window is being moved", fg);
 
 		if (!std::exchange(m_retrying, false)) m_retry = 0;
 		RECT caret{};
@@ -774,7 +811,7 @@ private:
 		}
 		// Остальное - в потоке CaretProbe; пока ждём, флажок остаётся, только если окно то же.
 		HWND focus = gti.hwndFocus ? gti.hwndFocus : fg;
-		if (!eventDriven && !browser && focus == m_noCaretFocus) return Hide();
+		if (!eventDriven && !browser && focus == m_noCaretFocus) return HideBecause("no caret in this window, found before", fg);
 		if (fg != m_shownFg) Hide();
 		m_askedFg = fg;
 		m_askedFocus = focus;
@@ -791,9 +828,8 @@ private:
 			m_lastDetail = res.detail;
 		}
 		if (!res.ok) {
-			const char* why = *res.how ? res.how : "no caret";
-			if (why != m_lastHow) LOG_ANY("caret flag: {}", why);
-			m_lastHow = why;
+			const char* why = *res.how ? res.how : "no caret (system caret, MSAA, UI Automation)";
+			Report(std::string("hidden - ") + why + Where(m_askedFg));
 			// Браузер: поле могло ещё ехать на место (открывается с анимацией), а Chromium - только включать
 			// специальные возможности. Ещё две попытки.
 			if (m_askedBrowser && m_retry < 2) {
@@ -801,14 +837,18 @@ private:
 				m_retrying = true;
 				EventPoke(m_retry == 1 ? 200 : 600);
 			}
-			return Hide();
+			Hide();
+			return;
 		}
 		Place(m_askedFg, res.rc, res.how);
 	}
 
-	// Картинка флага текущей раскладки нужного размера - в окно (если она другая).
-	bool PrepareImage(int px) {
-		if (!m_lay) return false;
+	// Картинка флага текущей раскладки нужного размера - в окно (если она другая). Нет - why: почему (для журнала).
+	bool PrepareImage(int px, std::string& why) {
+		if (!m_lay) {
+			why = "the layout is not known";
+			return false;
+		}
 		bool gray = !g_enabled.IsEnabled();
 		auto id = Utils::GetNameForHKL_simple(m_lay);
 		auto cfg = conf_get_unsafe();
@@ -816,7 +856,10 @@ private:
 		auto key = std::format(L"{}|{}|{}|{}|{}|{}", id, px, gray, StrUtils::Convert(cfg->caret_flag_set), cfg->useBritishFlag, opacity);
 		if (key == m_imgKey) return true;
 		auto img = IconMgr::Inst().GetImage(id.c_str(), px, gray);
-		if (!img || !img->IsOk()) return false;
+		if (!img || !img->IsOk()) {
+			why = std::format("no flag picture for {} ({})", StrUtils::Convert(std::wstring(id)), cfg->caret_flag_set);
+			return false;
+		}
 
 		int w = img->width, h = img->height;
 		BITMAPINFO bi{};
@@ -828,6 +871,7 @@ private:
 		if (!bmp) {
 			DeleteDC(mem);
 			ReleaseDC(nullptr, screen);
+			why = "no memory for the picture (CreateDIBSection)";
 			return false;
 		}
 		// RGBA -> BGRA с умноженной на альфу яркостью (так хочет UpdateLayeredWindow); заодно видимая часть.
@@ -860,28 +904,34 @@ private:
 		DeleteObject(bmp);
 		DeleteDC(mem);
 		ReleaseDC(nullptr, screen);
-		if (!ok) return false;
+		if (!ok) {
+			why = std::format("the flag window did not take the picture (UpdateLayeredWindow, error {})", GetLastError());
+			return false;
+		}
 		m_imgKey = key;
 		m_bbox = bbox;
 		return true;
 	}
 
 	void Place(HWND fg, const RECT& caret, const char* how) {
-		if (how != m_lastHow) {
-			LOG_ANY("caret flag: {}", how);
-			m_lastHow = how;
-		}
 		// Каретка за пределами окна (прокрутили, устарела) - флажка нет.
 		RECT wr{};
 		if (!GetWindowRect(fg, &wr) || caret.left < wr.left - 4 || caret.left > wr.right + 4 || caret.top < wr.top - 4 ||
 			caret.bottom > wr.bottom + 4) {
+			Report(std::string("hidden - the caret (") + how + ") is outside its window" + Where(fg),
+				std::format(": caret ({},{})-({},{}), window ({},{})-({},{})", caret.left, caret.top, caret.right, caret.bottom,
+					wr.left, wr.top, wr.right, wr.bottom));
 			return Hide();
 		}
 		HMONITOR mon = MonitorFromPoint({ caret.left, caret.top }, MONITOR_DEFAULTTONEAREST);
 		UINT dpiX = 96, dpiY = 96;
 		GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
 		int px = MulDiv(std::clamp(conf_get_unsafe()->caret_flag_size, 12, 64), dpiX, 96);
-		if (!PrepareImage(px)) return Hide();
+		std::string noPicture;
+		if (!PrepareImage(px, noPicture)) {
+			Report("hidden - " + noPicture + Where(fg));
+			return Hide();
+		}
 
 		// Под кареткой (или над ней - caret_flag_place), левым краем у неё. Не помещается у края рабочей
 		// области - с другой стороны строки.
@@ -897,6 +947,8 @@ private:
 			if (!wantAbove && below + m_bbox.bottom > mi.rcWork.bottom) y = above;
 		}
 		SetWindowPos(m_wnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
+		Report(std::string("shown (") + how + ")" + Where(fg), std::format(": caret ({},{})-({},{}), flag at ({},{}), {} px, visible {}",
+			caret.left, caret.top, caret.right, caret.bottom, x, y, px, IsWindowVisible(m_wnd) != FALSE));
 		m_visible = true;
 		m_shownFg = fg;
 		if (conf_get_unsafe()->caret_flag == 2) {

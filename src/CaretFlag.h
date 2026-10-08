@@ -493,6 +493,7 @@ public:
 	// Настройки могли смениться.
 	void Refresh() {
 		m_imgKey.clear();
+		m_excludedPid = 0; // список "Не работать в приложениях" мог смениться
 		int mode = conf_get_unsafe()->caret_flag;
 		if (mode == 0) {
 			Unhook();
@@ -529,6 +530,22 @@ private:
 	int m_retry = 0;          // браузер: сколько раз уже переспросили после неудачи
 	bool m_retrying = false;  // эта проверка - повторная
 	std::string m_lastDetail; // браузер: что нашли в прошлый раз (для журнала)
+
+	// Программа впереди - из "Не работать в приложениях" (disableInPrograms) или удалённый рабочий стол, как у
+	// IsSkipProgramTop (Settings.h): там FluentSwitcher молчит, и флажка нет (форум, 08.10.2026: "значок у курсора в
+	// этих программах все равно продолжает отображаться"). Ответ - на процесс, до смены настроек (Refresh).
+	DWORD m_excludedPid = 0;
+	bool m_excluded = false;
+	bool Excluded(DWORD pid) {
+		if (pid != m_excludedPid) {
+			m_excludedPid = pid;
+			std::wstring path, name;
+			auto cfg = conf_get_unsafe();
+			m_excluded = Utils::GetProcLowerNameByPid(pid, path, name) == TStatus::SW_ERR_SUCCESS && !name.empty() &&
+				(cfg->disableInPrograms.contains(name) || cfg->disableInPrograms.contains(path) || RemoteDesktop::IsClient(name));
+		}
+		return m_excluded;
+	}
 
 	bool m_visible = false;
 	HWND m_shownFg = nullptr;
@@ -732,6 +749,7 @@ private:
 		DWORD pid = 0;
 		DWORD tid = GetWindowThreadProcessId(fg, &pid);
 		if (pid != m_hookedPid) HookProcess(pid);
+		if (Excluded(pid)) return Hide();
 
 		// Раскладка сменилась - в режиме "ненадолго" это повод показаться.
 		HKL lay = Utils::GetFocusedWndInfo().lay;

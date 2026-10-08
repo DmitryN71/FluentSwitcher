@@ -31,6 +31,35 @@ const std::vector<HotkeyAction>& HotkeyActions()
     return actions;
 }
 
+// A key as the keyboard calls it: the multimedia keys by what they do (the file keeps the engine's names, VkNames.h).
+static wxString KeyDisplay(const wxString& key)
+{
+    static const std::pair<const char*, const char*> names[] = {
+        { "BROWSER_BACK", N_("Браузер: назад") },
+        { "BROWSER_FORWARD", N_("Браузер: вперёд") },
+        { "BROWSER_REFRESH", N_("Браузер: обновить") },
+        { "BROWSER_STOP", N_("Браузер: стоп") },
+        { "BROWSER_SEARCH", N_("Поиск") },
+        { "BROWSER_FAVORITES", N_("Избранное") },
+        { "BROWSER_HOME", N_("Домой") },
+        { "VOLUME_MUTE", N_("Без звука") },
+        { "VOLUME_DOWN", N_("Тише") },
+        { "VOLUME_UP", N_("Громче") },
+        { "MEDIA_NEXT_TRACK", N_("Следующий трек") },
+        { "MEDIA_PREV_TRACK", N_("Предыдущий трек") },
+        { "MEDIA_STOP", N_("Стоп") },
+        { "MEDIA_PLAY_PAUSE", N_("Воспроизведение / пауза") },
+        { "LAUNCH_MAIL", N_("Почта") },
+        { "LAUNCH_MEDIA_SELECT", N_("Медиаплеер") },
+        { "LAUNCH_APP1", N_("Этот компьютер") },
+        { "LAUNCH_APP2", N_("Калькулятор") },
+    };
+    for (const auto& [stored, shown] : names)
+        if (key == stored)
+            return T(shown);
+    return key;
+}
+
 wxString HotkeyDisplay(const wxString& stored)
 {
     wxString shown;
@@ -45,7 +74,18 @@ wxString HotkeyDisplay(const wxString& stored)
             suffix = T(" дважды");
         if (one.Replace("#up", "") > 0)
             suffix = T(", при отпускании");
-        one = one.Strip(wxString::both) + suffix;
+        wxString keys;
+        wxStringTokenizer plus(one, "+");
+        while (plus.HasMoreTokens())
+        {
+            const wxString key = plus.GetNextToken().Strip(wxString::both);
+            if (key.empty())
+                continue;
+            if (!keys.empty())
+                keys += " + ";
+            keys += KeyDisplay(key);
+        }
+        one = keys + suffix;
         if (!shown.empty())
             shown += T("   или   ");
         shown += one;
@@ -243,8 +283,12 @@ LRESULT CALLBACK HotkeyEditor::HookProc(int code, WPARAM wParam, LPARAM lParam)
     if (code != HC_ACTION || !s_recording)
         return CallNextHookEx(nullptr, code, wParam, lParam);
     const KBDLLHOOKSTRUCT* k = reinterpret_cast<const KBDLLHOOKSTRUCT*>(lParam);
-    if (k->flags & LLKHF_INJECTED)
-        return CallNextHookEx(nullptr, code, wParam, lParam); // typed by a program, not by a person
+    // Typed by a program, not by a person - but the multimedia keys (browser, volume, player, mail, calculator:
+    // VK_BROWSER_BACK - VK_LAUNCH_APP2) of many keyboards come marked so from Windows' own HID service (forum,
+    // 08.10.2026: "нельзя задействовать мультимедийные клавиши (Избранной, Домой)"; the engine takes them anyway).
+    const bool multimedia = k->vkCode >= VK_BROWSER_BACK && k->vkCode <= VK_LAUNCH_APP2;
+    if ((k->flags & LLKHF_INJECTED) && !multimedia)
+        return CallNextHookEx(nullptr, code, wParam, lParam);
     const bool down = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
     if (k->scanCode == 0x21D)
         return 1; // the made-up LCtrl that AltGr layouts add to the right Alt

@@ -81,8 +81,11 @@ namespace Utils
 			return SW_ERR_INVALID_PARAMETR;
 		CAutoHandle hProc = OpenProcess(IsWindowsVistaOrGreater() ? PROCESS_QUERY_LIMITED_INFORMATION : PROCESS_QUERY_INFORMATION, FALSE, pid);
 		IFW_RET(hProc.IsValid());
+		// Путь, как его пишут люди (C:\...), а не устройства (\device\harddiskvolume3\..., GetProcessImageFileName):
+		// с ним сравнивается "Не работать в приложениях" (Settings.h), где путь можно вписать руками.
 		TCHAR sBuff[0x1000];
-		IFW_RET(GetProcessImageFileName(hProc, sBuff, ARRAYSIZE(sBuff)) > 0);
+		DWORD size = ARRAYSIZE(sBuff);
+		IFW_RET(QueryFullProcessImageNameW(hProc, 0, sBuff, &size) != FALSE);
 		sPath = sBuff;
 		StrUtils::ToLower(sPath);
 		auto last = wcsrchr(sBuff, L'\\');

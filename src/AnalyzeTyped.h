@@ -52,6 +52,13 @@ inline TKeyType AnalizeTyped(const CHotKey& key, UINT vk, const TScanCode_Ext& s
 		return KEYTYPE_COMMAND_NO_CLEAR;
 	}
 
+	// Громкость и плеер (без звука, тише, громче, треки, стоп, пауза) текст не трогают - набранное слово помнится, как при
+	// CapsLock (Дмитрий, 08.10.2026: набрал "ghj", нажал "Тише" - и "Исправить последнее слово" уже нечего было
+	// исправлять). Клавиши браузера и запуска приложений слово по-прежнему забывают: после них текст другой.
+	if (vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE) {
+		return KEYTYPE_COMMAND_NO_CLEAR;
+	}
+
 	if (vk >= VK_F1 && vk <= VK_F24) {
 		return KEYTYPE_COMMAND_CLEAR;
 	}

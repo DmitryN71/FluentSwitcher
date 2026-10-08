@@ -388,7 +388,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         }
         return false;
     };
-    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked())
+    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return no("a password, a console or an excluded program", false);
     if (m_autoWord.backspace) return no("the word was edited with Backspace");
     if (m_autoWord.undone) return no("switched back by hand in this word");
@@ -558,7 +558,7 @@ void WorkerImplement::AutoSwitchEarly() {
         LOG_ANY("autoswitch early: not in this word, {}", why);
     };
     if (!cfg->autoswitch || !cfg->autoswitch_early || !KeyHold::Allowed(m_holdId)) return never("off or too late");
-    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked())
+    if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return never("a password, a console or an excluded program");
     if (m_autoWord.backspace) return never("the word was edited with Backspace");
     if (m_autoWord.undone) return never("switched back by hand in this word");

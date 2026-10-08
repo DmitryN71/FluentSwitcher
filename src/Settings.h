@@ -46,9 +46,12 @@ public:
     std::set <std::wstring> disableInPrograms;
     // Консольные программы, где автопереключение всё же работает (ConsolePrograms.h): имя exe или путь.
     std::set <std::wstring> autoswitch_console;
+    // Программы без автопереключения (08.10.2026): всё остальное там работает - исправление сочетанием, флаг у курсора,
+    // ДВе ЗАглавные (редакторы кода, программы с командами). Имя exe или путь.
+    std::set <std::wstring> autoswitch_off;
 
     void NormalizePaths() {
-        for (auto* list : { &disableInPrograms, &autoswitch_console }) {
+        for (auto* list : { &disableInPrograms, &autoswitch_console, &autoswitch_off }) {
             std::set <std::wstring> res;
             for (const auto& it : *list) {
                 auto cur = it;
@@ -77,6 +80,16 @@ public:
         if (!hadCaretSet) caret_flag_set = flagsSet;
         caret_flag_set = renamed(caret_flag_set);
         if (caret_flag_set == showFlags_AppIcon || caret_flag_set == showFlags_Nothing) caret_flag_set = flags_Default;
+    }
+    // Программа впереди - из autoswitch_off: автопереключения там нет (WorkerImplement: AutoSwitchLastWord, AutoSwitchEarly).
+    bool IsAutoSwitchOffTop() const {
+        if (autoswitch_off.empty()) return false;
+        std::wstring path, name;
+        if (Utils::GetProcLowerNameByPid(Utils::GetFocusedWndInfo().pid_top, path, name) != SW_ERR_SUCCESS || name.empty())
+            return false;
+        if (!autoswitch_off.contains(name) && !autoswitch_off.contains(path)) return false;
+        LOG_ANY(L"No automatic switch in {}: autoswitch_off", name);
+        return true;
     }
     // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h).
     bool IsSkipProgramTop() const {

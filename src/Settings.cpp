@@ -98,6 +98,7 @@ namespace nlohmann {
 			caret_flag_set,
 			disableInPrograms,
 			autoswitch_console,
+			autoswitch_off,
 			logLevel,
 			//SkipAllInjectKeys,
 			SkipLowLevelInjectKeys,

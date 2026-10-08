@@ -816,6 +816,21 @@ void SettingsFrame::BuildAutoSwitch()
                "другом виде (еру) переключало бы правильно набранное. Слово попадает сюда и само – после третьего "
                "исправления вручную («Исправить последнее слово»), с отметкой «выучено»"),
              { wxString("the"), wxString("a") }); // as autoswitch_force in the engine's Settings.h
+    // Apps (the engine's Settings.h): autoswitch_off - everything but the automatic switch works there (08.10.2026);
+    // autoswitch_console - console apps where it works (ConsolePrograms.h; in "Дополнительно" before 08.10.2026).
+    WordList("autoswitch_off", WordKind::Programs, T("Без автопереключения в приложениях"),
+             T("Всё остальное там работает: исправление сочетанием, флаг у курсора, ДВе ЗАглавные"),
+             T("Приложения, где автопереключение не нужно: редакторы кода, приложения с командами. Исправление "
+               "сочетанием и всё остальное там работает. Имя файла приложения (code.exe) или путь к нему"),
+             T("Имя файла – как в Диспетчере задач на вкладке «Подробности». Путь – если нужно одно приложение из "
+               "нескольких с тем же именем"));
+    WordList("autoswitch_console", WordKind::Programs, T("Автопереключение в консоли"),
+             T("Консольные приложения, где оно работает: far.exe. Пароль в консоли Windows от текста не отличает"),
+             T("Консольные приложения, где автопереключение работает. В консоли его нет: там вводят команды и пароли, а "
+               "пароль Windows от текста не отличает. Имя файла приложения (far.exe) или путь к нему"),
+             T("В обычной консоли – и приложение, запущенное в ней: far.exe из cmd. В Windows Terminal и ConEmu "
+               "приложение вкладки не узнать: добавьте WindowsTerminal.exe или ConEmu64.exe – и автопереключение будет "
+               "во всех вкладках. Не вводите пароли там, где оно включено"));
     // The journal: on / off and "Открыть" (the file, in the folder of the debug log) on one card.
     {
         ToggleSwitch* journal = nullptr;
@@ -1292,21 +1307,16 @@ void SettingsFrame::BuildAdvanced()
 {
     Section(kIconAdvanced, T("Дополнительно"));
 
-    // Apps (the engine's Settings.h): disableInPrograms - FluentSwitcher keeps quiet there altogether (SimpleSwitcher's
-    // list, now shown); autoswitch_console - console apps where the automatic switch works (ConsolePrograms.h).
+    // Apps where FluentSwitcher keeps quiet altogether (the engine's Settings.h, disableInPrograms - SimpleSwitcher's
+    // list, now shown): no hotkeys, fixes, automatic switch, flag at the cursor. The lists of the automatic switch -
+    // in its section.
     WordList("disableInPrograms", WordKind::Programs, T("Не работать в приложениях"),
-             T("FluentSwitcher там молчит: ни сочетаний, ни исправлений, ни автопереключения"),
+             T("FluentSwitcher там молчит: ни сочетаний, ни исправлений, ни автопереключения, ни флага у курсора"),
              T("Приложения, где FluentSwitcher молчит совсем: игры, приложения со своими сочетаниями. Имя файла "
-               "приложения (far.exe) или путь к нему"),
+               "приложения (far.exe) или путь к нему. Где не нужно только автопереключение – «Автопереключение» – "
+               "«Без автопереключения в приложениях»"),
              T("Имя файла – как в Диспетчере задач на вкладке «Подробности». Путь – если нужно одно приложение из "
                "нескольких с тем же именем"));
-    WordList("autoswitch_console", WordKind::Programs, T("Автопереключение в консоли"),
-             T("Консольные приложения, где оно работает: far.exe. Пароль в консоли Windows от текста не отличает"),
-             T("Консольные приложения, где автопереключение работает. В консоли его нет: там вводят команды и пароли, а "
-               "пароль Windows от текста не отличает. Имя файла приложения (far.exe) или путь к нему"),
-             T("В обычной консоли – и приложение, запущенное в ней: far.exe из cmd. В Windows Terminal и ConEmu "
-               "приложение вкладки не узнать: добавьте WindowsTerminal.exe или ConEmu64.exe – и автопереключение будет "
-               "во всех вкладках. Не вводите пароли там, где оно включено"));
 
     Toggle(T("Сочетания с Ctrl + Alt в раскладках с AltGr"),
            T("Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "

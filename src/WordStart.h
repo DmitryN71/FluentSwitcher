@@ -105,6 +105,16 @@ inline Result Known(const std::wstring& prefix, const std::wstring& language, bo
 	return it != l->starts.end() && impl::Word(*l, *it).starts_with(key) ? Result::Yes : Result::No;
 }
 
+// Слово целиком в списке языка (регистр не важен); common - в списке частых.
+inline bool IsWord(const std::wstring& word, const std::wstring& language, bool common = false) {
+	const impl::List* l = impl::For(language, common);
+	if (!l || word.empty()) return false;
+	const std::string key = impl::Key(word);
+	const auto it = std::lower_bound(l->starts.begin(), l->starts.end(), key,
+	                                 [l](uint32_t start, const std::string& k) { return impl::Word(*l, start) < k; });
+	return it != l->starts.end() && impl::Word(*l, *it) == key;
+}
+
 // Набранное посреди слова - слово или начало слова своего языка: слово целиком (словарь), начало по списку или
 // подсказка словаря, которая с него начинается. Нет списка для языка - да: судить не по чему, не трогать.
 inline bool Typed(const std::wstring& letters, const std::wstring& language) {

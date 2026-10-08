@@ -920,6 +920,10 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
         m_twoCaps = {};
 }
 
+// ДВе ЗАглавные: английское слово из трёх букв ("THe", "WAs") исправляется, если оно частое (TwoCaps::KnownEnglish).
+static const bool s_twoCapsEnglish = (TwoCaps::KnownEnglish =
+    [](const std::wstring& lower) { return WordStart::IsWord(lower, L"en", true); }, true);
+
 std::vector<std::wstring> WorkerImplement::TwoCapsExceptions() {
     std::vector<std::wstring> words;
     for (const auto& e : conf_get_unsafe()->two_caps_exceptions) words.push_back(StrUtils::Convert(e));

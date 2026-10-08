@@ -3,9 +3,11 @@
 //   - две заглавные, дальше строчные, и всё слово - буквы одного алфавита: eM, iPhone (не две заглавные в начале),
 //     2FA, MP3s (цифры) не трогаются;
 //   - кириллица - от трёх букв ("ЧТо", "ДЛя", "НЕт" - самые частые такие опечатки; Maz на форуме, 08.10.2026: "ни разу
-//     не исправились ДВе... Таких сочетаний много"), латиница - от четырёх: PCs, IDs, GHz, CDs, VMs так и пишутся.
-//     Единицы (МГц, МВт, МПа...) - во встроенных исключениях. "СШа" (США с Shift, отпущенным на букву раньше) станет
-//     "Сша" - так же неверно, как было; "Исправить последнее слово" вернёт;
+//     не исправились ДВе... Таких сочетаний много"). Единицы (МГц, МВт, МПа...) - во встроенных исключениях. "СШа" (США с
+//     Shift, отпущенным на букву раньше) станет "Сша" - так же неверно, как было; "Исправить последнее слово" вернёт;
+//   - латиница из трёх букв - только частое английское слово ("THe", "WAs", "TRy"; Дмитрий: "кучу английских
+//     трехбуквенных слов мы не обрабатываем"): PCs, IDs, GHz, CDs, VMs так и пишутся. Частые слова - список движка
+//     (KnownEnglish); в нём есть и pcs, ids, oss - они во встроенных исключениях;
 //   - исключения: встроенные (VMware, OAuth...) и свои (two_caps_exceptions; "Исправить последнее слово" сразу
 //     после исправления возвращает слово и добавляет его туда). Исключение действует и на слова, которые с него
 //     начинаются: "ИПшник" - и "ИПшника", "ИПшники".
@@ -26,9 +28,16 @@ inline const std::vector<std::wstring>& BuiltIn() {
 		L"VMware", L"OAuth", L"IPsec", L"DBeaver", L"LTspice", L"KBps", L"MBps", L"GBps", L"TBps", L"ВКонтакте",
 		// Единицы: мега-, гига-, тера- (кило- - строчная "к": кВт, кГц).
 		L"МГц", L"ГГц", L"ТГц", L"МВт", L"ГВт", L"ТВт", L"МПа", L"ГПа", L"МДж", L"ГДж", L"МОм", L"ГОм",
+		// Английские сокращения из трёх букв с "s" и единицы (на случай, если они есть в списке частых слов).
+		L"PCs", L"IDs", L"OSs", L"PRs", L"CDs", L"TVs", L"VMs", L"DJs", L"MPs", L"GBs", L"MBs", L"KBs", L"TBs", L"GHz",
+		L"MHz", L"KHz", L"THz",
 	};
 	return words;
 }
+
+// Частое английское слово (строчными) - для латинских слов из трёх букв. Ставит движок (WorkerImplement.cpp: список
+// WORDS_EN_COMMON, WordStart.h); не поставлена (проверка правила без списков) - такие слова не исправляются.
+inline bool (*KnownEnglish)(const std::wstring& lower) = nullptr;
 
 enum class Script { Other, Latin, Cyrillic, Greek };
 
@@ -49,11 +58,17 @@ inline wchar_t ToLower(wchar_t c) { return (wchar_t)(UINT_PTR)CharLowerW((LPWSTR
 inline bool Matches(const std::wstring& word, const std::vector<std::wstring>& exceptions) {
 	const Script script = word.empty() ? Script::Other : ScriptOf(word[0]);
 	if (script == Script::Other) return false;
-	if (word.size() < (script == Script::Cyrillic ? 3u : 4u)) return false;
+	if (word.size() < 3) return false;
 	for (size_t i = 0; i < word.size(); i++) {
 		const wchar_t c = word[i];
 		if (ScriptOf(c) != script || !IsLetter(c)) return false;
 		if (i < 2 ? !IsUpper(c) : !IsLower(c)) return false;
+	}
+	if (word.size() == 3 && script != Script::Cyrillic) {
+		if (script != Script::Latin || !KnownEnglish) return false;
+		std::wstring lower = word;
+		for (auto& c : lower) c = ToLower(c);
+		if (!KnownEnglish(lower)) return false;
 	}
 	auto excepted = [&word](const std::wstring& e) {
 		return !e.empty() && (word == e || (e.size() >= 4 && word.compare(0, e.size(), e) == 0));

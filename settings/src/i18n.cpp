@@ -174,6 +174,10 @@ const std::unordered_map<std::string, const char*>& English()
           "FluentSwitcher keeps quiet there: no hotkeys, no fixes, no automatic switch, no flag at the cursor" },
         { "Приложения, где FluentSwitcher молчит совсем: игры, приложения со своими сочетаниями. Имя файла приложения (far.exe) или путь к нему. Где не нужно только автопереключение – «Автопереключение» – «Без автопереключения в приложениях»",
           "Apps where FluentSwitcher keeps quiet altogether: games, apps with hotkeys of their own. The app's file name (far.exe) or its path. Where only the automatic switch is not wanted - Auto switch - No automatic switch in apps" },
+        { "«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, Enter или Tab",
+          "\"THis\" becomes \"This\", \"NOt\" - \"Not\": after a space, Enter or Tab" },
+        { "PCs, IDs, GHz, МГц, МВт, eM, iPhone и слова из исключений не трогаются; английские слова – от четырёх букв. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – Двух",
+          "PCs, IDs, GHz, eM, iPhone and the exceptions are left alone; Latin words - from four letters, Cyrillic - from three. Fixed by mistake? Press \"Fix the last word\" (Shift twice) right away: the word comes back. A layout fix fixes TWo INitial CApitals too: EРшы becomes This" },
         { "Флаг у текстового курсора", "Flag at the text cursor" },
         { "Показывает раскладку там, где вы печатаете", "Shows the layout where you type" },
         { "Сколько показывать «ненадолго»", "How long \"for a moment\" is" },
@@ -390,12 +394,6 @@ const std::unordered_map<std::string, const char*>& English()
         { "Журнал с %s по %s: само – %d, вернули – %d, вручную – %d",
           "Journal from %s to %s: by itself - %d, switched back - %d, by hand - %d" },
         { "Последние %zu ошибок из %zu", "The last %zu mistakes of %zu" },
-        { "«ДВух» станет «Двух» после пробела, Enter или Tab", "\"THis\" becomes \"This\" after a space, Enter or Tab" },
-        { "PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. Исправилось зря – сразу нажмите «Исправить "
-          "последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – "
-          "Двух",
-          "PCs, IDs, GHz, eM, iPhone and the exceptions are left alone. Fixed by mistake? Press \"Fix the last word\" "
-          "(Shift twice) right away: the word comes back. A layout fix fixes TWo INitial CApitals too: EРшы becomes This" },
         { "Слова, которые так и пишутся: VMware, IPsec", "Words that are written so: VMware, IPsec" },
         { "Слово закрывает и те, что с него начинаются: ИПшник – и ИПшники. Само слово попадает сюда после "
           "третьей отмены, с отметкой «выучено»",

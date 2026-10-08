@@ -913,11 +913,11 @@ void SettingsFrame::BuildTyping()
     };
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
-    CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух» после пробела, Enter или Tab"),
+    CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, Enter или Tab"),
                    "two_caps", false),
-            T("PCs, IDs, GHz, eM, iPhone и слова из исключений не трогаются. Исправилось зря – сразу нажмите «Исправить "
-              "последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – "
-              "Двух"));
+            T("PCs, IDs, GHz, МГц, МВт, eM, iPhone и слова из исключений не трогаются; английские слова – от четырёх "
+              "букв. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. "
+              "Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – Двух"));
     // The exceptions: in a window of their own, one per line; the card says how many.
     WordList("two_caps_exceptions", WordKind::Caps, T("Исключения для ДВух ЗАглавных"),
              T("Слова, которые так и пишутся: VMware, IPsec"),

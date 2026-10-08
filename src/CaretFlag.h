@@ -726,13 +726,14 @@ private:
 				L"Windows.UI.Input.InputSite.WindowClass" });
 	}
 
-	// Полный экран: почему так решили (для журнала), или nullptr.
+	// Полный экран: почему так решили (для журнала), или nullptr. "Занят" (QUNS_BUSY) Windows не спрашиваем: у gutasiho
+	// (форум, 08.10.2026; Windows 10 LTSC и 11) она отвечала так всегда - в Блокноте, Проводнике, Notepad++, - и флажка
+	// не было нигде. Окно во весь экран видно и само (ниже), а игры с Direct3D и режим презентации Windows называет прямо.
 	static const char* IsFullscreen(HWND fg) {
 		QUERY_USER_NOTIFICATION_STATE st{};
 		if (SUCCEEDED(SHQueryUserNotificationState(&st))) {
 			if (st == QUNS_RUNNING_D3D_FULL_SCREEN) return "full screen: Windows says Direct3D full screen (QUNS_RUNNING_D3D_FULL_SCREEN)";
 			if (st == QUNS_PRESENTATION_MODE) return "full screen: Windows says presentation mode (QUNS_PRESENTATION_MODE)";
-			if (st == QUNS_BUSY) return "full screen: Windows says busy, a full-screen app (QUNS_BUSY)";
 		}
 		if (IsClass(fg, { L"Progman", L"WorkerW" })) return nullptr;
 		RECT wr{};

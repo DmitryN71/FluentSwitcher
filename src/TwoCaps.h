@@ -1,7 +1,11 @@
 // "ДВе ЗАглавные" (two_caps): слово, набранное с двумя заглавными в начале, исправляется после пробела - "ДВух" ->
 // "Двух". Правило узкое, чтобы не трогать то, что так и пишется:
-//   - две заглавные, дальше не меньше двух строчных, и всё слово - буквы одного алфавита: PCs, IDs, GHz (одна
-//     строчная), eM, iPhone (не две заглавные в начале), 2FA, MP3s (цифры) не трогаются;
+//   - две заглавные, дальше строчные, и всё слово - буквы одного алфавита: eM, iPhone (не две заглавные в начале),
+//     2FA, MP3s (цифры) не трогаются;
+//   - кириллица - от трёх букв ("ЧТо", "ДЛя", "НЕт" - самые частые такие опечатки; Maz на форуме, 08.10.2026: "ни разу
+//     не исправились ДВе... Таких сочетаний много"), латиница - от четырёх: PCs, IDs, GHz, CDs, VMs так и пишутся.
+//     Единицы (МГц, МВт, МПа...) - во встроенных исключениях. "СШа" (США с Shift, отпущенным на букву раньше) станет
+//     "Сша" - так же неверно, как было; "Исправить последнее слово" вернёт;
 //   - исключения: встроенные (VMware, OAuth...) и свои (two_caps_exceptions; "Исправить последнее слово" сразу
 //     после исправления возвращает слово и добавляет его туда). Исключение действует и на слова, которые с него
 //     начинаются: "ИПшник" - и "ИПшника", "ИПшники".
@@ -19,7 +23,9 @@ namespace TwoCaps {
 // Слова, которые сами пишутся двумя заглавными (и с них начинаются другие).
 inline const std::vector<std::wstring>& BuiltIn() {
 	static const std::vector<std::wstring> words = {
-		L"VMware", L"OAuth", L"IPsec", L"DBeaver", L"LTspice", L"KBps", L"MBps", L"GBps", L"TBps",
+		L"VMware", L"OAuth", L"IPsec", L"DBeaver", L"LTspice", L"KBps", L"MBps", L"GBps", L"TBps", L"ВКонтакте",
+		// Единицы: мега-, гига-, тера- (кило- - строчная "к": кВт, кГц).
+		L"МГц", L"ГГц", L"ТГц", L"МВт", L"ГВт", L"ТВт", L"МПа", L"ГПа", L"МДж", L"ГДж", L"МОм", L"ГОм",
 	};
 	return words;
 }
@@ -41,9 +47,9 @@ inline wchar_t ToLower(wchar_t c) { return (wchar_t)(UINT_PTR)CharLowerW((LPWSTR
 
 // Слово (только буквы) под правило и не в исключениях.
 inline bool Matches(const std::wstring& word, const std::vector<std::wstring>& exceptions) {
-	if (word.size() < 4) return false;
-	const Script script = ScriptOf(word[0]);
+	const Script script = word.empty() ? Script::Other : ScriptOf(word[0]);
 	if (script == Script::Other) return false;
+	if (word.size() < (script == Script::Cyrillic ? 3u : 4u)) return false;
 	for (size_t i = 0; i < word.size(); i++) {
 		const wchar_t c = word[i];
 		if (ScriptOf(c) != script || !IsLetter(c)) return false;
@@ -100,7 +106,7 @@ inline Fix Analyze(const std::wstring& text, const std::vector<std::wstring>& ex
 	size_t begin = 0, end = text.size();
 	while (begin < end && !IsLetter(text[begin])) begin++;
 	while (end > begin && !IsLetter(text[end - 1])) end--;
-	if (end - begin < 4) return {};
+	if (end - begin < 3) return {}; // от трёх букв; сколько нужно для алфавита - Matches
 	for (size_t i = begin; i < end; i++)
 		if (!IsLetter(text[i])) return {}; // знак внутри слова ("ДВ-ух") - не наше
 	for (size_t i = 0; i < begin; i++)

@@ -400,7 +400,8 @@ struct WordEnd {
 };
 inline WordEnd EndWord() {
 	WordEnd end;
-	end.twoCaps = !broken && word.size() >= 4 && word[0] && word[1] && !word[2] && !word[3];
+	// От трёх букв ("ЧТо"; латиница - от четырёх, это решает движок: TwoCaps::Matches).
+	end.twoCaps = !broken && word.size() >= 3 && word[0] && word[1] && !word[2] && (word.size() < 4 || !word[3]);
 	end.letters = !broken && !word.empty();
 	end.size = word.size();
 	end.lastLetter = lastLetter;

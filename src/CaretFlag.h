@@ -409,7 +409,7 @@ private:
 	}
 
 	// PowerShell ISE (его редактор - из Visual Studio 2010, WpfTextView): UI Automation отдаёт прямоугольники текста в
-	// координатах самого редактора - точки (1/96 дюйма) от левого верхнего угла его видимой части, а не экрана, - и только
+	// координатах самого редактора - точки от левого верхнего угла его видимой части, а не экрана, - и только
 	// строки целиком, даже для одного символа (флажок стоял на меню, форум 07.10). Каретка там: её строка, перенесённая на
 	// экран, а в строке - номер символа, умноженный на ширину символа (шрифт редактора моноширинный, Lucida Console).
 	// Редактор, который отдаёт координаты экрана (первая видимая строка - там, где он сам на экране), - как обычно.
@@ -472,12 +472,12 @@ private:
 		const bool last = SUCCEEDED(tp->get_DocumentRange(&doc)) && doc &&
 			SUCCEEDED(ln->CompareEndpoints(TextPatternRangeEndpoint_End, doc, TextPatternRangeEndpoint_End, &end)) && end >= 0;
 		const UINT cells = len + (last ? 0 : 1);
+		// Свои координаты - в тех же точках, что и прямоугольник редактора (UI Automation пересчитывает их под масштаб
+		// экрана, как и его): умножать на масштаб не нужно. rc1 умножал - при 125 % флаг в консоли ISE уходил вправо от
+		// приглашения (Дмитрий 08.10.2026; при 100 % разницы нет).
 		const double x = line.left + (cells ? double(line.right - line.left) * col / cells : 0);
-		UINT dpiX = 96, dpiY = 96;
-		GetDpiForMonitor(MonitorFromRect(&box, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-		const double k = dpiX / 96.0;
-		const LONG cx = box.left + std::lround(x * k);
-		rc = { cx, box.top + std::lround(line.top * k), cx + 1, box.top + std::lround(line.bottom * k) };
+		const LONG cx = box.left + std::lround(x);
+		rc = { cx, box.top + line.top, cx + 1, box.top + line.bottom };
 		return rc.bottom > rc.top ? 1 : -1;
 	}
 

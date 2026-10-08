@@ -44,16 +44,21 @@ public: class HookerKeyboard {
 
 private: inline static HookerKeyboard hookerKeyb;
 
-	// Последний вызов перехвата клавиатуры или мыши (GetTickCount) - по нему видно, что Windows его отключила (Watch).
-	inline static DWORD lastHookTick = 0;
+	// Последний вызов перехвата клавиатуры и мыши (GetTickCount) - по ним видно, что Windows его отключила (Watch).
+	inline static DWORD lastKeyTick = 0, lastMouseTick = 0;
 	inline static DWORD lastRehook = 0;
+	// Клавиши, которые Windows отдала программам (Raw Input, окно потока перехвата: OnRawKey): когда последняя и в каком
+	// окне. Мышь их не обновляет - отключённый перехват клавиатуры виден, даже если мышью работают.
+	inline static DWORD lastRawKeyTick = 0;
+	inline static HWND rawKeyWindow = nullptr;
+	inline static bool rawSeen = false; // Raw Input приходит (не пришло ни одного - смотрим по-старому, GetLastInputInfo)
 
 	static LRESULT CALLBACK LowLevelKeyboardProc(
 		_In_  int nCode,
 		_In_  WPARAM wParam,
 		_In_  LPARAM lParam
 	) {
-		lastHookTick = GetTickCount();
+		lastKeyTick = GetTickCount();
 		if (nCode == HC_ACTION) Late("key", ((KBDLLHOOKSTRUCT*)lParam)->time);
 		return hookerKeyb.LowLevelKeyboardProc(nCode, wParam, lParam);
 	}
@@ -95,7 +100,7 @@ private: inline static HookerKeyboard hookerKeyb;
 	// его испорченным (сочетание внутри слова) и не проверял до пробела (Дмитрий 06.10: eM Client, ответ по
 	// Ctrl+Shift+R - первое слово не переключалось, по кнопке "Ответить" - переключалось: щелчок слово сбрасывает).
 	static void CALLBACK FocusProc(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD) {
-		KeyHold::ResetWord();
+		KeyHold::FocusIn(); // не посреди набора: там это список подсказок (KeyHold::FocusIn)
 	}
 
 	static LRESULT CALLBACK LowLevelMouseProc(
@@ -103,7 +108,7 @@ private: inline static HookerKeyboard hookerKeyb;
 		_In_  WPARAM wParam,
 		_In_  LPARAM lParam
 	) {
-		lastHookTick = GetTickCount();
+		lastMouseTick = GetTickCount();
 		if (nCode == HC_ACTION) {
 			Late("mouse", ((MSLLHOOKSTRUCT*)lParam)->time);
 			if (wParam == WM_MOUSEMOVE) {
@@ -139,7 +144,7 @@ public:
 
 		hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
 		IFW_RET(hHookKeyGlobal.IsValid());
-		lastHookTick = GetTickCount();
+		lastKeyTick = lastMouseTick = GetTickCount();
 
 		if (!Utils::IsDebug()) {
 			hHookMouseGlobal = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
@@ -164,28 +169,63 @@ public:
 		RETURN_SUCCESS;
 	}
 
+	// Raw Input клавиатуры - окну потока перехвата (HookerThread.h), даже когда впереди другие: по нему видно, что
+	// перехват клавиатуры отключён (Watch).
+	void WatchRawInput(HWND window) {
+		RAWINPUTDEVICE device{ .usUsagePage = 0x01, .usUsage = 0x06, .dwFlags = RIDEV_INPUTSINK, .hwndTarget = window };
+		IFW_LOG(RegisterRawInputDevices(&device, 1, sizeof(device)));
+	}
+	// WM_INPUT в окне потока перехвата: клавиша дошла до программ (time - когда пришло сообщение: поток мог быть занят).
+	static void OnRawKey(DWORD time) {
+		lastRawKeyTick = time;
+		rawKeyWindow = GetForegroundWindow();
+		if (!rawSeen) {
+			rawSeen = true;
+			LOG_ANY("hook: raw input comes, the keyboard hook is watched by it");
+		}
+	}
+
 	// Windows молча отключает перехват, который не ответил вовремя (LowLevelHooksTimeout): программа перестаёт видеть
-	// клавиши, а пока не отключила - каждое нажатие и движение мыши ждёт его. Ввод был, а перехват не видел ничего
-	// больше 1,5 с - подключиться заново (не чаще раза в 30 с: ввод мимо перехвата бывает у сенсорного экрана и пера).
-	// Таймер потока перехвата (HookerThread.h), раз в 2 с.
+	// клавиши, а пока не отключила - каждое нажатие и движение мыши ждёт его. Таймер потока перехвата (HookerThread.h),
+	// раз в 2 с; подключаемся заново не чаще раза в 30 с.
+	//   - Клавиатура: клавиша дошла до программ (Raw Input) на секунду позже, чем её видел наш перехват, и в том же окне,
+	//     что впереди сейчас, - перехват клавиатуры отключён. Подключить заново только его: каждый новый перехват встаёт
+	//     первым, перед перехватами других программ (AutoHotkey, FluentClipper), - их порядок без нужды не трогаем.
+	//     Состояние клавиш - заново: отпускания, пока его не было, мы не видели (иначе клавиша "нажата" до 10 с).
+	//   - Мышь (и клавиатура, пока Raw Input не пришёл ни разу): ввод был (GetLastInputInfo), а перехваты не видели
+	//     ничего больше 1,5 с. Ввод мимо перехвата бывает и у сенсорной панели, экрана и пера - поэтому только мышь.
 	void Watch() {
-		LASTINPUTINFO li{ sizeof(li) };
-		if (!GetLastInputInfo(&li)) return;
 		const DWORD now = GetTickCount();
-		if ((LONG)(li.dwTime - lastHookTick) < 1500 || now - lastRehook < 30000) return;
+		if (now - lastRehook < 30000) return;
+		const bool keyboard = rawSeen && (LONG)(lastRawKeyTick - lastKeyTick) >= 1000 && now - lastRawKeyTick < 4000 &&
+			rawKeyWindow == GetForegroundWindow();
+		LASTINPUTINFO li{ sizeof(li) };
+		const bool unseen = !keyboard && GetLastInputInfo(&li) && (LONG)(li.dwTime - lastMouseTick) >= 1500 &&
+			(LONG)(li.dwTime - lastKeyTick) >= 1500 && (!rawSeen || (LONG)(li.dwTime - lastRawKeyTick) >= 1500);
+		if (!keyboard && !unseen) return;
 		// Впереди окно от администратора, а мы нет: его ввод Windows нам и не показывает. Или удалённый рабочий стол: его
 		// клиент на весь экран ловит клавиатуру своим перехватом, и новый наш встал бы перед ним.
 		if (!KeyHold::CanHold()) return;
-		LOG_WARN("hook: input {} ms after the hooks last saw any, hooking again", li.dwTime - lastHookTick);
 		lastRehook = now;
-		hHookKeyGlobal.Cleanup();
-		hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
-		IFW_LOG(hHookKeyGlobal.IsValid());
-		if (!Utils::IsDebug()) {
+		if (keyboard || !rawSeen) {
+			LOG_WARN("hook: keys came {} ms after the keyboard hook last saw any, hooking it again", now - lastKeyTick);
+			hHookKeyGlobal.Cleanup();
+			hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
+			IFW_LOG(hHookKeyGlobal.IsValid());
+			lastKeyTick = now;
+			ClearAllKeys();
+			KeyHold::ResetWord();
+			if (KeyHold::replaying > 0) { // отправленное, пока перехвата не было, уже не вернётся - не ждать его
+				KeyHold::replaying = 0;
+				if (!KeyHold::active && !KeyHold::held.empty()) KeyHold::Next();
+			}
+		}
+		if (!keyboard && !Utils::IsDebug()) {
+			LOG_WARN("hook: input {} ms after the hooks last saw any, hooking the mouse again", li.dwTime - lastMouseTick);
 			hHookMouseGlobal.Cleanup();
 			hHookMouseGlobal = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
 			IFW_LOG(hHookMouseGlobal.IsValid());
+			lastMouseTick = now;
 		}
-		lastHookTick = now;
 	}
 };

@@ -92,7 +92,14 @@ inline unsigned generation = 0; // номер последней придерж�
 inline bool active = false;     // придержка: движок решает
 inline ULONGLONG since = 0;     // начало придержки или последней отправки - от него сроки
 inline bool timedOut = false;
-inline std::deque<INPUT> held;
+// Придержанное нажатие; physical - с клавиатуры (не от другой программы): его клавишу можно назвать по месту на
+// клавиатуре в раскладке, какая стоит при отправке (Send).
+struct Held {
+	INPUT in;
+	bool physical = false;
+};
+inline std::deque<Held> held;
+inline WORD downAs[512] = {}; // клавиша по месту (scan, 0x100 - расширенная): каким другим VK ушло её нажатие
 inline size_t replaying = 0;    // столько отправленных заново ещё не прошло через хук
 inline bool batchEnded = false; // последнее отправленное прошло через хук: что дальше - AfterKey
 inline bool flushing = false;   // последняя отправка - всё сразу после неудачи (не в счёт удачи)
@@ -222,27 +229,54 @@ inline void Hold(const KBDLLHOOKSTRUCT& k, bool first = false) {
 		in.ki.wVk = 0;
 		in.ki.dwFlags = (in.ki.dwFlags & KEYEVENTF_KEYUP) | KEYEVENTF_UNICODE;
 	}
+	const Held h{ in, !(k.flags & LLKHF_INJECTED) };
 	if (first)
-		held.push_front(in);
+		held.push_front(h);
 	else
-		held.push_back(in);
+		held.push_back(h);
 	CheckTimeout();
 	if (!active && replaying == 0) Next(); // ничего не держит, а очередь есть - отправить (лишнее сообщение не вредит)
 }
 
 // Отправить порцию: до первого конца слова (пробел, Enter, Tab) или клавиши не буквы включительно; all - всё сразу.
+// Нажатая при Ctrl, Alt или Win буква - тоже последней: это сочетание, и на нём придержка ждёт, пока движок его
+// сделает (HookerKeyboard: сочетание среди придержанных) - а набранное за ним, уйди оно той же порцией, попало бы в
+// программу раньше, чем вставка или исправление.
+// Клавиши с клавиатуры отправляются той клавишей, что на том же месте в раскладке сейчас: автопереключение могло
+// сменить раскладку, пока они ждали, а в немецкой или французской раскладке на месте русской "н" - Z, а не Y.
 inline void SendBatch(bool all = false) {
 	auto letter = [](WORD vk) {
 		return (vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9') || (vk >= VK_OEM_1 && vk <= VK_OEM_3) ||
 			(vk >= VK_OEM_4 && vk <= VK_OEM_8) || vk == VK_OEM_102 || vk == VK_SPACE || vk == 0; // 0 - знак Юникода
 	};
+	const bool command = (GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_LWIN) |
+	                      GetAsyncKeyState(VK_RWIN)) & 0x8000;
+	const HKL lay = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), nullptr));
 	std::vector<INPUT> list;
+	std::vector<bool> physical;
 	while (!held.empty()) {
-		const INPUT in = held.front();
+		Held h = held.front();
 		held.pop_front();
+		INPUT& in = h.in;
+		const bool up = in.ki.dwFlags & KEYEVENTF_KEYUP;
+		if (h.physical && in.ki.wScan && in.ki.wVk != VK_SPACE && letter(in.ki.wVk)) {
+			const bool ext = in.ki.dwFlags & KEYEVENTF_EXTENDEDKEY;
+			const size_t at = (in.ki.wScan & 0xFF) | (ext ? 0x100 : 0);
+			if (!up) {
+				const WORD vk = (WORD)MapVirtualKeyExW(in.ki.wScan | (ext ? 0xE000 : 0), MAPVK_VSC_TO_VK_EX, lay);
+				const bool other = vk && vk != in.ki.wVk && vk != VK_SPACE && letter(vk);
+				if (other) in.ki.wVk = vk;
+				downAs[at] = other ? vk : 0;
+			}
+			else if (downAs[at]) { // отпускание - той же клавишей, что ушло нажатие (не той, что на месте сейчас)
+				in.ki.wVk = downAs[at];
+				downAs[at] = 0;
+			}
+		}
 		list.push_back(in);
+		physical.push_back(h.physical);
 		const WORD vk = in.ki.wVk;
-		if (!all && (!letter(vk) || (vk == VK_SPACE && !(in.ki.dwFlags & KEYEVENTF_KEYUP)))) break;
+		if (!all && (!letter(vk) || (vk == VK_SPACE && !up) || (command && !up))) break;
 	}
 	if (list.empty()) return;
 	since = now();
@@ -263,7 +297,7 @@ inline void SendBatch(bool all = false) {
 			Fail();
 		}
 		sendFailed = true;
-		for (size_t i = list.size(); i-- > sent;) held.push_front(list[i]);
+		for (size_t i = list.size(); i-- > sent;) held.push_front({ list[i], physical[i] });
 		const size_t unsent = list.size() - sent;
 		replaying = replaying > unsent ? replaying - unsent : 0;
 	}
@@ -327,6 +361,8 @@ inline void AfterKey() {
 // ----- регистр букв текущего слова, как его видит хук -----
 inline std::vector<bool> word; // true - заглавная
 inline UINT lastLetter = 0;    // клавиша последней буквы слова
+inline UINT firstKeys[2] = {}; // клавиши первых двух букв (i, 'i - fix_lone_i)
+inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, CapsLock, сочетание - не наш случай
 inline std::atomic<bool> earlyDone = false; // рабочий поток: посреди этого слова решать больше нечего
 
@@ -346,8 +382,23 @@ inline bool SignKey(UINT vk, bool shift) {
 inline void ResetWord() {
 	word.clear();
 	lastLetter = 0;
+	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
 	earlyDone = false;
+}
+
+// Фокус перешёл (EVENT_OBJECT_FOCUS, Hooker::FocusProc): в другом поле слово начинается заново. Но не посреди набора:
+// списки подсказок (адресная строка браузера, VS Code, упоминания в мессенджерах) передают фокус своей строке после
+// каждой буквы - слово стиралось бы, и его конец не проверялся. Сочетание, которым перешли в другое поле (Ctrl+L,
+// Ctrl+Shift+R), слово и так "портит" - его сбрасываем всегда.
+inline void FocusIn() {
+	if (word.empty() || broken || now() - letterAt > 500) ResetWord();
+}
+
+// Раскладка окна впереди - английская (i - I, fix_lone_i: решает движок, а хук не держит клавиши зря в других).
+inline bool EnglishLayout() {
+	const HKL lay = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), nullptr));
+	return PRIMARYLANGID(LOWORD((UINT_PTR)lay)) == LANG_ENGLISH;
 }
 
 // Нажатие, которое движок получает как набор (не пробел). true - в слово добавилась буква. repeat - автоповтор
@@ -362,8 +413,12 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 	}
 	if (vk == VK_BACK) {
 		if (!word.empty()) word.pop_back();
+		if (word.size() < 2) firstKeys[1] = 0;
+		if (word.empty()) firstKeys[0] = 0;
 		return false;
 	}
+	// Громкость и плеер текст не трогают - слово продолжается (как у движка: AnalyzeTyped.h).
+	if (vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE) return false;
 	if (repeat && IsLetterKey(vk)) {
 		broken = true;
 		return false;
@@ -371,6 +426,8 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 	if (IsLetterKey(vk)) {
 		word.push_back(shift);
 		lastLetter = vk;
+		if (word.size() <= 2) firstKeys[word.size() - 1] = vk;
+		letterAt = now();
 		return true;
 	}
 	if (vk >= '0' && vk <= '9') {
@@ -395,14 +452,16 @@ inline bool EarlyPoint() {
 struct WordEnd {
 	bool twoCaps = false; // могло подойти под ДВе ЗАглавные (две заглавные, потом строчные)
 	bool letters = false; // буквы без цифр и команд - его проверит автопереключение (и одну: список "Переключать всегда")
+	bool loneI = false;   // может быть i, i'm, i've, i'll, i'd ('i - с кавычкой): до четырёх клавиш, первая буква - I
 	size_t size = 0;      // букв
 	UINT lastLetter = 0;  // клавиша последней
 };
 inline WordEnd EndWord() {
 	WordEnd end;
-	// От трёх букв ("ЧТо"; латиница - от четырёх, это решает движок: TwoCaps::Matches).
+	// От трёх букв ("ЧТо", "THe"; какие из них исправлять - решает движок: TwoCaps::Matches).
 	end.twoCaps = !broken && word.size() >= 3 && word[0] && word[1] && !word[2] && (word.size() < 4 || !word[3]);
 	end.letters = !broken && !word.empty();
+	end.loneI = end.letters && word.size() <= 4 && (firstKeys[0] == 'I' || (firstKeys[0] == VK_OEM_7 && firstKeys[1] == 'I'));
 	end.size = word.size();
 	end.lastLetter = lastLetter;
 	ResetWord();

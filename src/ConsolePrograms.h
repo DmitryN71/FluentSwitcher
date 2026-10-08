@@ -5,14 +5,17 @@
 //
 // Окно консоли разрешено, если его программа - из списка: имя exe или путь, строчными. В обычной консоли
 // (ConsoleWindowClass) окно принадлежит первой программе в ней (cmd.exe или far.exe, запущенный ярлыком), поэтому
-// смотрим и запущенные из неё по дереву процессов: far.exe из cmd. В Windows Terminal, ConEmu, mintty окно - их
-// собственное, а вкладки по процессам не различить: там только сама программа окна (WindowsTerminal.exe - все вкладки).
+// смотрим и запущенные из неё по дереву процессов: far.exe из cmd. Но если из неё же запущена программа, которая
+// спрашивает пароль (ssh, sudo, runas - PasswordPrompt), и её самой нет в списке - нельзя: FAR в списке не значит, что
+// можно переключать пароль, набранный в ssh из FAR. В Windows Terminal, ConEmu, mintty окно - их собственное, а вкладки
+// по процессам не различить: там только сама программа окна (WindowsTerminal.exe - все вкладки).
 // Ответ на окно помнится 2 с (у каждого потока свой: спрашивают и хук, и движок): снимок процессов - не на каждую клавишу.
 #pragma once
 
 #include <windows.h>
 #include <tlhelp32.h>
 
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -37,6 +40,24 @@ inline std::wstring PathOf(DWORD pid) {
 	return ok ? Lower(path) : std::wstring();
 }
 
+// Программы, которые спрашивают пароль в консоли.
+inline bool PasswordPrompt(const std::wstring& lowerName) {
+	for (const wchar_t* p : { L"ssh.exe", L"scp.exe", L"sftp.exe", L"plink.exe", L"pscp.exe", L"psftp.exe", L"telnet.exe",
+	                          L"ftp.exe", L"sudo.exe", L"runas.exe", L"wsl.exe", L"bash.exe", L"mysql.exe", L"psql.exe" })
+		if (lowerName == p) return true;
+	return false;
+}
+
+// Когда процесс запущен; 0 - не узнать.
+inline ULONGLONG CreatedAt(DWORD pid) {
+	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+	if (!process) return 0;
+	FILETIME created{}, exited{}, kernel{}, user{};
+	const bool ok = GetProcessTimes(process, &created, &exited, &kernel, &user) != FALSE;
+	CloseHandle(process);
+	return ok ? ((ULONGLONG)created.dwHighDateTime << 32 | created.dwLowDateTime) : 0;
+}
+
 inline bool Allowed(HWND w, const std::set<std::wstring>& programs) {
 	if (programs.empty() || !w) return false;
 	thread_local struct {
@@ -52,6 +73,22 @@ inline bool Allowed(HWND w, const std::set<std::wstring>& programs) {
 	wchar_t cls[64] = {};
 	GetClassNameW(w, cls, 64);
 	const bool tree = wcscmp(cls, L"ConsoleWindowClass") == 0;
+	bool paths = false; // в списке есть и пути, не только имена
+	for (const auto& p : programs) paths = paths || p.find(L'\\') != std::wstring::npos;
+	auto listed = [&](DWORD pid, const std::wstring& lowerName) {
+		if (programs.contains(lowerName)) return true;
+		if (!paths) return false;
+		const std::wstring path = PathOf(pid);
+		return !path.empty() && programs.contains(path);
+	};
+
+	if (!tree) { // Windows Terminal, ConEmu, mintty: только программа окна - снимок процессов не нужен
+		const std::wstring path = PathOf(root);
+		const std::wstring name = path.substr(path.find_last_of(L'\\') + 1);
+		const bool allowed = !path.empty() && (programs.contains(name) || programs.contains(path));
+		cache = { w, now, allowed };
+		return allowed;
+	}
 
 	std::vector<PROCESSENTRY32W> all;
 	if (HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0); snap != INVALID_HANDLE_VALUE) {
@@ -59,24 +96,36 @@ inline bool Allowed(HWND w, const std::set<std::wstring>& programs) {
 		for (BOOL ok = Process32FirstW(snap, &e); ok; ok = Process32NextW(snap, &e)) all.push_back(e);
 		CloseHandle(snap);
 	}
+	// Запущенные из программы окна, по дереву. Номер родителя мог достаться новому процессу (родитель давно закрыт):
+	// потомок старше такого "родителя" - не его.
 	std::set<DWORD> ours{ root };
-	for (bool more = tree; more;) {
+	std::map<DWORD, ULONGLONG> created;
+	auto createdAt = [&](DWORD pid) {
+		const auto it = created.find(pid);
+		return it != created.end() ? it->second : (created[pid] = CreatedAt(pid));
+	};
+	for (bool more = true; more;) {
 		more = false;
-		for (const auto& p : all)
-			if (p.th32ProcessID != p.th32ParentProcessID && ours.contains(p.th32ParentProcessID) &&
-			    ours.insert(p.th32ProcessID).second)
-				more = true;
-	}
-	bool allowed = false;
-	for (const auto& p : all)
-		if (ours.contains(p.th32ProcessID) && programs.contains(Lower(p.szExeFile))) allowed = true;
-	bool paths = false; // в списке есть и пути, не только имена
-	for (const auto& p : programs) paths = paths || p.find(L'\\') != std::wstring::npos;
-	for (DWORD pid : ours)
-		if (!allowed && paths) {
-			const std::wstring path = PathOf(pid);
-			allowed = !path.empty() && programs.contains(path);
+		for (const auto& p : all) {
+			if (p.th32ProcessID == p.th32ParentProcessID || !ours.contains(p.th32ParentProcessID) ||
+			    ours.contains(p.th32ProcessID))
+				continue;
+			const ULONGLONG parent = createdAt(p.th32ParentProcessID), child = createdAt(p.th32ProcessID);
+			if (parent && child && child < parent) continue;
+			ours.insert(p.th32ProcessID);
+			more = true;
 		}
+	}
+	bool allowed = false, prompt = false;
+	for (const auto& p : all) {
+		if (!ours.contains(p.th32ProcessID)) continue;
+		const std::wstring name = Lower(p.szExeFile);
+		if (listed(p.th32ProcessID, name))
+			allowed = true;
+		else if (PasswordPrompt(name))
+			prompt = true;
+	}
+	allowed = allowed && !prompt;
 	cache = { w, now, allowed };
 	return allowed;
 }

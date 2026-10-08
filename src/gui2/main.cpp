@@ -6,6 +6,7 @@
 #include "LayoutSound.h"
 #include "SettingsIpc.h"
 #include "Update.h"
+#include "ConfigLock.h"
 #include "utils/WinTimer.h"
 
 void WriteJournalLine(const std::string& utf8); // WorkerImplement.cpp: строка журнала автопереключения - в файл
@@ -27,11 +28,17 @@ void StartGui() {
 	// Счёт до трёх - отмены ДВух ЗАглавных и автопереключения, исправления вручную: на третий раз слово уходит в список
 	// (исключения или "Переключать всегда"), о чём говорит уведомление у флага. true - ушло.
 	// name - имя списка в настройках: слово отмечается выученным (learned), окно настроек так его и показывает.
+	struct Learned {
+		std::string word;
+		ULONGLONG at = 0;
+	};
+	std::map<std::string, Learned> lastLearned; // по имени списка: слово, которое только что ушло туда (uncount)
 	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const char* name,
 	                       const std::wstring& word, const char* title, const char* text) {
 		const std::string utf8 = StrUtils::Convert(word);
 		if (++counts[utf8] < 3) return false;
 		counts.erase(utf8);
+		lastLearned[name] = { utf8, GetTickCount64() };
 		if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
 		auto& learned = conf_gui()->learned[name];
 		if (std::ranges::find(learned, utf8) == learned.end()) learned.push_back(utf8);
@@ -39,12 +46,41 @@ void StartGui() {
 		                StrUtils::Convert(std::string(LOC(text))), [] { show_main_wind(); });
 		return true;
 	};
-	// Счёт исправлений вручную изменился - в файл раз в минуту, а не на каждое исправление.
+	// Отмену (исправление) тут же взяли назад - она не в счёт. Если она была третьей и слово уже ушло в список - вернуть
+	// его оттуда, со счётом два. 0 - нечего снимать, 1 - снят счёт, 2 - слово убрано из списка.
+	auto uncount = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const char* name,
+	                   const std::wstring& word) {
+		const std::string utf8 = StrUtils::Convert(word);
+		if (const auto it = counts.find(utf8); it != counts.end()) {
+			if (--it->second <= 0) counts.erase(it);
+			return 1;
+		}
+		Learned& last = lastLearned[name];
+		if (last.word != utf8 || GetTickCount64() - last.at > 60000) return 0;
+		last = {};
+		std::erase(list, utf8);
+		std::erase(conf_gui()->learned[name], utf8);
+		counts[utf8] = 2;
+		LOG_ANY("{}: {} taken back from the list", name, utf8);
+		return 2;
+	};
+	// Счёт исправлений вручную изменился - в файл раз в минуту, а не на каждое исправление. В файл как он есть на диске,
+	// со своим счётом: там могут быть новые настройки из окна, которые мы ещё не перечитали.
 	bool fixCountsChanged = false;
-	timer.CycleTimer([&] {
-		if (!fixCountsChanged) return;
+	auto saveFixCounts = [&] {
 		fixCountsChanged = false;
-		SaveApplyGuiConfig();
+		ConfigLock lock;
+		if (!std::filesystem::is_regular_file(ProgramConfig::GetPath_Conf())) {
+			SaveApplyGuiConfig(); // файла нет - весь из памяти
+			return;
+		}
+		ProgramConfig disk;
+		if (cfg_details::LoadConfig(disk) != TStatus::SW_ERR_SUCCESS) return;
+		disk.autoswitch_fix = conf_gui()->autoswitch_fix;
+		IFS_LOG(cfg_details::Save_conf(disk));
+	};
+	timer.CycleTimer([&] {
+		if (fixCountsChanged) saveFixCounts();
 	}, 60 * 1000);
 
 	// Буквы вместо флага - цвета текста панели задач: сменилась её тема (светлая / тёмная) - перерисовать значок.
@@ -170,10 +206,12 @@ void StartGui() {
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
 				auto& counts = conf_gui()->autoswitch_fix;
 				if (msg == WM_AutoSwitchUnlearnForce) {
-					const auto it = counts.find(StrUtils::Convert(*word));
-					if (it != counts.end() && --it->second <= 0) counts.erase(it);
+					const int undone = uncount(counts, conf_gui()->autoswitch_force, "autoswitch_force", *word);
 					LOG_ANY(L"autoswitch: {} fixed back by hand, not counted", *word);
-					fixCountsChanged = true;
+					if (undone == 2)
+						SaveApplyGuiConfig();
+					else if (undone == 1)
+						fixCountsChanged = true;
 					return 0;
 				}
 				LOG_ANY(L"autoswitch: {} fixed by hand", *word);
@@ -200,10 +238,7 @@ void StartGui() {
 				// Отмену тут же исправили обратно ("Shift дважды" по привычке после автопереключения, потом ещё раз): переключение
 				// было верным - отмена не в счёт.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
-				auto& counts = conf_gui()->autoswitch_undo;
-				const auto it = counts.find(StrUtils::Convert(*word));
-				if (it != counts.end()) {
-					if (--it->second <= 0) counts.erase(it);
+				if (uncount(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions", *word)) {
 					LOG_ANY(L"autoswitch: {} fixed again after switching back, not counted", *word);
 					SaveApplyGuiConfig();
 				}
@@ -244,4 +279,5 @@ void StartGui() {
 		::TranslateMessage(&msg);
 		::DispatchMessage(&msg);
 	}
+	if (fixCountsChanged) saveFixCounts(); // выход: счёт за последнюю минуту не терять
 }

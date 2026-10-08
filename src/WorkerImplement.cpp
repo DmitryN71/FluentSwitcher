@@ -230,8 +230,11 @@ bool ConsoleBlocked() {
     return KeyHold::IsConsoleWindow(fg) && !ConsolePrograms::Allowed(fg, conf_get_unsafe()->autoswitch_console);
 }
 
-// Редактор кода впереди: там i - переменная (for i in, int i = 0), а не местоимение (fix_lone_i).
+// Редактор кода впереди: там i - переменная (for i in, int i = 0), а не местоимение (fix_lone_i), а ILogger, QString -
+// имена (ДВе ЗАглавные). И программа из "Без автопереключения" (autoswitch_off): туда кладут редакторы, которых нет в
+// этом списке (kate, gvim, geany).
 bool IsCodeEditor() {
+    if (conf_get_unsafe()->IsAutoSwitchOffTop()) return true;
     static const wchar_t* const editors[] = {
         L"code.exe", L"code - insiders.exe", L"cursor.exe", L"windsurf.exe", L"devenv.exe", L"idea64.exe",
         L"pycharm64.exe", L"clion64.exe", L"rider64.exe", L"webstorm64.exe", L"goland64.exe", L"phpstorm64.exe",
@@ -326,8 +329,9 @@ bool WorkerImplement::ByHandAfterOurs(const std::wstring& typed, bool partial) c
 
 // Слова перепечатываемого с двумя заглавными в начале ("ЕРу еуые" - "THe test", "ЕРуку" - "THere": Shift отпустили
 // поздно) - по правилу "ДВух ЗАглавных": вторая буква строчная (так же FixText при "Исправить последнее слово";
-// автопереключение переводит слово раньше, чем его увидело бы правило). Слово из трёх букв под правило не подходит
-// (PCs, IDs, GHz так и пишутся) - его исправляем, только если словарь знает его так ("The"), а с двумя заглавными нет.
+// автопереключение переводит слово раньше, чем его увидело бы правило). Латинское слово из трёх букв, которого нет в
+// частых (TwoCaps::Matches), - ещё и по словарю: исправляем, если словарь знает его так ("Oxo"), а с двумя заглавными
+// нет (PCs, IDs, IPs словарь знает так и есть). Встроенные исключения - и здесь.
 // Меняется только перепечатываемое: в буфере слово как набрано, и отмена вернёт его как было.
 void WorkerImplement::TwoCapsInKeys(TKeyRevert& keys, HKL to) {
     if (!conf_get_unsafe()->two_caps) return;
@@ -347,7 +351,7 @@ void WorkerImplement::TwoCapsInKeys(TKeyRevert& keys, HKL to) {
         }
         bool fix = TwoCaps::Matches(w, exceptions);
         if (!fix && w.size() == 3 && TwoCaps::IsUpper(w[0]) && TwoCaps::IsUpper(w[1]) && TwoCaps::IsLower(w[2]) &&
-            std::find(exceptions.begin(), exceptions.end(), w) == exceptions.end()) {
+            !TwoCaps::Excepted(w, exceptions)) {
             std::wstring one = w;
             one[1] = TwoCaps::ToLower(one[1]);
             fix = SpellCheck::Check(w, lang, true) == SpellCheck::Result::NotWord &&
@@ -360,17 +364,23 @@ void WorkerImplement::TwoCapsInKeys(TKeyRevert& keys, HKL to) {
     }
 }
 
-void WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
+bool WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     TKeyRevert list = m_cycleList.KeysFrom(begin);
-    if (list.empty()) return;
+    if (list.empty()) return false;
     TwoCapsInKeys(list, to);
     TextFixed();
     LiftHeldMods();
     IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = to,
                             .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
+    // Щелчок или другое окно посреди перепечатки: её бросили (ProcessRevert) - не записывать как переключение.
+    if (CaretStop()()) {
+        LOG_ANY("autoswitch: the retyping was stopped, not counted");
+        return false;
+    }
     m_cycleList.SetLayFrom(begin, to);
     if (wordEnded) m_cycleList.SetSeparateLast();
     AutoLayoutIsOurs();
+    return true;
 }
 
 bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
@@ -428,7 +438,12 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     // Слово перед этим - контекст коротких слов (AutoSwitch.h); слова перед ним - их переводят вместе с этим.
     bool fixedBefore = false;
     const auto tail = m_cycleList.TailWords(afterSpace, 6, &fixedBefore);
-    const auto context = ContextBefore(m_cycleList, tail, fixedBefore, lay);
+    // Контекст нужен только коротким словам - и считается тогда (в нём поход в словарь за словом перед этим).
+    std::optional<AutoSwitch::Context> contextCache;
+    auto context = [&]() -> const AutoSwitch::Context& {
+        if (!contextCache) contextCache = ContextBefore(m_cycleList, tail, fixedBefore, lay);
+        return *contextCache;
+    };
     for (HKL other : cfg->layouts_info.EnabledLayouts()) {
         if (other == lay) continue;
         std::wstring there;
@@ -460,7 +475,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
                 (strcmp(why, "too short") == 0 || strcmp(why, "a word as typed") == 0 ||
                  strcmp(why, "a short word with a sign after it") == 0)) {
                 shortWord = AutoSwitch::ShortWord(typed, there, Utils::GetNameForHKL_simple(lay),
-                                                  Utils::GetNameForHKL_simple(other), context, dictionary(lay));
+                                                  Utils::GetNameForHKL_simple(other), context(), dictionary(lay));
                 if (shortWord != AutoSwitch::Short::No) {
                     LOG_ANY(L"autoswitch: {} / {}: a short word, {}", typed, there, std::wstring(why, why + strlen(why)));
                     why = nullptr;
@@ -497,12 +512,12 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         const std::wstring from = TailText(m_cycleList, first, wordEnd, lay), to = TailText(m_cycleList, first, wordEnd, other);
         const std::wstring retroFrom = trimmed(TailText(m_cycleList, first, wordBegin, lay)),
                            retroTo = trimmed(TailText(m_cycleList, first, wordBegin, other));
-        SwitchTail(first, other, true);
+        if (!SwitchTail(first, other, true)) return true;
         m_autoSwitched = { .word = AutoSwitch::Lower(AutoSwitch::Letters(typed).core), .at = GetTickCount64(),
                            .size = m_cycleList.Size(), .typed = from, .there = to, .wordTyped = typed, .wordThere = there,
                            .retroTyped = retroFrom, .retroThere = retroTo, .from = lay, .to = other, .span = total - first,
                            .retro = wordBegin - first, .pair = shortWord == AutoSwitch::Short::WithPartner,
-                           .total = m_cycleList.Total() };
+                           .total = m_cycleList.Total(), .changes = m_cycleList.Changes() };
         m_lastAutoSwitch = GetTickCount64();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = false;
@@ -655,12 +670,12 @@ void WorkerImplement::AutoSwitchEarly() {
         while (!retroTo.empty() && retroTo.back() == L' ') retroTo.pop_back();
         // Как "Исправить последнее слово", но слово не кончилось: его буквы в буфере остаются одним словом (без
         // SetSeparateLast) - конец слова проверит его целиком, "Исправить последнее слово" вернёт целиком.
-        SwitchTail(begin, other, false);
+        if (!SwitchTail(begin, other, false)) return;
         m_autoSwitched = { .word = AutoSwitch::Lower(AutoSwitch::Letters(typed).core), .at = GetTickCount64(),
                            .size = m_cycleList.Size(), .typed = from, .there = to, .wordTyped = typed + more,
                            .wordThere = there + more, .retroTyped = retroFrom, .retroThere = retroTo, .early = true,
                            .ends = m_wordEnds, .from = lay, .to = other, .span = total - begin, .retro = wordBegin - begin,
-                           .total = m_cycleList.Total() };
+                           .total = m_cycleList.Total(), .changes = m_cycleList.Changes() };
         m_lastAutoSwitch = GetTickCount64();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = true;
@@ -814,8 +829,9 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
         if (!same) return false;
         if (m_wordEnds == last.ends) m_autoWord.undone = true; // слово ещё набирают: в нём больше не переключать
     }
-    // После переключения ничего не набирали (Total() - и после 90 клавиш, когда Size() уже не растёт).
-    else if (m_cycleList.Size() != last.size || m_cycleList.Total() != last.total)
+    // После переключения ничего не набирали и не стирали (Changes() - и после 90 клавиш, когда Size() уже не растёт; и
+    // стёрли 4 клавиши, набрали 4 другие - отменилось бы уже не то).
+    else if (m_cycleList.Size() != last.size || m_cycleList.Changes() != last.changes)
         return false;
     // Переведённое - всё, что с него начинается (набранное после переключения посреди слова - тоже: Total() вырос на
     // столько). Стёрли больше, чем набрали, - уже не то: как обычно, вернётся последнее слово.
@@ -870,12 +886,24 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
         text += c;
     }
     auto fix = cfg->two_caps ? TwoCaps::Analyze(text, TwoCapsExceptions()) : TwoCaps::Fix{};
+    // В редакторе кода латинское слово с двумя заглавными - имя (ILogger, IEnumerable, QString, TForm): не трогаем.
+    // Русское (комментарий) - исправляем.
+    if (!fix.tail.empty() && TwoCaps::ScriptOf(fix.word[0]) == TwoCaps::Script::Latin && IsCodeEditor()) {
+        LOG_ANY("two caps: a Latin word in a code editor, left as typed");
+        fix = {};
+    }
     // Английское i отдельным словом - I; только в английской раскладке и не в консоли или редакторе кода (там i -
     // переменная: for i in, int i = 0).
     if (fix.tail.empty() && cfg->fix_lone_i && Utils::GetNameForHKL_simple(lay).starts_with(L"en") && !IsConsole() &&
         !IsCodeEditor())
         fix = TwoCaps::LoneI(text, TwoCapsExceptions());
     if (fix.tail.empty()) return;
+    // Поле пароля в браузере, программе на Electron, WinUI - не окно Edit, IsPasswordFocus его не видит: "PAssword" ушёл
+    // бы "Password". Спрашиваем UI Automation, только когда исправлять уже есть что.
+    if (IsPasswordUia()) {
+        LOG_ANY("two caps: a password field, left as typed");
+        return;
+    }
     // Слово, набранное в чужой раскладке ("GJgsnrf" - не английское, "попытка" - русское): правило его не трогает, его
     // исправит перевод раскладки, и сразу с заглавными ("Попытка"). Словари - Windows (WinDictionary.h); нет словаря -
     // как раньше.
@@ -914,7 +942,7 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
     keys[fix.from]->is_shift = fix.upper; // и в буфере слов: вторая буква теперь строчная (i - заглавная)
     // Отмена - только после пробела: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
     if (afterSpace)
-        m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from], m_cycleList.Total(),
+        m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from], m_cycleList.Changes(),
                       fix.upper };
     else
         m_twoCaps = {};
@@ -947,13 +975,13 @@ void WorkerImplement::FixTwoCapsInKeys(TKeyRevert& keys, HKL lay) {
 
 bool WorkerImplement::TwoCapsUndoReady() const {
     return !m_twoCaps.word.empty() && GetTickCount64() - m_twoCaps.at <= 10000 && m_cycleList.Size() == m_twoCaps.size &&
-        m_cycleList.Total() == m_twoCaps.total;
+        m_cycleList.Changes() == m_twoCaps.changes;
 }
 
 bool WorkerImplement::UndoTwoCaps() {
     auto last = std::exchange(m_twoCaps, {});
     if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size ||
-        m_cycleList.Total() != last.total)
+        m_cycleList.Changes() != last.changes) // и указатель на клавишу (key) годен, только если буфер тот же
         return false;
     LOG_ANY(L"two caps: {} back, it is an exception now", last.word);
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
@@ -1195,12 +1223,22 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
     } release{ keyData.holdId };
     m_holdId = keyData.holdId;
     m_caretBase = KeyHold::caretMoves;
-    // Движок будет печатать: таймаут придержки подождёт его (до 15 с), как при автопереключении. Не вышло - её уже
-    // отпустили, сочетание делается без неё, как раньше.
-    if (keyData.holdId && !KeyHold::Claim(keyData.holdId)) LOG_ANY("hotkey hold {} already let go", keyData.holdId);
+    // Движок будет печатать: таймаут придержки подождёт его (до 15 с), как при автопереключении.
+    const bool late = keyData.holdId && !KeyHold::Claim(keyData.holdId);
     KeyHold::Claimed claimed{ keyData.holdId };
     auto hk = keyData.hk;
     const auto& key = keyData.hotkey;
+    if (late) {
+        // Пока движок был занят, придержку отпустили (3 с): набранное после сочетания уже ушло в программу. Исправлять
+        // набранное теперь - стереть не то; такое сочетание пропускаем (и не считаем его отменой или исправлением).
+        // Остальные (раскладка, команды) - без придержки.
+        LOG_ANY("hotkey hold {} already let go", keyData.holdId);
+        m_holdId = 0;
+        if (IsNeedSavedWords(hk) || hk == hk_RevertSelelected) {
+            LOG_ANY("skip hotkey {}: typed text went on meanwhile", key.ToString());
+            return;
+        }
+    }
 
     if (keyData.delayed_from != 0 && keyData.delayed_from <= m_lastHotKeyTime) {
         LOG_ANY("skip hotkey {} possible was double press", key.ToString());

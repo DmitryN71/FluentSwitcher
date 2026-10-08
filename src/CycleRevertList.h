@@ -17,6 +17,7 @@ class CycleRevertList {
 	int iLastCorrected = c_lastCorrectedInf;
 	TimePoint lastadd;
 	size_t m_total = 0; // клавиш добавлено минус стёрто, с начала работы: сколько набрано после какого-то момента
+	size_t m_changes = 0; // клавиш добавлено и стёрто, с начала работы: изменилось ли набранное после какого-то момента
 
 public:
 	void DeleteLastSymbol() {
@@ -24,6 +25,7 @@ public:
 			bool move_last = m_symbolList.back().is_last_revert;
 			m_symbolList.pop_back();
 			m_total--;
+			m_changes++;
 			if (move_last && !m_symbolList.empty())
 				m_symbolList.back().is_last_revert = true;
 		}
@@ -50,7 +52,7 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 
 	// сначала объеденим все одинаковые сохраняя индексы старта слов.
 
-	struct ZippData { int i; const TKeyHookInfo* p; TKeyType type; bool is_last_revert = false; };
+	struct ZippData { int i; const TKeyHookInfo* p; TKeyType type; bool is_last_revert = false; bool digits = false; };
 	std::vector<ZippData> zipped;
 	zipped.reserve(8);
 	{
@@ -99,6 +101,7 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 				it.type = KEYTYPE_SPACE;
 			}
 			if (it.type == KEYTYPE_LETTER_OR_SPACE) {
+				it.digits = !it.p->key.space_on_extended;
 				// не разделяем слово без надобности.
 				it.type = (i > 0 && i < std::ssize(zipped) - 1 && Utils::is_all(KEYTYPE_LETTER, zipped[i - 1].type, zipped[i + 1].type))
 					? KEYTYPE_LETTER
@@ -133,7 +136,13 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 
 	// Знаки в конце слова, без пробела ("cnjg?" -> "стоп,"), относятся к этому слову. Иначе "последнее
 	// слово" - один знак, и исправлялся только он. Знак между буквами ("ghbdtn.rfr") по-прежнему
-	// разделяет слова.
+	// разделяет слова. Цифры в конце слова - его часть и здесь: "КС1." исправлялось в "КС1/" - цифра считалась
+	// пробелом, и знак за ней был отдельным словом (Дмитрий, 08.10.2026).
+	auto word_before = [&](int z) {
+		if (z <= 0) return false;
+		if (Utils::is_in(zipped[z - 1].type, KEYTYPE_LETTER, KEYTYPE_CUSTOM)) return true;
+		return zipped[z - 1].digits && z >= 2 && zipped[z - 2].type == KEYTYPE_LETTER;
+	};
 	auto only_signs_till_space = [&](int z) {
 		for (; z < std::ssize(zipped) && zipped[z].type != KEYTYPE_SPACE; ++z) {
 			if (zipped[z].type != KEYTYPE_CUSTOM) return false;
@@ -143,8 +152,7 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 	std::vector<int> words; // индексы старта слов.
 	for (int z : starts) {
 		const auto& it = zipped[z];
-		bool glue = it.type == KEYTYPE_CUSTOM && !it.is_last_revert && z > 0
-			&& Utils::is_in(zipped[z - 1].type, KEYTYPE_LETTER, KEYTYPE_CUSTOM)
+		bool glue = it.type == KEYTYPE_CUSTOM && !it.is_last_revert && word_before(z)
 			&& only_signs_till_space(z);
 		if (!glue) {
 			words.push_back(it.i);
@@ -275,6 +283,7 @@ public: void AddKeyToList(const TKeyBaseInfo& key, HKL lay = 0) {
 
 	m_symbolList.push_back({ .key = key, .lay = lay });
 	m_total++;
+	m_changes++;
 }
 
 // ----- Слова в конце набранного - автопереключению (AutoSwitch.h): контекст слова и короткие слова перед ним -----
@@ -332,5 +341,8 @@ public: void SetLayFrom(size_t begin, HKL lay) {
 	for (size_t i = begin; i < m_symbolList.size(); i++) m_symbolList[i].lay = lay;
 }
 public: size_t Total() const { return m_total; }
+// Растёт и от набора, и от Backspace: то же число - после этого момента ничего не набирали и не стирали (Total() того не
+// скажет: стёрли 4 клавиши, набрали 4 другие - он тот же).
+public: size_t Changes() const { return m_changes; }
 
 };

@@ -176,8 +176,8 @@ const std::unordered_map<std::string, const char*>& English()
           "Apps where FluentSwitcher keeps quiet altogether: games, apps with hotkeys of their own. The app's file name (far.exe) or its path. Where only the automatic switch is not wanted - Auto switch - No automatic switch in apps" },
         { "«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, Enter или Tab",
           "\"THis\" becomes \"This\", \"NOt\" - \"Not\": after a space, Enter or Tab" },
-        { "PCs, IDs, GHz, МГц, МВт, eM, iPhone и слова из исключений не трогаются; английские из трёх букв – только частые слова: THe, WAs. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – Двух",
-          "PCs, IDs, GHz, eM, iPhone and the exceptions are left alone; English words of three letters - only frequent ones: THe, WAs. Fixed by mistake? Press \"Fix the last word\" (Shift twice) right away: the word comes back. A layout fix fixes TWo INitial CApitals too: EРшы becomes This" },
+        { "PCs, IDs, GHz, МГц, МВт, eM, iPhone и слова из исключений не трогаются; английские из трёх букв – только частые слова: THe, WAs; в редакторах кода латинские имена (ILogger) тоже. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – Двух",
+          "PCs, IDs, GHz, eM, iPhone and the exceptions are left alone; English words of three letters - only frequent ones: THe, WAs; in code editors Latin names (ILogger) too. Fixed by mistake? Press \"Fix the last word\" (Shift twice) right away: the word comes back. A layout fix fixes TWo INitial CApitals too: EРшы becomes This" },
         { "Флаг у текстового курсора", "Flag at the text cursor" },
         { "Показывает раскладку там, где вы печатаете", "Shows the layout where you type" },
         { "Сколько показывать «ненадолго»", "How long \"for a moment\" is" },
@@ -536,9 +536,9 @@ const std::unordered_map<std::string, const char*>& English()
         { "Лицензия GPL-3.0", "GPL-3.0 license" },
         { "Приложение бесплатное, исходный код открыт. Поставляется без каких-либо гарантий. Части "
           "других авторов – под своими лицензиями: wxWidgets, оформление FluentClipper, значки Fluent "
-          "UI System Icons (Microsoft), флаги GoSquared и другие",
+          "UI System Icons (Microsoft), флаги Flagpack и другие",
           "The app is free and open source. It comes without any warranty. Parts by others are under their own "
-          "licenses: wxWidgets, the FluentClipper design, Fluent UI System Icons (Microsoft), GoSquared flags "
+          "licenses: wxWidgets, the FluentClipper design, Fluent UI System Icons (Microsoft), Flagpack flags "
           "and more" },
         { "Лицензии", "Licenses" },
         { "Рядом с приложением нет файла THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.txt is not next to the app" },

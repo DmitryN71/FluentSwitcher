@@ -15,8 +15,9 @@ public:
     std::function<void()> onChange;
     std::function<void()> onEnter; // with `enter`: Enter pressed in it
 
-    // enter: Enter goes to onEnter (otherwise the box does not take it); Esc empties a box that is not empty.
-    TextField(wxWindow* parent, const wxString& value, int width, bool enter = false) : wxPanel(parent)
+    // enter: Enter goes to onEnter (otherwise the box does not take it); Esc empties a box that is not empty. maxLength -
+    // characters at most: paths and pasted lists are long (a path of 73 characters was cut at 64 and never matched).
+    TextField(wxWindow* parent, const wxString& value, int width, bool enter = false, int maxLength = 64) : wxPanel(parent)
     {
         SetBackgroundStyle(wxBG_STYLE_PAINT);
         SetMinSize(FromDIP(wxSize(width, 32)));
@@ -25,7 +26,7 @@ public:
         m_text->SetFont(UiFont(10));
         m_text->SetBackgroundColour(g.input);
         m_text->SetForegroundColour(g.text);
-        m_text->SetMaxLength(64);
+        m_text->SetMaxLength(maxLength);
         m_text->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { if (onChange) onChange(); });
         if (enter) // wxEVT_TEXT_ENTER without wxTE_PROCESS_ENTER is an assert of wxWidgets
         {

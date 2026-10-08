@@ -28,6 +28,7 @@ class CoreWorker {
 
 		Hooker hooker;
 		IFS_LOG(hooker.StartHook());
+		hooker.WatchRawInput(m_hWnd);
 		SetTimer(m_hWnd, 6, 2000, NULL); // перехват не отключён Windows? (Hooker::Watch)
 
 		MSG msg;
@@ -57,6 +58,9 @@ class CoreWorker {
 				else if (timerId == 6) {
 					hooker.Watch();
 				}
+			}else if (msg.message == WM_INPUT) {
+				Hooker::OnRawKey(msg.time);
+				DefWindowProcW(msg.hwnd, msg.message, msg.wParam, msg.lParam); // Raw Input убирает за собой
 			}else if (msg.message == KeyHold::WM_Release) {
 				KeyHold::OnRelease((unsigned)msg.wParam, msg.lParam == 1);
 			}else if (msg.message == KeyHold::WM_Next) {

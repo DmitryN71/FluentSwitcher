@@ -42,7 +42,7 @@ endif()
 set(FLUENTSWITCHER_VERSION 1.5.0)
 # Бета: "-beta1" - в названии версии ("1.5.0-beta1": программа, файлы выпуска, метка v1.5.0-beta1 - выпуск на GitHub
 # станет предварительным), числа свойств файла - без него. Выпуск - пусто.
-set(FLUENTSWITCHER_VERSION_SUFFIX "-beta24")
+set(FLUENTSWITCHER_VERSION_SUFFIX "-rc1")
 string(REPLACE "." ";" fs_version_parts ${FLUENTSWITCHER_VERSION})
 list(GET fs_version_parts 0 FLUENTSWITCHER_VERSION_MAJOR)
 list(GET fs_version_parts 1 FLUENTSWITCHER_VERSION_MINOR)
@@ -150,8 +150,8 @@ block()
 	target_include_directories(SettingsUi PRIVATE settings/fluentui extern "${CMAKE_BINARY_DIR}/generated")
 	target_link_libraries(SettingsUi PUBLIC wx::core wx::base dwmapi)
 	target_link_libraries(${PROJECT_NAME} PRIVATE SettingsUi imm32 dwmapi)
-	# The word lists in the resources (src/res/res.rc): a new list - the program is rebuilt.
-	set_property(SOURCE src/res/res.rc APPEND PROPERTY OBJECT_DEPENDS
-		"${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_ru.txt" "${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_en.txt"
-		"${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_ru_common.txt" "${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_en_common.txt")
+	# The word lists in the resources (src/res/res.rc): a new list - the program is rebuilt. All of them, by a mask: the
+	# Ukrainian ones were added to res.rc and not here, and a new Ukrainian list did not get into the program.
+	file(GLOB word_lists CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_*.txt")
+	set_property(SOURCE src/res/res.rc APPEND PROPERTY OBJECT_DEPENDS ${word_lists})
 endblock()

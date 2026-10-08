@@ -327,6 +327,9 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// программа из исключений - там движок всё равно ничего не исправит, а игра, которая не принимает
 			// отправленных нажатий, потеряла бы придержанное. Последним: это поход за именем программы.
 			auto canHold = [&] { return KeyHold::CanHold(&cfg->autoswitch_console) && !cfg->IsSkipProgramTop(); };
+			// Программа из "Без автопереключения" (autoswitch_off): для автопереключения там не держим - движок всё равно
+			// откажет, а нажатия ушли бы заново, отправленными (их не принимают некоторые игры и программы).
+			auto autoswitchHere = [&] { return !cfg->IsAutoSwitchOffTop(); };
 			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
 				const auto end = KeyHold::EndWord();
 				// Модификатор вместе с ней - сочетание, не конец слова; кроме Shift+Enter (новая строка в мессенджерах) и
@@ -342,10 +345,14 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					else if (key != vkCode && (key != end.lastLetter || end.size < 2)) otherKey = true;
 				}
 				const bool modEnter = vkCode == VK_RETURN && mods == 1 && (curk.HasMod(VK_SHIFT) || curk.HasMod(VK_CONTROL));
-				// Слово до четырёх букв - может быть i, i'm, i've (fix_lone_i): решает движок.
+				// Слово до четырёх клавиш с I в начале, в английской раскладке, - может быть i, i'm, i've (fix_lone_i): решает
+				// движок. В других раскладках и другие короткие слова не держим: движок i там не исправляет, а держать
+				// после каждого короткого слова - лишние отправленные заново нажатия.
+				const bool twoCaps = end.twoCaps && cfg->two_caps;
+				const bool loneI = end.loneI && cfg->fix_lone_i && KeyHold::EnglishLayout();
 				const bool check = KeyHold::CanStart() && !otherKey && (mods == 0 || modEnter) && g_enabled.IsEnabled() &&
-					((end.twoCaps && cfg->two_caps) || (end.letters && cfg->autoswitch) ||
-					 (end.letters && end.size <= 4 && cfg->fix_lone_i)) && canHold();
+					(twoCaps || loneI || (end.letters && cfg->autoswitch)) && canHold() &&
+					(twoCaps || loneI || autoswitchHere());
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
 					// поле), поэтому ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе
@@ -367,12 +374,12 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				const bool command = curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN);
 				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold());
 				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
-					KeyHold::CanStart() && KeyHold::EarlyPoint() && canHold();
+					KeyHold::CanStart() && KeyHold::EarlyPoint() && canHold() && autoswitchHere();
 				// Клавиша, которая в другой раскладке бывает знаком после слова (б ю ж э - , . ; ', "/ ?" - . ,, Shift с
 				// цифрой - ? : ; "): слово проверяется сразу, как в конце, без пробела ("ПшеРгию" - "GitHub.", "b xnj&" -
 				// "и что?"; Дмитрий 06.10). Решает движок (AutoSwitchAtSign): знак ли это там и не начало ли слова здесь.
 				sign = !command && cfg->autoswitch && g_enabled.IsEnabled() && KeyHold::SignKey(vkCode, curk.HasMod(VK_SHIFT)) &&
-					!KeyHold::broken && KeyHold::word.size() >= 2 && KeyHold::CanStart() && canHold();
+					!KeyHold::broken && KeyHold::word.size() >= 2 && KeyHold::CanStart() && canHold() && autoswitchHere();
 				hold = early || sign;
 				if (hold) {
 					if (sign) {

@@ -119,8 +119,9 @@ inline bool IsWord(const std::wstring& word, const std::wstring& language, bool 
 // подсказка словаря, которая с него начинается. Нет списка для языка - да: судить не по чему, не трогать.
 inline bool Typed(const std::wstring& letters, const std::wstring& language) {
 	if (!Available(language)) return true;
-	if (SpellCheck::CheckAnyCase(letters, language) == SpellCheck::Result::Word) return true;
+	// Сначала свой список (доли микросекунды), потом словарь Windows (поход в COM): ответ тот же, "или".
 	if (Known(letters, language) != Result::No) return true;
+	if (SpellCheck::CheckAnyCase(letters, language) == SpellCheck::Result::Word) return true;
 	const std::wstring l = Lower(letters);
 	for (const auto& s : SpellCheck::Suggest(letters, language, 10)) {
 		const std::wstring w = Lower(s);

@@ -79,6 +79,16 @@ namespace _log_int {
 					m_started = true;
 					std::thread([this] { Writer(); }).detach();
 					std::atexit([] { Get().Finish(); });
+					// Падение и std::terminate: atexit не зовётся, а строки перед ними - самые нужные. Дописать очередь
+					// (не дольше секунды) и падать дальше как обычно.
+					std::set_terminate([] {
+						Get().Finish(true);
+						std::abort();
+					});
+					SetUnhandledExceptionFilter([](EXCEPTION_POINTERS*) -> LONG {
+						Get().Finish(true);
+						return EXCEPTION_CONTINUE_SEARCH;
+					});
 				}
 			}
 			m_cv.notify_one();
@@ -104,9 +114,10 @@ namespace _log_int {
 				m_idleCv.notify_all();
 			}
 		}
-		// Выход: дописать очередь (не дольше секунды).
-		void Finish() {
-			std::unique_lock lock(m_mtx);
+		// Выход: дописать очередь (не дольше секунды). crash - при падении: очередь мог держать упавший поток - тогда не ждать.
+		void Finish(bool crash = false) {
+			std::unique_lock lock(m_mtx, std::defer_lock);
+			if (crash ? !lock.try_lock() : (lock.lock(), false)) return;
 			m_idleCv.wait_for(lock, std::chrono::seconds(1), [this] { return m_queue.empty() && !m_writing; });
 		}
 		FILE* LazyOpen() {

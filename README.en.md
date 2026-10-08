@@ -23,12 +23,12 @@ free and open source under GPL-3.0.
   you keep fixing by hand goes to "Always switch" the third time. The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked. The journal
   of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the
   reason; its mistakes make a report for the forum topic - you see and can edit the text, the app sends nothing.
-- **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab (three letters too: "THe" - "The" for frequent English words, "НЕт" - "Нет"). PCs, IDs, GHz, eM, iPhone are left alone, and there
+- **TWo INitial CApitals**: "THis" becomes "This" after a space, Enter or Tab (three letters too: "THe" - "The" for frequent English words, "НЕт" - "Нет"). PCs, IDs, GHz, eM, iPhone, and Latin names like ILogger in code editors, are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives
   "Попытка" at once. Turned on in Typing.
 - **i → I**: the English "i" on its own becomes "I" (i'm - I'm), except in consoles and code editors, where i
-  is a variable. Turned on in Typing.
+  is a variable. On from the start, turned off in Typing.
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after

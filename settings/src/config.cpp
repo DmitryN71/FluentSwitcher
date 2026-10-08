@@ -42,7 +42,9 @@ bool Config::Load(const wxString& path, wxString* error)
 
 bool Config::Save(wxString* error) const
 {
-    const wxString tmp = m_path + ".tmp";
+    // Its own temporary file (the engine's is .engine.tmp): a shared one, written by both at once, mixed two writes into
+    // one broken file.
+    const wxString tmp = m_path + ".settings.tmp";
     {
         std::ofstream out(tmp.wc_str(), std::ios::binary | std::ios::trunc);
         out << std::setw(2) << m_json << std::endl;

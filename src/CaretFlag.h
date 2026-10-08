@@ -542,8 +542,11 @@ private:
 
 	// Программа впереди - из "Не работать в приложениях" (disableInPrograms) или удалённый рабочий стол, как у
 	// IsSkipProgramTop (Settings.h): там FluentSwitcher молчит, и флажка нет (форум, 08.10.2026: "значок у курсора в
-	// этих программах все равно продолжает отображаться"). Ответ - на процесс, до смены настроек (Refresh).
+	// этих программах все равно продолжает отображаться"). Процесс - тот же, что смотрит движок: окна в фокусе
+	// (GetFocusedWndInfo), не окна впереди - у приложений из Магазина (Калькулятор) впереди рамка ApplicationFrameHost.exe,
+	// а пишут в окно самого приложения. Ответ - на процесс, до смены настроек (Refresh).
 	DWORD m_excludedPid = 0;
+	HWND m_excludedFg = nullptr; // окно впереди, для которого спрашивали (Where)
 	bool m_excluded = false;
 	std::wstring m_excludedName; // имя exe этого процесса - и для журнала
 	bool Excluded(DWORD pid) {
@@ -568,6 +571,8 @@ private:
 	// только при смене, не на каждое движение каретки (форум, 08.10.2026: у gutasiho флажка нет нигде - почему, журнал не
 	// говорил).
 	std::string m_report;
+	// Журнал отладки включён: только тогда собирать строки для Report (флажок обновляется на каждую клавишу).
+	static bool Reporting() { return GetLogLevel() >= LOG_LEVEL_2; }
 	void Report(const std::string& key, const std::string& detail = {}) {
 		if (key == m_report) return;
 		m_report = key;
@@ -579,11 +584,11 @@ private:
 		if (fg) GetClassNameW(fg, cls, (int)std::size(cls));
 		DWORD pid = 0;
 		if (fg) GetWindowThreadProcessId(fg, &pid);
-		const std::wstring name = pid && pid == m_excludedPid ? m_excludedName : L"?";
+		const std::wstring name = fg == m_excludedFg ? m_excludedName : L"?";
 		return std::format(" in {} [{}]", StrUtils::Convert(name), StrUtils::Convert(std::wstring(cls)));
 	}
 	void HideBecause(const char* why, HWND fg = nullptr) {
-		Report(std::string("hidden - ") + why + (fg ? Where(fg) : std::string()));
+		if (Reporting()) Report(std::string("hidden - ") + why + (fg ? Where(fg) : std::string()));
 		Hide();
 	}
 
@@ -785,11 +790,14 @@ private:
 		DWORD pid = 0;
 		DWORD tid = GetWindowThreadProcessId(fg, &pid);
 		if (pid != m_hookedPid) HookProcess(pid);
-		if (Excluded(pid)) return HideBecause("an app of \"Don't work in apps\" or a remote desktop", fg);
+		const auto focused = Utils::GetFocusedWndInfo();
+		m_excludedFg = fg;
+		if (Excluded(focused.pid_top ? focused.pid_top : pid))
+			return HideBecause("an app of \"Don't work in apps\" or a remote desktop", fg);
 		if (const char* full = IsFullscreen(fg)) return HideBecause(full, fg);
 
 		// Раскладка сменилась - в режиме "ненадолго" это повод показаться.
-		HKL lay = Utils::GetFocusedWndInfo().lay;
+		HKL lay = focused.lay;
 		if (lay && lay != m_lay) {
 			if (m_lay) Brief();
 			m_lay = lay;
@@ -830,7 +838,7 @@ private:
 		}
 		if (!res.ok) {
 			const char* why = *res.how ? res.how : "no caret (system caret, MSAA, UI Automation)";
-			Report(std::string("hidden - ") + why + Where(m_askedFg));
+			if (Reporting()) Report(std::string("hidden - ") + why + Where(m_askedFg));
 			// Браузер: поле могло ещё ехать на место (открывается с анимацией), а Chromium - только включать
 			// специальные возможности. Ещё две попытки.
 			if (m_askedBrowser && m_retry < 2) {
@@ -919,7 +927,7 @@ private:
 		RECT wr{};
 		if (!GetWindowRect(fg, &wr) || caret.left < wr.left - 4 || caret.left > wr.right + 4 || caret.top < wr.top - 4 ||
 			caret.bottom > wr.bottom + 4) {
-			Report(std::string("hidden - the caret (") + how + ") is outside its window" + Where(fg),
+			if (Reporting()) Report(std::string("hidden - the caret (") + how + ") is outside its window" + Where(fg),
 				std::format(": caret ({},{})-({},{}), window ({},{})-({},{})", caret.left, caret.top, caret.right, caret.bottom,
 					wr.left, wr.top, wr.right, wr.bottom));
 			return Hide();
@@ -930,7 +938,7 @@ private:
 		int px = MulDiv(std::clamp(conf_get_unsafe()->caret_flag_size, 12, 64), dpiX, 96);
 		std::string noPicture;
 		if (!PrepareImage(px, noPicture)) {
-			Report("hidden - " + noPicture + Where(fg));
+			if (Reporting()) Report("hidden - " + noPicture + Where(fg));
 			return Hide();
 		}
 
@@ -948,7 +956,7 @@ private:
 			if (!wantAbove && below + m_bbox.bottom > mi.rcWork.bottom) y = above;
 		}
 		SetWindowPos(m_wnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
-		Report(std::string("shown (") + how + ")" + Where(fg), std::format(": caret ({},{})-({},{}), flag at ({},{}), {} px, visible {}",
+		if (Reporting()) Report(std::string("shown (") + how + ")" + Where(fg), std::format(": caret ({},{})-({},{}), flag at ({},{}), {} px, visible {}",
 			caret.left, caret.top, caret.right, caret.bottom, x, y, px, IsWindowVisible(m_wnd) != FALSE));
 		m_visible = true;
 		m_shownFg = fg;

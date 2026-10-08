@@ -18,6 +18,7 @@
 #include <wx/utils.h>
 
 #include "../../src/Update.h" // after wxWidgets: Windows headers of its own
+#include "../../src/ConfigLock.h"
 #include <shlwapi.h>          // SHLoadIndirectString: the names of keyboards
 #pragma comment(lib, "shlwapi.lib")
 
@@ -136,6 +137,17 @@ wxString LayoutList()
 // The report: the version, Windows, the layouts, the switches; how many lines of each kind the journal has; and its
 // errors - "switched back" (switched by mistake) and "by hand" (missed), at most the last 200. errors - how many there
 // are; -1 - no journal.
+// UTF-8 with broken bytes (a line cut off by a power loss, a file saved again in another encoding): the broken ones as
+// replacement characters - wxConvUTF8 gave nothing for the whole file, and the report said there were no errors.
+wxString FromUtf8Lenient(const std::string& bytes)
+{
+    const int n = MultiByteToWideChar(CP_UTF8, 0, bytes.data(), (int)bytes.size(), nullptr, 0);
+    std::wstring text(n, L'\0');
+    if (n > 0)
+        MultiByteToWideChar(CP_UTF8, 0, bytes.data(), (int)bytes.size(), text.data(), n);
+    return wxString(text);
+}
+
 wxString JournalReport(const wxString& folder, const Config& config, int* errors)
 {
     // The journal in Russian or Ukrainian ("вручну" begins "вручную" too).
@@ -152,9 +164,11 @@ wxString JournalReport(const wxString& folder, const Config& config, int* errors
             continue;
         wxLogNull quiet; // a file being written by the engine: no message boxes of wxWidgets
         wxFFile file(path, "rb");
-        wxString content;
-        if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8))
+        if (!file.IsOpened())
             continue;
+        std::string bytes((size_t)std::max<wxFileOffset>(file.Length(), 0), '\0');
+        bytes.resize(file.Read(bytes.data(), bytes.size()));
+        const wxString content = FromUtf8Lenient(bytes);
         any = true;
         // "06.10.2026 18:56:14  by hand    еру → the  (claude.exe)  [a short word alone]": the kind from the 22nd character.
         for (wxString line : wxSplit(content, '\n', '\0'))
@@ -560,15 +574,16 @@ wxWindow* SettingsFrame::Numbers(const wxString& title, const wxString& descript
 
 wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon)
 {
-    // The sets: the folders in "flags" next to the program - Flagpack, or a folder of the user's own. "Glossy" - the
-    // set before 1.5.0, left by an older version unpacked over: the engine takes Flagpack instead.
+    // The sets: the folders in "flags" next to the program - Flagpack, or a folder of the user's own. Glossy, Fluent,
+    // Round, Square - the sets before 1.5.0 (and SimpleSwitcher's), left by an older version unpacked over: the engine
+    // takes Flagpack instead (Settings.h, NormalizeFlags), so they are not offered.
     wxArrayString values, names;
     wxDir dir(m_folder + "\\flags");
     if (dir.IsOpened())
     {
         wxString name;
         for (bool more = dir.GetFirst(&name, wxEmptyString, wxDIR_DIRS); more; more = dir.GetNext(&name))
-            if (name != "Glossy")
+            if (name != "Glossy" && name != "Fluent" && name != "Round" && name != "Square")
                 values.Add(name);
     }
     if (values.Index("Flagpack") == wxNOT_FOUND)
@@ -916,7 +931,7 @@ void SettingsFrame::BuildTyping()
     CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, Enter или Tab"),
                    "two_caps", false),
             T("PCs, IDs, GHz, МГц, МВт, eM, iPhone и слова из исключений не трогаются; английские из трёх букв – только "
-              "частые слова: THe, WAs. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. "
+              "частые слова: THe, WAs; в редакторах кода латинские имена (ILogger) тоже. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. "
               "Перевод раскладки тоже исправляет ДВе ЗАглавные: LDe[ – Двух"));
     // The exceptions: in a window of their own, one per line; the card says how many.
     WordList("two_caps_exceptions", WordKind::Caps, T("Исключения для ДВух ЗАглавных"),
@@ -1235,7 +1250,7 @@ void SettingsFrame::FillCommands()
             rows->Add(top, 0, wxEXPAND);
 
             // The program and its arguments, or the text.
-            TextField* what = new TextField(panel, cmd, snippet ? 488 : 370);
+            TextField* what = new TextField(panel, cmd, snippet ? 488 : 370, false, 4096); // a path, a text
             what->SetHint(snippet ? T("Текст, например: С уважением, Дмитрий") : T("Путь к приложению"));
             what->onChange = [this, what, i] {
                 m_edit.Json()["run_programs"][i]["cmd"] = ToUtf8(what->Value());
@@ -1262,7 +1277,7 @@ void SettingsFrame::FillCommands()
             rows->Add(whatRow, 0, wxTOP, FromDIP(4));
             if (!snippet)
             {
-                TextField* args = new TextField(panel, FromUtf8(command.value("args", std::string())), 370);
+                TextField* args = new TextField(panel, FromUtf8(command.value("args", std::string())), 370, false, 4096);
                 args->SetHint(T("Необязательно"));
                 args->onChange = [this, args, i] {
                     m_edit.Json()["run_programs"][i]["args"] = ToUtf8(args->Value());
@@ -1415,7 +1430,7 @@ void SettingsFrame::BuildAbout()
     AddSettingsCard(m_page, m_column, T("Лицензия GPL-3.0"),
                     T("Приложение бесплатное, исходный код открыт. Поставляется без каких-либо гарантий. Части "
                       "других авторов – под своими лицензиями: wxWidgets, оформление FluentClipper, значки Fluent "
-                      "UI System Icons (Microsoft), флаги GoSquared и другие"),
+                      "UI System Icons (Microsoft), флаги Flagpack и другие"),
                     [this](wxWindow* card) {
                         FluentButton* open = new FluentButton(card, wxID_ANY, T("Лицензии"));
                         open->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
@@ -1561,10 +1576,17 @@ bool SettingsFrame::Apply()
     const wxString oldTheme = m_saved.GetString("ui_theme", wxString());
     if (m_edit != m_saved)
     {
-        TakeEngineLearned(m_edit, m_saved);
-        RefillWordLists(); // with the words the engine learned meanwhile
         wxString error;
-        if (!m_edit.Save(&error))
+        bool saved;
+        {
+            // Taking what the engine learned and writing - together, while the engine does not write (it adds learned
+            // words and its counts to the file too): its write in between would be lost.
+            ConfigLock lock;
+            TakeEngineLearned(m_edit, m_saved);
+            saved = m_edit.Save(&error);
+        }
+        RefillWordLists(); // with the words the engine learned meanwhile
+        if (!saved)
         {
             SetStatus(T("Не удалось сохранить: ") + error, true);
             return false;

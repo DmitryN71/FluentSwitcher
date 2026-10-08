@@ -72,7 +72,9 @@ inline std::vector<std::wstring> Suggest(const std::wstring& word, const std::ws
 inline Result CheckAnyCase(const std::wstring& word, const std::wstring& language) {
 	const Result asTyped = Check(word, language, true);
 	if (asTyped != Result::NotWord) return asTyped;
-	return Check(word, language);
+	bool lower = true; // набрано строчными - второй раз спрашивать то же незачем
+	for (wchar_t c : word) lower = lower && !IsCharUpperW(c);
+	return lower ? asTyped : Check(word, language);
 }
 
 // Слово набрано не в той раскладке: `typed` - не слово языка `language`, а `other` (те же клавиши в другой раскладке) -

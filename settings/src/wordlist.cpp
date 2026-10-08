@@ -11,6 +11,8 @@
 #include <wx/scrolwin.h>
 #include <wx/tokenzr.h>
 
+#include <algorithm>
+
 #include "../../src/WordStart.h" // after wxWidgets: Windows headers of its own; the engine's lists, in this exe too
 
 namespace
@@ -30,25 +32,42 @@ std::wstring LanguageOf(HKL layout)
         : std::wstring();
 }
 
+// Lower case in every alphabet: wxString::Lower and IsSameAs(.., false) in this process change Latin letters only (no
+// locale is set here), and "СМ" was another word than "см" - the engine, CharLowerW, has them as one.
+wxString LowerAll(const wxString& s)
+{
+    std::wstring w = s.ToStdWstring();
+    if (!w.empty())
+        CharLowerBuffW(w.data(), (DWORD)w.size());
+    return wxString(w);
+}
+
+bool SameText(const wxString& a, const wxString& b)
+{
+    return a.length() == b.length() && LowerAll(a) == LowerAll(b);
+}
+
 // The word and the same keys in the other layouts: "http" (en-US), "реез" (ru-RU). The first is the word itself, in the
 // language of the first layout it can be typed in (every character a key, with Shift or without it, not with AltGr); then
 // its text in each other layout - a key that is dead there or types more than one character gives none. Nowhere to
-// type it - the word alone.
+// type it - the word alone. The same key is the same place on the keyboard (the scan code), as the engine has it: in a
+// German layout Z is where the Russian "н" is, not "я".
 std::vector<Form> FormsOf(const wxString& word, const std::vector<HKL>& layouts)
 {
     std::vector<Form> forms{ { word, std::wstring() } };
     for (HKL from : layouts)
     {
-        std::vector<std::pair<UINT, bool>> keys; // the key and Shift
+        std::vector<std::pair<UINT, bool>> keys; // the scan code and Shift
         for (wxUniChar c : word)
         {
             const SHORT key = VkKeyScanExW((WCHAR)c.GetValue(), from);
-            if (key == -1 || (HIBYTE(key) & 6))
+            const UINT scan = key == -1 ? 0 : MapVirtualKeyExW(LOBYTE(key), MAPVK_VK_TO_VSC, from);
+            if (key == -1 || (HIBYTE(key) & 6) || !scan)
             {
                 keys.clear();
                 break;
             }
-            keys.push_back({ LOBYTE(key), (HIBYTE(key) & 1) != 0 });
+            keys.push_back({ scan, (HIBYTE(key) & 1) != 0 });
         }
         if (keys.empty())
             continue;
@@ -59,23 +78,24 @@ std::vector<Form> FormsOf(const wxString& word, const std::vector<HKL>& layouts)
             if (to == from)
                 continue;
             wxString text;
-            for (const auto& [vk, shift] : keys)
+            for (const auto& [scan, shift] : keys)
             {
                 BYTE state[256] = {};
                 if (shift)
                     state[VK_SHIFT] = 0x80;
                 wchar_t out[4] = {};
+                const UINT vk = MapVirtualKeyExW(scan, MAPVK_VSC_TO_VK, to);
                 // 4: the state of the keyboard is not changed (a dead key is not left pending)
-                if (ToUnicodeEx(vk, MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, to), state, out, 4, 4, to) != 1)
+                if (!vk || ToUnicodeEx(vk, scan, state, out, 4, 4, to) != 1)
                 {
                     text.clear();
                     break;
                 }
                 text += out[0];
             }
-            bool known = text.empty() || text.IsSameAs(word, false);
+            bool known = text.empty() || SameText(text, word);
             for (const Form& f : forms)
-                known = known || f.text.IsSameAs(text, false);
+                known = known || SameText(f.text, text);
             if (!known)
                 forms.push_back({ text, LanguageOf(to) });
         }
@@ -332,7 +352,7 @@ public:
 
         wxStaticText* text = FluentText(this, wxString(), 10, g.text);
         SetWrappedLabel(text, about, FromDIP(520));
-        m_field = new TextField(this, wxString(), 400, true);
+        m_field = new TextField(this, wxString(), 400, true, 4096); // paths, pasted lists
         m_field->SetHint(m_kind == WordKind::Programs ? T("Добавить или найти приложение") : T("Добавить или найти слово"));
         m_field->onChange = [this] {
             m_done.clear();
@@ -434,13 +454,14 @@ private:
     {
         const bool caps = m_kind == WordKind::Caps;
         for (size_t i = 0; i < m_words.size(); i++)
-            if (caps ? m_words[i] == word : m_words[i].IsSameAs(word, false))
+            if (caps ? m_words[i] == word : SameText(m_words[i], word))
             {
                 *covered = false;
                 return (int)i;
             }
         for (size_t i = 0; i < m_words.size(); i++)
-            if (caps ? m_words[i].length() >= 4 && word.StartsWith(m_words[i]) : m_forms[i].Index(word, false) != wxNOT_FOUND)
+            if (caps ? m_words[i].length() >= 4 && word.StartsWith(m_words[i])
+                     : std::any_of(m_forms[i].begin(), m_forms[i].end(), [&](const wxString& f) { return SameText(f, word); }))
             {
                 *covered = true;
                 return (int)i;
@@ -454,7 +475,7 @@ private:
     {
         if (m_kind == WordKind::Programs)
         {
-            wxString name = word.Lower();
+            wxString name = LowerAll(word);
             if (!name.Contains("\\") && !name.Contains("/") && !name.Contains("."))
                 name += ".exe";
             return name;
@@ -483,7 +504,10 @@ private:
         wxStringTokenizer words(text, m_kind == WordKind::Programs ? ",;\t\r\n" : " ,;\t\r\n", wxTOKEN_STRTOK);
         while (words.HasMoreTokens())
         {
-            const wxString w = words.GetNextToken();
+            // "far.exe, code.exe": " code.exe" with its space never matched in the engine.
+            const wxString w = words.GetNextToken().Strip(wxString::both);
+            if (w.empty())
+                continue;
             bool covered = false;
             const wxString kept = Kept(w);
             if (Find(w, &covered) >= 0 || Find(kept, &covered) >= 0)
@@ -538,7 +562,7 @@ private:
     void Refill()
     {
         const wxString query = m_field->Value().Strip(wxString::both);
-        const wxString lower = query.Lower();
+        const wxString lower = LowerAll(query);
         bool covered = false;
         int hit = query.empty() ? -1 : Find(query, &covered);
         if (hit < 0 && !query.empty() && Kept(query) != query)
@@ -547,9 +571,9 @@ private:
         for (int i = (int)m_words.size() - 1; i >= 0; i--) // the newest first
         {
             const wxString& w = m_words[i];
-            bool match = query.empty() || i == hit || w.Lower().Contains(lower); // the word that covers it - too
+            bool match = query.empty() || i == hit || LowerAll(w).Contains(lower); // the word that covers it - too
             for (const wxString& f : m_forms[i])
-                match = match || f.Lower().Contains(lower);
+                match = match || LowerAll(f).Contains(lower);
             if (!match)
                 continue;
             WordRows::Row row;

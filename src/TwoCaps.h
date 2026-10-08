@@ -7,7 +7,9 @@
 //     Shift, отпущенным на букву раньше) станет "Сша" - так же неверно, как было; "Исправить последнее слово" вернёт;
 //   - латиница из трёх букв - только частое английское слово ("THe", "WAs", "TRy"; Дмитрий: "кучу английских
 //     трехбуквенных слов мы не обрабатываем"): PCs, IDs, GHz, CDs, VMs так и пишутся. Частые слова - список движка
-//     (KnownEnglish); в нём есть и pcs, ids, oss - они во встроенных исключениях;
+//     (KnownEnglish); в нём есть и сокращения с "s" (pcs, ips, pos, ops, ais...), поэтому слово из двух заглавных и
+//     "s" исправляется, только если это слово, а не сокращение во множественном числе: was, has, his, its, yes...
+//     (WordWithS; словарь Windows тоже считает "IPs", "POs" словами);
 //   - исключения: встроенные (VMware, OAuth...) и свои (two_caps_exceptions; "Исправить последнее слово" сразу
 //     после исправления возвращает слово и добавляет его туда). Исключение действует и на слова, которые с него
 //     начинаются: "ИПшник" - и "ИПшника", "ИПшники".
@@ -27,7 +29,7 @@ inline const std::vector<std::wstring>& BuiltIn() {
 	static const std::vector<std::wstring> words = {
 		L"VMware", L"OAuth", L"IPsec", L"DBeaver", L"LTspice", L"KBps", L"MBps", L"GBps", L"TBps", L"ВКонтакте",
 		// Единицы: мега-, гига-, тера- (кило- - строчная "к": кВт, кГц).
-		L"МГц", L"ГГц", L"ТГц", L"МВт", L"ГВт", L"ТВт", L"МПа", L"ГПа", L"МДж", L"ГДж", L"МОм", L"ГОм",
+		L"МГц", L"ГГц", L"ТГц", L"МВт", L"ГВт", L"ТВт", L"МПа", L"ГПа", L"ТПа", L"МДж", L"ГДж", L"ТДж", L"МОм", L"ГОм",
 		// Английские сокращения из трёх букв с "s" и единицы (на случай, если они есть в списке частых слов).
 		L"PCs", L"IDs", L"OSs", L"PRs", L"CDs", L"TVs", L"VMs", L"DJs", L"MPs", L"GBs", L"MBs", L"KBs", L"TBs", L"GHz",
 		L"MHz", L"KHz", L"THz",
@@ -38,6 +40,13 @@ inline const std::vector<std::wstring>& BuiltIn() {
 // Частое английское слово (строчными) - для латинских слов из трёх букв. Ставит движок (WorkerImplement.cpp: список
 // WORDS_EN_COMMON, WordStart.h); не поставлена (проверка правила без списков) - такие слова не исправляются.
 inline bool (*KnownEnglish)(const std::wstring& lower) = nullptr;
+
+// Частые английские слова из трёх букв на "s" - слова, а не сокращения во множественном числе (IPs, POs, OPs, AIs).
+inline bool WordWithS(const std::wstring& lower) {
+	for (const wchar_t* w : { L"was", L"has", L"his", L"its", L"yes", L"gas", L"bus", L"ifs", L"ins", L"ohs", L"ups" })
+		if (lower == w) return true;
+	return false;
+}
 
 enum class Script { Other, Latin, Cyrillic, Greek };
 
@@ -54,6 +63,18 @@ inline bool IsLower(wchar_t c) { return IsCharLowerW(c) != FALSE; }
 inline bool IsLetter(wchar_t c) { return IsCharAlphaW(c) != FALSE; }
 inline wchar_t ToLower(wchar_t c) { return (wchar_t)(UINT_PTR)CharLowerW((LPWSTR)(UINT_PTR)c); }
 
+// Слово во встроенных или своих исключениях - или начинается с исключения от четырёх букв ("ИПшник" - "ИПшника").
+inline bool Excepted(const std::wstring& word, const std::vector<std::wstring>& exceptions) {
+	auto excepted = [&word](const std::wstring& e) {
+		return !e.empty() && (word == e || (e.size() >= 4 && word.compare(0, e.size(), e) == 0));
+	};
+	for (const auto& e : BuiltIn())
+		if (excepted(e)) return true;
+	for (const auto& e : exceptions)
+		if (excepted(e)) return true;
+	return false;
+}
+
 // Слово (только буквы) под правило и не в исключениях.
 inline bool Matches(const std::wstring& word, const std::vector<std::wstring>& exceptions) {
 	const Script script = word.empty() ? Script::Other : ScriptOf(word[0]);
@@ -69,15 +90,9 @@ inline bool Matches(const std::wstring& word, const std::vector<std::wstring>& e
 		std::wstring lower = word;
 		for (auto& c : lower) c = ToLower(c);
 		if (!KnownEnglish(lower)) return false;
+		if (lower[2] == L's' && !WordWithS(lower)) return false;
 	}
-	auto excepted = [&word](const std::wstring& e) {
-		return !e.empty() && (word == e || (e.size() >= 4 && word.compare(0, e.size(), e) == 0));
-	};
-	for (const auto& e : BuiltIn())
-		if (excepted(e)) return false;
-	for (const auto& e : exceptions)
-		if (excepted(e)) return false;
-	return true;
+	return !Excepted(word, exceptions);
 }
 
 struct Fix {

@@ -178,7 +178,7 @@ class WorkerImplement {
         ULONGLONG at = 0;
         size_t size = 0;         // набранных клавиш после исправления: другое число - уже печатали дальше
         TKeyBaseInfo* key = nullptr; // клавиша второй буквы в буфере слов
-        size_t total = 0;        // CycleRevertList::Total() после исправления (Size() после 90 клавиш не растёт)
+        size_t changes = 0;      // CycleRevertList::Changes() после исправления (Size() после 90 клавиш не растёт)
         bool upper = false;      // исправление сделало букву заглавной (i - I): отмена - строчной
     } m_twoCaps;
 
@@ -239,7 +239,8 @@ class WorkerImplement {
     } m_lastUndo; // последняя отмена автопереключения: исправили снова сразу после неё - не в счёт (TakeHandFix)
     // Перевести набранное с клавиши begin до конца в раскладку to (стереть, переключить, напечатать). wordEnded - слово
     // кончилось: отметка "исправлено", дальше - новое слово.
-    void SwitchTail(size_t begin, HKL to, bool wordEnded);
+    // false - нечего или бросили посреди (щелчок): не переключено.
+    bool SwitchTail(size_t begin, HKL to, bool wordEnded);
     void TwoCapsInKeys(TKeyRevert& keys, HKL to);
     // Перепечатать набранное с клавиши begin: до middle - в раскладке first, дальше - в rest; раскладку не менять.
     void RetypeTail(size_t begin, size_t middle, HKL first, HKL rest);
@@ -296,6 +297,7 @@ class WorkerImplement {
         size_t retro = 0;       // ... из них - коротких слов перед словом
         bool pair = false;      // само слово - короткое, переключено вместе с ними (AutoSwitch::Short::WithPartner)
         size_t total = 0;       // CycleRevertList::Total() при переключении
+        size_t changes = 0;     // CycleRevertList::Changes() при переключении: другое - потом набирали или стирали
     } m_autoSwitched;
     unsigned m_holdId = 0;      // номер придержки текущего сообщения (KeyHold::Allowed)
     unsigned m_wordEnds = 0;    // границ слов (AutoWordEnd) с начала работы

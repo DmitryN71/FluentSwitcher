@@ -119,10 +119,29 @@ inline bool IsVowel(wchar_t c) {
 	}
 }
 
+// Слово из списка со знаками по краям ("C#", "C++", ".NET") сравнивается целиком, со знаками: от "C#" без знаков
+// осталось бы "c", и под него попадал бы каждый предлог "с" (в "Переключать всегда" - переключался бы в "c").
+inline bool Signed(const std::wstring& entry) {
+	const Part p = Letters(entry);
+	return !p.core.empty() && (p.begin > 0 || p.end < entry.size());
+}
+// ... набранное - это слово (и знак препинания после него: "C#,").
+inline bool SameSigned(const std::wstring& entry, const std::wstring& word) {
+	const std::wstring el = Lower(entry);
+	std::wstring w = Lower(word);
+	if (w == el) return true;
+	while (!w.empty() && wcschr(L".,;:!?", w.back())) w.pop_back();
+	return w == el;
+}
+
 // Слово из исключений - в любой из двух форм (cv или см).
 inline bool Excepted(const std::wstring& typed, const std::wstring& there, const std::vector<std::wstring>& exceptions) {
 	const auto tl = Lower(Letters(typed).core), al = Lower(Letters(there).core);
 	for (const auto& e : exceptions) {
+		if (Signed(e)) {
+			if (SameSigned(e, typed) || SameSigned(e, there)) return true;
+			continue;
+		}
 		const auto el = Lower(Letters(e).core);
 		if (!el.empty() && (el == tl || el == al)) return true;
 	}
@@ -136,6 +155,10 @@ inline bool Forced(const std::wstring& typed, const std::wstring& there, const s
 	if (a.core.empty() || a.inner) return false;
 	const auto tl = Lower(t.core), al = Lower(a.core);
 	for (const auto& f : forced) {
+		if (Signed(f)) {
+			if (SameSigned(f, there) && !SameSigned(f, typed)) return true;
+			continue;
+		}
 		const auto fl = Lower(Letters(f).core);
 		if (!fl.empty() && fl == al && fl != tl) return true;
 	}
@@ -327,6 +350,7 @@ inline bool ExceptedEarly(const std::wstring& typed, const std::wstring& there,
                           const std::vector<std::wstring>& exceptions) {
 	const std::wstring tl = Lower(Letters(typed).core), al = Lower(Letters(there).core);
 	for (const auto& e : exceptions) {
+		if (Signed(e)) continue; // со знаками - только слово целиком (Excepted)
 		const std::wstring el = Lower(Letters(e).core);
 		if (el.empty()) continue;
 		for (const std::wstring* w : { &tl, &al }) {

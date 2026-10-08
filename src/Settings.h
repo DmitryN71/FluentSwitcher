@@ -55,6 +55,10 @@ public:
             std::set <std::wstring> res;
             for (const auto& it : *list) {
                 auto cur = it;
+                // Пробелы по краям (" code.exe" из "far.exe, code.exe", набранного руками в файл) - не часть имени.
+                const size_t b = cur.find_first_not_of(L" \t"), e = cur.find_last_not_of(L" \t");
+                if (b == std::wstring::npos) continue;
+                cur = cur.substr(b, e - b + 1);
                 StrUtils::ToLower(cur);
                 PathUtils::NormalizeDelims(cur);
                 res.insert(std::move(cur)); // todo cast

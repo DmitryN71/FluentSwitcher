@@ -1,4 +1,5 @@
 ﻿#include "Settings.h"
+#include "ConfigLock.h"
 #include "json.hpp"
 
 using json = nlohmann::json;
@@ -199,10 +200,12 @@ namespace cfg_details {
 	TStatus Save_conf(const ProgramConfig& gui) {
 
 		// Сначала во временный файл, потом заменой: файл читает и окно настроек (отдельная программа),
-		// и оборванная запись не должна оставить половину настроек.
+		// и оборванная запись не должна оставить половину настроек. Временный файл - свой (у окна - .settings.tmp):
+		// общий, если оба пишут сразу, перемешал бы две записи в одну испорченную. И по очереди с окном (ConfigLock).
+		ConfigLock lock;
 		auto path = ProgramConfig::GetPath_Conf();
 		auto tmp = path;
-		tmp += L".tmp";
+		tmp += L".engine.tmp";
 		{
 			std::ofstream outp(tmp, std::ios::binary);
 			IFS_RET(Save_conf_To_Stream(outp, gui));

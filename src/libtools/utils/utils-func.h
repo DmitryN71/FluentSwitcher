@@ -70,7 +70,8 @@ namespace Utils
 
 	inline bool IsSelfElevated()
 	{
-		return IsElevated(GetCurrentProcess());
+		static const bool self = IsElevated(GetCurrentProcess()); // права процесса не меняются, пока он работает
+		return self;
 	}
 
 	inline TStatus GetProcLowerNameByPid(DWORD pid, std::wstring& sPath, std::wstring& sName)
@@ -79,6 +80,15 @@ namespace Utils
 		sName.clear();
 		if (pid == 0) 
 			return SW_ERR_INVALID_PARAMETR;
+		// Тот же процесс спрашивают по нескольку раз на одно слово (перехват, движок, флажок у курсора): ответ помнится
+		// секунду, у каждого потока свой.
+		thread_local struct { DWORD pid = 0; ULONGLONG at = 0; std::wstring path, name; } cache;
+		const ULONGLONG now = GetTickCount64();
+		if (cache.pid == pid && now - cache.at < 1000) {
+			sPath = cache.path;
+			sName = cache.name;
+			RETURN_SUCCESS;
+		}
 		CAutoHandle hProc = OpenProcess(IsWindowsVistaOrGreater() ? PROCESS_QUERY_LIMITED_INFORMATION : PROCESS_QUERY_INFORMATION, FALSE, pid);
 		IFW_RET(hProc.IsValid());
 		// Путь, как его пишут люди (C:\...), а не устройства (\device\harddiskvolume3\..., GetProcessImageFileName):
@@ -95,6 +105,7 @@ namespace Utils
 		}
 		sName = last + 1;
 		StrUtils::ToLower(sName);
+		cache = { pid, now, sPath, sName };
 
 		RETURN_SUCCESS;
 	}

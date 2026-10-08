@@ -34,8 +34,8 @@ inline bool IsClient(const std::wstring& name) {
 
 // Программа process - из них (process - с PROCESS_QUERY_LIMITED_INFORMATION).
 inline bool IsClientProcess(HANDLE process) {
-	wchar_t path[MAX_PATH];
-	DWORD size = MAX_PATH;
+	wchar_t path[0x1000]; // пути длиннее MAX_PATH бывают: имя - в конце
+	DWORD size = (DWORD)std::size(path);
 	if (!process || !QueryFullProcessImageNameW(process, 0, path, &size)) return false;
 	const wchar_t* slash = wcsrchr(path, L'\\');
 	std::wstring name = slash ? slash + 1 : path;

@@ -913,7 +913,7 @@ void SettingsFrame::BuildTyping()
 {
     Section(kIconTyping, T("Набор текста"));
 
-    // "Где кончается слово" (separate_ext_mode) is not shown since 1.5.0-rc6 (Дмитрий 08.10.2026: nobody understands
+    // "Где кончается слово" (separate_ext_mode) is not shown since 1.5.0-rc1 (Дмитрий 08.10.2026: nobody understands
     // it, and the fixes at punctuation are made for the default): the file keeps its value, and the engine uses it.
     TextField* letters = nullptr;
     AddSettingsCard(m_page, m_column, T("Считать буквами"),

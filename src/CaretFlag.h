@@ -146,7 +146,7 @@ private:
 		Result res{ .seq = req.seq };
 		RECT rc{};
 		CComPtr<IUIAutomationElement> el;
-		int editable = uia ? Editable(uia, req.pid, res.type, res.state, el) : -1;
+		int editable = uia ? Editable(uia, req, res.type, res.state, el) : -1;
 		// Редактор на странице в Firefox (contenteditable - группа без значения): поле, если у него системная каретка -
 		// Firefox заводит её только там, где можно печатать (и в тексте страницы при F7, но страница - Document "только
 		// для чтения").
@@ -234,7 +234,9 @@ private:
 		VARIANT self;
 		self.vt = VT_I4;
 		self.lVal = CHILDID_SELF;
-		if (FAILED(acc->accLocation(&x, &y, &w, &h, self)) || h <= 1 || (x == 0 && y == 0)) {
+		// Каретка в 2-3 точки - не каретка текста: Telegram (Qt) ставит такую над строкой для окна ввода иероглифов, а его
+		// каретку говорит UI Automation (Дмитрий 08.10.2026: флажок прыгал из-под каретки на строку).
+		if (FAILED(acc->accLocation(&x, &y, &w, &h, self)) || h < 4 || (x == 0 && y == 0)) {
 			return false;
 		}
 		rc = { x, y, x + 1, y + h };
@@ -276,10 +278,17 @@ private:
 	// (редактор на странице - contenteditable, тело письма в eM Client; в Firefox решает его системная каретка, в
 	// Chromium - да: BrowserCaret). Текст страницы и поля "только для чтения" - с состоянием MSAA
 	// STATE_SYSTEM_READONLY (так их отличают и программы чтения с экрана) или ValuePattern.IsReadOnly.
-	static int Editable(IUIAutomation* uia, DWORD pid, int& type, DWORD& state, CComPtr<IUIAutomationElement>& el) {
+	static int Editable(IUIAutomation* uia, const Request& req, int& type, DWORD& state, CComPtr<IUIAutomationElement>& el) {
 		if (FAILED(uia->GetFocusedElement(&el)) || !el) return -1;
 		int elPid = 0;
-		if (FAILED(el->get_CurrentProcessId(&elPid)) || (DWORD)elPid != pid) return -1;
+		if (FAILED(el->get_CurrentProcessId(&elPid))) return -1;
+		// WhatsApp (WinUI 3 со страницей Chromium внутри): Windows называет фокусом рамку - мост WinUI или окно
+		// Chrome_WidgetWin_0, не в фокусе и без размеров, - а поле ввода на странице есть в дереве самого окна.
+		if (CComPtr<IUIAutomationElement> inner = FocusInWindow(uia, req.focus, el)) {
+			el = inner;
+		}
+		else if ((DWORD)elPid != req.pid)
+			return -1;
 		CONTROLTYPEID ct = 0;
 		el->get_CurrentControlType(&ct);
 		type = ct;
@@ -308,6 +317,48 @@ private:
 		CComPtr<IUIAutomationTextPattern> text;
 		return ct == UIA_GroupControlTypeId && stateKnown &&
 			SUCCEEDED(el->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&text))) && text ? 2 : 0;
+	}
+
+	// Фокус по Windows - рамка, а не поле (focused: тип Pane, Win32, не в фокусе клавиатуры или без размеров): элемент с
+	// фокусом клавиатуры в дереве окна focus (поиск по всему дереву страницы - долгий: найденный помнится, пока у него
+	// фокус; не нашли - снова не раньше чем через полсекунды). Иначе - nullptr.
+	static CComPtr<IUIAutomationElement> FocusInWindow(IUIAutomation* uia, HWND focus, IUIAutomationElement* focused) {
+		CONTROLTYPEID ct = 0;
+		CComBSTR fw;
+		BOOL kb = FALSE;
+		RECT box{};
+		if (!focused || FAILED(focused->get_CurrentControlType(&ct)) || ct != UIA_PaneControlTypeId ||
+			FAILED(focused->get_CurrentFrameworkId(&fw)) || !fw || wcscmp(fw, L"Win32") != 0)
+			return nullptr;
+		focused->get_CurrentHasKeyboardFocus(&kb);
+		focused->get_CurrentBoundingRectangle(&box);
+		if (kb && box.right > box.left) return nullptr;
+		const HWND root = focus ? GetAncestor(focus, GA_ROOT) : nullptr;
+		if (!root) return nullptr;
+		static thread_local struct {
+			HWND root = nullptr;
+			CComPtr<IUIAutomationElement> el;
+			ULONGLONG searched = 0;
+		} cache;
+		if (cache.root == root && cache.el) {
+			BOOL still = FALSE;
+			if (SUCCEEDED(cache.el->get_CurrentHasKeyboardFocus(&still)) && still) return cache.el;
+		}
+		const ULONGLONG now = GetTickCount64();
+		if (cache.root == root && now - cache.searched < 500) return nullptr;
+		cache = { root, nullptr, now };
+		CComPtr<IUIAutomationElement> top;
+		CComPtr<IUIAutomationCondition> cond;
+		VARIANT yes;
+		yes.vt = VT_BOOL;
+		yes.boolVal = VARIANT_TRUE;
+		CComPtr<IUIAutomationElement> found;
+		if (FAILED(uia->ElementFromHandle(root, &top)) || !top ||
+			FAILED(uia->CreatePropertyCondition(UIA_HasKeyboardFocusPropertyId, yes, &cond)) || !cond ||
+			FAILED(top->FindFirst(TreeScope_Descendants, cond, &found)) || !found)
+			return nullptr;
+		cache.el = found;
+		return found;
 	}
 
 	// Браузер: каретка внутри поля в фокусе и внутри видимой части страницы (ближайший документ над полем - страница
@@ -451,8 +502,25 @@ private:
 		}
 		RECT box{};
 		if (FAILED(el->get_CurrentBoundingRectangle(&box)) || box.bottom - box.top < 8 || box.right <= box.left) return false;
-		LONG pad = std::max<LONG>(2, (box.bottom - box.top) / 6);
-		rc = { box.left + pad, box.top + pad, box.left + pad + 1, box.bottom - pad };
+		// Высота строки: размер шрифта поля (UI Automation) с межстрочным, нет его - 20 точек при 96 dpi.
+		UINT dpiX = 96, dpiY = 96;
+		GetDpiForMonitor(MonitorFromRect(&box, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+		LONG line = MulDiv(20, dpiY, 96);
+		VARIANT size;
+		VariantInit(&size);
+		if (doc && SUCCEEDED(doc->GetAttributeValue(UIA_FontSizeAttributeId, &size)) && size.vt == VT_R8 && size.dblVal > 4 &&
+			size.dblVal < 100)
+			line = std::lround(size.dblVal * dpiY / 72.0 * 1.3);
+		VariantClear(&size);
+		const LONG h = box.bottom - box.top;
+		if (h <= 2 * line) { // поле в одну строку (адрес и тема в eM Client): текст посередине
+			const LONG pad = std::max<LONG>(2, h / 6);
+			rc = { box.left + pad, box.top + pad, box.left + pad + 1, box.bottom - pad };
+		}
+		else { // в несколько строк (WeChat): первая строка сверху - а не всё поле, флажок вставал под его низ
+			const LONG pad = MulDiv(3, dpiX, 96); // текст в WeChat - в 2-3 точках от края поля
+			rc = { box.left + pad, box.top + pad, box.left + pad + 1, box.top + pad + line };
+		}
 		return true;
 	}
 };
@@ -724,10 +792,12 @@ private:
 			(c.starts_with(L"Chrome_") && c.find(L"WidgetWin") != std::wstring_view::npos);
 	}
 
-	// Программы, где системная каретка есть, но не там (или её нет вовсе): сразу UI Automation.
+	// Программы, где системная каретка есть, но не там (или её нет вовсе): сразу UI Automation. Блокнот (RichEditD2DPT) - не
+	// из них: его системная каретка верна, а UI Automation на пустой строке говорит о следующей (Дмитрий 08.10.2026:
+	// флажок на строку ниже каретки).
 	static bool UiaFirst(HWND fg, HWND focus) {
 		return IsClass(fg, { L"ApplicationFrameWindow" }) ||
-			IsClass(focus, { L"RichEditD2DPT", L"Windows.UI.Core.CoreWindow", L"Microsoft.UI.Content.DesktopChildSiteBridge",
+			IsClass(focus, { L"Windows.UI.Core.CoreWindow", L"Microsoft.UI.Content.DesktopChildSiteBridge",
 				L"Windows.UI.Input.InputSite.WindowClass" });
 	}
 
@@ -755,7 +825,8 @@ private:
 	// для такого окна в tools\test_caret.cpp не пересчитал ничего).
 	static bool SystemCaret(const GUITHREADINFO& gti, RECT& out) {
 		HWND w = gti.hwndCaret;
-		if (!w || gti.rcCaret.bottom - gti.rcCaret.top < 2) return false;
+		// 2x2 - не каретка текста (Telegram ставит такую над строкой, Msaa): дальше - MSAA, UI Automation.
+		if (!w || gti.rcCaret.bottom - gti.rcCaret.top < 4) return false;
 		POINT a{ gti.rcCaret.left, gti.rcCaret.top };
 		POINT b{ gti.rcCaret.left, gti.rcCaret.bottom };
 		RECT logical{}, physical{};

@@ -8,6 +8,7 @@
 #include <thread>
 #include <source_location>
 #include <print>
+#include <csignal>
 
 enum TLogLevel {
 	LOG_LEVEL_DISABLE = 0,  
@@ -80,11 +81,13 @@ namespace _log_int {
 					std::thread([this] { Writer(); }).detach();
 					std::atexit([] { Get().Finish(); });
 					// Падение и std::terminate: atexit не зовётся, а строки перед ними - самые нужные. Дописать очередь
-					// (не дольше секунды) и падать дальше как обычно.
+					// (не дольше секунды) и падать дальше как обычно. set_terminate в MSVC - только для этого потока;
+					// abort из любого потока (terminate в потоке хука, движка) сначала поднимает SIGABRT - он общий.
 					std::set_terminate([] {
 						Get().Finish(true);
 						std::abort();
 					});
+					std::signal(SIGABRT, [](int) { Get().Finish(true); });
 					SetUnhandledExceptionFilter([](EXCEPTION_POINTERS*) -> LONG {
 						Get().Finish(true);
 						return EXCEPTION_CONTINUE_SEARCH;
@@ -114,10 +117,16 @@ namespace _log_int {
 				m_idleCv.notify_all();
 			}
 		}
-		// Выход: дописать очередь (не дольше секунды). crash - при падении: очередь мог держать упавший поток - тогда не ждать.
+		// Выход: дописать очередь (не дольше секунды). crash - при падении: очередь мог держать упавший поток - ждать её
+		// не дольше 0,1 с (обычно её держат микросекунды: другой поток кладёт строку).
 		void Finish(bool crash = false) {
 			std::unique_lock lock(m_mtx, std::defer_lock);
-			if (crash ? !lock.try_lock() : (lock.lock(), false)) return;
+			if (!crash)
+				lock.lock();
+			else {
+				for (int i = 0; i < 100 && !lock.try_lock(); i++) Sleep(1);
+				if (!lock.owns_lock()) return;
+			}
 			m_idleCv.wait_for(lock, std::chrono::seconds(1), [this] { return m_queue.empty() && !m_writing; });
 		}
 		FILE* LazyOpen() {

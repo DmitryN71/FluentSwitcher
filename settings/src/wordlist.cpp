@@ -504,8 +504,11 @@ private:
         wxStringTokenizer words(text, m_kind == WordKind::Programs ? ",;\t\r\n" : " ,;\t\r\n", wxTOKEN_STRTOK);
         while (words.HasMoreTokens())
         {
-            // "far.exe, code.exe": " code.exe" with its space never matched in the engine.
-            const wxString w = words.GetNextToken().Strip(wxString::both);
+            // "far.exe, code.exe": " code.exe" with its space never matched in the engine. And a path in quotes
+            // (Explorer's "Copy as path": "C:\Program Files\Far Manager\Far.exe") - without them.
+            wxString w = words.GetNextToken().Strip(wxString::both);
+            if (m_kind == WordKind::Programs && w.length() >= 2 && (w[0] == '"' || w[0] == '\'') && w.Last() == w[0])
+                w = w.Mid(1, w.length() - 2).Strip(wxString::both);
             if (w.empty())
                 continue;
             bool covered = false;
@@ -607,7 +610,8 @@ private:
                 ? T("Введите слово – как оно должно быть или как набирается по ошибке: Enter добавит его")
                 : m_kind == WordKind::Programs ? T("Имя файла приложения, например far.exe, или путь к нему: Enter добавит")
                 : T("Введите слово: Enter добавит его, а список покажет похожие");
-        else if (hit >= 0 && (m_kind == WordKind::Programs || (!covered && m_words[hit].IsSameAs(query, m_kind == WordKind::Caps))))
+        else if (hit >= 0 && (m_kind == WordKind::Programs ||
+                              (!covered && (m_kind == WordKind::Caps ? m_words[hit] == query : SameText(m_words[hit], query)))))
             hint = T("Уже в списке");
         else if (m_kind == WordKind::Programs)
             hint = wxString::Format(T("Enter добавит %s"), Quote(Kept(query)));

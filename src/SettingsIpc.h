@@ -59,13 +59,11 @@ namespace SettingsIpc {
 		}
 		if (msg == msgReloadConfig) {
 			LOG_ANY("ipc: reload config");
-			// Счёт исправлений вручную в памяти новее файла (в файл он идёт раз в минуту): не потерять его.
-			const auto fixCounts = cfg_details::conf_gui()->autoswitch_fix;
+			// Счёт исправлений вручную в памяти новее файла (в файл он идёт раз в минуту), а окно его не меняет: оставить
+			// свой целиком - и снятое с него (исправили обратно, забытое при трёхстах словах) не вернётся из файла.
+			auto fixCounts = std::move(cfg_details::conf_gui()->autoswitch_fix);
 			cfg_details::ReloadGuiConfig();
-			for (const auto& [word, count] : fixCounts) {
-				int& now = cfg_details::conf_gui()->autoswitch_fix[word];
-				if (now < count) now = count;
-			}
+			cfg_details::conf_gui()->autoswitch_fix = std::move(fixCounts);
 			SyncLayouts(); // в файле могли остаться не все раскладки Windows
 			ApplyAcessebil();
 			if (!IsAdminOk()) {

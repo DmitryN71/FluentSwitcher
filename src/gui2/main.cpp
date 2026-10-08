@@ -64,20 +64,61 @@ void StartGui() {
 		LOG_ANY("{}: {} taken back from the list", name, utf8);
 		return 2;
 	};
-	// Счёт исправлений вручную изменился - в файл раз в минуту, а не на каждое исправление. В файл как он есть на диске,
-	// со своим счётом: там могут быть новые настройки из окна, которые мы ещё не перечитали.
+	// Выученное в файл - как он есть на диске, со своим: там могут быть новые настройки из окна, которых мы ещё не
+	// перечитали (окно сохранило их, пока мы ждали очереди к файлу, ConfigLock, - его ReloadConfig придёт следом), и
+	// запись всего из памяти их бы стёрла. change - что поменять в прочитанном с диска. Файла нет - всё из памяти.
+	// Прочитать не вышло (занят, испорчен): whole - всё из памяти, как раньше (выученное слово не терять); иначе -
+	// ещё раз через минуту (счёт исправлений).
 	bool fixCountsChanged = false;
-	auto saveFixCounts = [&] {
-		fixCountsChanged = false;
+	auto saveMerged = [&](const std::function<void(ProgramConfig&)>& change, bool whole) {
 		ConfigLock lock;
-		if (!std::filesystem::is_regular_file(ProgramConfig::GetPath_Conf())) {
-			SaveApplyGuiConfig(); // файла нет - весь из памяти
+		std::error_code ec;
+		const bool exists = std::filesystem::is_regular_file(ProgramConfig::GetPath_Conf(), ec);
+		ProgramConfig disk;
+		const bool read = exists && cfg_details::LoadConfig(disk, false) == TStatus::SW_ERR_SUCCESS;
+		if (!read && (exists || ec) && !whole) {
+			LOG_WARN("config: can't read the file{}, fix counts wait", ec ? " (" + ec.message() + ")" : std::string());
+			fixCountsChanged = true;
 			return;
 		}
-		ProgramConfig disk;
-		if (cfg_details::LoadConfig(disk) != TStatus::SW_ERR_SUCCESS) return;
-		disk.autoswitch_fix = conf_gui()->autoswitch_fix;
+		fixCountsChanged = false;
+		if (!read) {
+			cfg_details::SaveGuiConfig();
+			return;
+		}
+		change(disk);
+		disk.autoswitch_fix = conf_gui()->autoswitch_fix; // счёт исправлений - движка: окно его не меняет
 		IFS_LOG(cfg_details::Save_conf(disk));
+	};
+	// Счёт исправлений вручную изменился - в файл раз в минуту, а не на каждое исправление.
+	auto saveFixCounts = [&] { saveMerged([](ProgramConfig&) {}, false); };
+	// Слово ушло в список name, вернулось из него или изменился его счёт: в памяти - уже; движку - сразу, в файл - только
+	// это слово (его счёт, место в списке и отметка "выучено").
+	auto saveWord = [&](const char* name, const std::wstring& word) {
+		cfg_details::ApplyGuiConfig();
+		const std::string utf8 = StrUtils::Convert(word);
+		auto lists = [&](ProgramConfig& c) -> std::pair<std::map<std::string, int>*, std::vector<std::string>*> {
+			if (std::string_view(name) == "two_caps_exceptions") return { &c.two_caps_undo, &c.two_caps_exceptions };
+			if (std::string_view(name) == "autoswitch_exceptions") return { &c.autoswitch_undo, &c.autoswitch_exceptions };
+			return { &c.autoswitch_fix, &c.autoswitch_force };
+		};
+		saveMerged([&](ProgramConfig& disk) {
+			auto [memCounts, memList] = lists(*conf_gui());
+			auto [diskCounts, diskList] = lists(disk);
+			if (const auto it = memCounts->find(utf8); it != memCounts->end())
+				(*diskCounts)[utf8] = it->second;
+			else
+				diskCounts->erase(utf8);
+			auto same = [&](const std::vector<std::string>& from, std::vector<std::string>& to) {
+				const bool in = std::ranges::find(from, utf8) != from.end();
+				if (!in)
+					std::erase(to, utf8);
+				else if (std::ranges::find(to, utf8) == to.end())
+					to.push_back(utf8);
+			};
+			same(*memList, *diskList);
+			same(conf_gui()->learned[name], disk.learned[name]);
+		}, true);
 	};
 	timer.CycleTimer([&] {
 		if (fixCountsChanged) saveFixCounts();
@@ -181,7 +222,7 @@ void StartGui() {
 				countToList(conf_gui()->two_caps_undo, conf_gui()->two_caps_exceptions, "two_caps_exceptions", *word,
 				            "\"{}\" will not be fixed any more",
 				            "It is in the exceptions of TWo INitial CApitals: Settings, Typing");
-				SaveApplyGuiConfig();
+				saveWord("two_caps_exceptions", *word);
 				return 0;
 			}
 
@@ -193,7 +234,7 @@ void StartGui() {
 				countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions", *word,
 				            "\"{}\" will not be switched any more",
 				            "It is in the exceptions of the layout auto switch: Settings, Auto switch");
-				SaveApplyGuiConfig();
+				saveWord("autoswitch_exceptions", *word);
 				return 0;
 			}
 
@@ -209,7 +250,7 @@ void StartGui() {
 					const int undone = uncount(counts, conf_gui()->autoswitch_force, "autoswitch_force", *word);
 					LOG_ANY(L"autoswitch: {} fixed back by hand, not counted", *word);
 					if (undone == 2)
-						SaveApplyGuiConfig();
+						saveWord("autoswitch_force", *word);
 					else if (undone == 1)
 						fixCountsChanged = true;
 					return 0;
@@ -219,10 +260,8 @@ void StartGui() {
 				                                 "\"{}\" will always be switched",
 				                                 "It is in \"Always switch\" of the layout auto switch: Settings, Auto switch");
 				if (counts.size() > 300) std::erase_if(counts, [](const auto& c) { return c.second < 2; });
-				if (learned) {
-					fixCountsChanged = false;
-					SaveApplyGuiConfig();
-				}
+				if (learned)
+					saveWord("autoswitch_force", *word);
 				else
 					fixCountsChanged = true;
 				return 0;
@@ -240,7 +279,7 @@ void StartGui() {
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
 				if (uncount(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions", *word)) {
 					LOG_ANY(L"autoswitch: {} fixed again after switching back, not counted", *word);
-					SaveApplyGuiConfig();
+					saveWord("autoswitch_exceptions", *word);
 				}
 				return 0;
 			}
@@ -279,5 +318,5 @@ void StartGui() {
 		::TranslateMessage(&msg);
 		::DispatchMessage(&msg);
 	}
-	if (fixCountsChanged) saveFixCounts(); // выход: счёт за последнюю минуту не терять
+	if (fixCountsChanged) saveMerged([](ProgramConfig&) {}, true); // выход: счёт за последнюю минуту не терять
 }

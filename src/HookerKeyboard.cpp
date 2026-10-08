@@ -63,6 +63,8 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			held_event = true;
 			return;
 		}
+		else
+			KeyHold::PassedLive(*k);
 
 		if (k->vkCode > 255) {
 			LOG_ANY(L"k->vkCode > 255: {}", k->vkCode);
@@ -327,8 +329,9 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// программа из исключений - там движок всё равно ничего не исправит, а игра, которая не принимает
 			// отправленных нажатий, потеряла бы придержанное. Последним: это поход за именем программы.
 			auto canHold = [&] { return KeyHold::CanHold(&cfg->autoswitch_console) && !cfg->IsSkipProgramTop(); };
-			// Программа из "Без автопереключения" (autoswitch_off): для автопереключения там не держим - движок всё равно
-			// откажет, а нажатия ушли бы заново, отправленными (их не принимают некоторые игры и программы).
+			// Программа из "Без автопереключения" (autoswitch_off): там не держим - движок всё равно откажет, а нажатия
+			// ушли бы заново, отправленными (их не принимают некоторые игры и программы). Кроме ДВух ЗАглавных не
+			// латиницей: латинские (ILogger) и i там - имена, движок их не трогает (IsCodeEditor), а русские исправляет.
 			auto autoswitchHere = [&] { return !cfg->IsAutoSwitchOffTop(); };
 			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
 				const auto end = KeyHold::EndWord();
@@ -352,7 +355,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				const bool loneI = end.loneI && cfg->fix_lone_i && KeyHold::EnglishLayout();
 				const bool check = KeyHold::CanStart() && !otherKey && (mods == 0 || modEnter) && g_enabled.IsEnabled() &&
 					(twoCaps || loneI || (end.letters && cfg->autoswitch)) && canHold() &&
-					(twoCaps || loneI || autoswitchHere());
+					(autoswitchHere() || (twoCaps && !KeyHold::LatinLayout()));
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
 					// поле), поэтому ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе
@@ -374,17 +377,23 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				const bool command = curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN);
 				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold());
 				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
-					KeyHold::CanStart() && KeyHold::EarlyPoint() && canHold() && autoswitchHere();
+					KeyHold::CanStart() && KeyHold::EarlyPoint();
+				if (early && !autoswitchHere()) {
+					KeyHold::earlyDone = true; // "Без автопереключения": посреди этого слова решать нечего - не спрашивать снова
+					early = false;
+				}
+				early = early && canHold();
 				// Клавиша, которая в другой раскладке бывает знаком после слова (б ю ж э - , . ; ', "/ ?" - . ,, Shift с
 				// цифрой - ? : ; "): слово проверяется сразу, как в конце, без пробела ("ПшеРгию" - "GitHub.", "b xnj&" -
 				// "и что?"; Дмитрий 06.10). Решает движок (AutoSwitchAtSign): знак ли это там и не начало ли слова здесь.
 				// И ДВе ЗАглавные: слово до этой клавиши (она могла добавиться буквой) - две заглавные, потом строчная: "OLd." -
-				// "Old.", не дожидаясь пробела (Дмитрий 08.10). Буква ли это в этой раскладке (ю, б) - решает движок.
+				// "Old.", не дожидаясь пробела (Дмитрий 08.10); буква в этой раскладке (ю, б) - не знак, слово продолжается.
 				const bool signKey = !command && g_enabled.IsEnabled() && KeyHold::SignKey(vkCode, curk.HasMod(VK_SHIFT)) &&
 					!KeyHold::broken && KeyHold::CanStart();
-				const bool signCaps = signKey && cfg->two_caps && KeyHold::TwoCapsShape(KeyHold::word.size() - (letter ? 1 : 0));
+				const bool signCaps = signKey && cfg->two_caps && KeyHold::TwoCapsShape(KeyHold::word.size() - (letter ? 1 : 0)) &&
+					!KeyHold::LetterHere(vkCode);
 				const bool signAuto = signKey && cfg->autoswitch && KeyHold::word.size() >= 2;
-				sign = (signCaps || signAuto) && canHold() && (signCaps || autoswitchHere());
+				sign = (signCaps || signAuto) && canHold() && (autoswitchHere() || (signCaps && !KeyHold::LatinLayout()));
 				hold = early || sign;
 				if (hold) {
 					if (sign) {

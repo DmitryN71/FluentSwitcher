@@ -47,7 +47,8 @@ public:
     // Консольные программы, где автопереключение всё же работает (ConsolePrograms.h): имя exe или путь.
     std::set <std::wstring> autoswitch_console;
     // Программы без автопереключения (08.10.2026): всё остальное там работает - исправление сочетанием, флаг у курсора,
-    // ДВе ЗАглавные (редакторы кода, программы с командами). Имя exe или путь.
+    // ДВе ЗАглавные кириллицей (редакторы кода, программы с командами: латинские ILogger и i там - имена, их не трогаем,
+    // WorkerImplement IsCodeEditor). Имя exe или путь.
     std::set <std::wstring> autoswitch_off;
 
     void NormalizePaths() {
@@ -55,10 +56,14 @@ public:
             std::set <std::wstring> res;
             for (const auto& it : *list) {
                 auto cur = it;
-                // Пробелы по краям (" code.exe" из "far.exe, code.exe", набранного руками в файл) - не часть имени.
-                const size_t b = cur.find_first_not_of(L" \t"), e = cur.find_last_not_of(L" \t");
+                // Пробелы по краям (" code.exe" из "far.exe, code.exe", набранного руками в файл) - не часть имени, и
+                // кавычки вокруг пути ("Копировать как путь" в Проводнике: "C:\Program Files\Far Manager\Far.exe").
+                const size_t b = cur.find_first_not_of(L" \t\r\n"), e = cur.find_last_not_of(L" \t\r\n");
                 if (b == std::wstring::npos) continue;
                 cur = cur.substr(b, e - b + 1);
+                if (cur.size() >= 2 && (cur.front() == L'"' || cur.front() == L'\'') && cur.back() == cur.front())
+                    cur = cur.substr(1, cur.size() - 2);
+                if (cur.empty()) continue;
                 StrUtils::ToLower(cur);
                 PathUtils::NormalizeDelims(cur);
                 res.insert(std::move(cur)); // todo cast
@@ -85,14 +90,15 @@ public:
         caret_flag_set = renamed(caret_flag_set);
         if (caret_flag_set == showFlags_AppIcon || caret_flag_set == showFlags_Nothing) caret_flag_set = flags_Default;
     }
-    // Программа впереди - из autoswitch_off: автопереключения там нет (WorkerImplement: AutoSwitchLastWord, AutoSwitchEarly).
-    bool IsAutoSwitchOffTop() const {
+    // Программа впереди - из autoswitch_off: автопереключения там нет (WorkerImplement: AutoSwitchLastWord, AutoSwitchEarly;
+    // IsCodeEditor - без записи в журнал: то же слово его уже записало).
+    bool IsAutoSwitchOffTop(bool log = true) const {
         if (autoswitch_off.empty()) return false;
         std::wstring path, name;
         if (Utils::GetProcLowerNameByPid(Utils::GetFocusedWndInfo().pid_top, path, name) != SW_ERR_SUCCESS || name.empty())
             return false;
         if (!autoswitch_off.contains(name) && !autoswitch_off.contains(path)) return false;
-        LOG_ANY(L"No automatic switch in {}: autoswitch_off", name);
+        if (log) LOG_ANY(L"No automatic switch in {}: autoswitch_off", name);
         return true;
     }
     // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h).
@@ -267,7 +273,9 @@ namespace cfg_details {
 
 	inline auto conf_gui() { return g_guiCfg.get(); }
 
-	TStatus LoadConfig(ProgramConfig& cfg);
+	// applyLogLevel - false: файл читают только ради слияния (счёт исправлений, выученное слово), журнал не трогать
+	// (force_DbgMode включил бы его снова и записал бы все настройки).
+	TStatus LoadConfig(ProgramConfig& cfg, bool applyLogLevel = true);
 	TStatus Save_conf(const ProgramConfig& gui);
 	// В файле нет поля, которое движок пишет (появилось в новой версии с тем же номером): тогда файл
 	// дописывается, чтобы новое поле было видно и его можно было править вручную или в окне настроек.

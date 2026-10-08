@@ -151,7 +151,7 @@ namespace nlohmann {
 
 namespace cfg_details {
 
-	TStatus LoadConfig(ProgramConfig& cfg) {
+	TStatus LoadConfig(ProgramConfig& cfg, bool applyLogLevel) {
 		try {
 
 			auto p = ProgramConfig::GetPath_Conf();
@@ -181,7 +181,7 @@ namespace cfg_details {
 			cfg.NormalizePaths();
 			cfg.NormalizeFlags(data.contains("caret_flag_set"));
 
-			if (cfg.force_DbgMode) {
+			if (cfg.force_DbgMode && applyLogLevel) {
 				SetLogLevel_print_info(cfg.logLevel);
 			}
 

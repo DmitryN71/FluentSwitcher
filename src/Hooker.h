@@ -13,6 +13,7 @@ class Hooker {
 public:
 	void ClearAllKeys() {
 		hookerKeyb = {}; // пересоздаем весь рабочий state.
+		KeyHold::ForgetRemaps();
 		Worker()->PostMsg(Message_ClearWorlds{});
 	}
 
@@ -46,11 +47,14 @@ private: inline static HookerKeyboard hookerKeyb;
 
 	// Последний вызов перехвата клавиатуры и мыши (GetTickCount) - по ним видно, что Windows его отключила (Watch).
 	inline static DWORD lastKeyTick = 0, lastMouseTick = 0;
-	inline static DWORD lastRehook = 0;
+	inline static DWORD lastRehookKey = 0, lastRehookMouse = 0;
 	// Клавиши, которые Windows отдала программам (Raw Input, окно потока перехвата: OnRawKey): когда последняя и в каком
 	// окне. Мышь их не обновляет - отключённый перехват клавиатуры виден, даже если мышью работают.
 	inline static DWORD lastRawKeyTick = 0;
 	inline static HWND rawKeyWindow = nullptr;
+	// Сколько нажатий и отпусканий подряд дошло до программ, а наш перехват их не видел (больше секунды ничего): одно - ещё
+	// не признак (его мог съесть перехват другой программы: AutoHotkey, PowerToys, запись сочетания), четыре - признак.
+	inline static int rawUnseen = 0;
 	inline static bool rawSeen = false; // Raw Input приходит (не пришло ни одного - смотрим по-старому, GetLastInputInfo)
 
 	static LRESULT CALLBACK LowLevelKeyboardProc(
@@ -179,6 +183,7 @@ public:
 	static void OnRawKey(DWORD time) {
 		lastRawKeyTick = time;
 		rawKeyWindow = GetForegroundWindow();
+		rawUnseen = (LONG)(time - lastKeyTick) >= 1000 ? rawUnseen + 1 : 0;
 		if (!rawSeen) {
 			rawSeen = true;
 			LOG_ANY("hook: raw input comes, the keyboard hook is watched by it");
@@ -187,28 +192,41 @@ public:
 
 	// Windows молча отключает перехват, который не ответил вовремя (LowLevelHooksTimeout): программа перестаёт видеть
 	// клавиши, а пока не отключила - каждое нажатие и движение мыши ждёт его. Таймер потока перехвата (HookerThread.h),
-	// раз в 2 с; подключаемся заново не чаще раза в 30 с.
-	//   - Клавиатура: клавиша дошла до программ (Raw Input) на секунду позже, чем её видел наш перехват, и в том же окне,
-	//     что впереди сейчас, - перехват клавиатуры отключён. Подключить заново только его: каждый новый перехват встаёт
-	//     первым, перед перехватами других программ (AutoHotkey, FluentClipper), - их порядок без нужды не трогаем.
+	// раз в 2 с; каждый перехват подключаем заново не чаще раза в 30 с.
+	//   - Клавиатура: нажатия дошли до программ (Raw Input), а наш перехват больше секунды не видел ни одного (rawUnseen),
+	//     в том же окне, что впереди сейчас, - перехват клавиатуры отключён. Подключить заново его: каждый новый перехват
+	//     встаёт первым, перед перехватами других программ (AutoHotkey, FluentClipper), - их порядок без нужды не трогаем.
 	//     Состояние клавиш - заново: отпускания, пока его не было, мы не видели (иначе клавиша "нажата" до 10 с).
+	//     Перехват мыши после этого не звали ни разу - его Windows отключила тогда же (поток стоял, а мышь двигали) или
+	//     мышь не трогали: подключить заново и его, сразу. Иначе щелчок в другом месте текста остался бы незамеченным
+	//     ещё 30 с, и автопереключение стёрло бы не те буквы.
 	//   - Мышь (и клавиатура, пока Raw Input не пришёл ни разу): ввод был (GetLastInputInfo), а перехваты не видели
-	//     ничего больше 1,5 с. Ввод мимо перехвата бывает и у сенсорной панели, экрана и пера - поэтому только мышь.
+	//     ничего больше 1,5 с. Когда Raw Input есть, клавиатуру по этому признаку не трогаем: ввод мимо перехвата бывает и
+	//     у сенсорной панели, экрана и пера.
 	void Watch() {
 		const DWORD now = GetTickCount();
-		if (now - lastRehook < 30000) return;
-		const bool keyboard = rawSeen && (LONG)(lastRawKeyTick - lastKeyTick) >= 1000 && now - lastRawKeyTick < 4000 &&
-			rawKeyWindow == GetForegroundWindow();
+		const bool keyboard = rawSeen && rawUnseen >= 4 && (LONG)(lastRawKeyTick - lastKeyTick) >= 1000 &&
+			now - lastRawKeyTick < 4000 && rawKeyWindow == GetForegroundWindow() && now - lastRehookKey >= 30000;
 		LASTINPUTINFO li{ sizeof(li) };
 		const bool unseen = !keyboard && GetLastInputInfo(&li) && (LONG)(li.dwTime - lastMouseTick) >= 1500 &&
 			(LONG)(li.dwTime - lastKeyTick) >= 1500 && (!rawSeen || (LONG)(li.dwTime - lastRawKeyTick) >= 1500);
-		if (!keyboard && !unseen) return;
+		const bool keyboardUnseen = unseen && !rawSeen && now - lastRehookKey >= 30000;
+		const bool mouse = ((keyboard && (LONG)(lastMouseTick - lastKeyTick) <= 0) || unseen) && now - lastRehookMouse >= 30000;
+		if (!keyboard && !keyboardUnseen && !mouse) return;
 		// Впереди окно от администратора, а мы нет: его ввод Windows нам и не показывает. Или удалённый рабочий стол: его
 		// клиент на весь экран ловит клавиатуру своим перехватом, и новый наш встал бы перед ним.
 		if (!KeyHold::CanHold()) return;
-		lastRehook = now;
-		if (keyboard || !rawSeen) {
-			LOG_WARN("hook: keys came {} ms after the keyboard hook last saw any, hooking it again", now - lastKeyTick);
+		if (keyboard || keyboardUnseen) {
+			if (keyboard) {
+				LOG_WARN("hook: {} keys reached the programs {} ms after the keyboard hook last saw any, hooking it again",
+				         rawUnseen, lastRawKeyTick - lastKeyTick);
+			}
+			else {
+				LOG_WARN("hook: input {} ms after the hooks last saw any (no raw input yet), hooking the keyboard again",
+				         li.dwTime - lastKeyTick);
+			}
+			lastRehookKey = now;
+			rawUnseen = 0;
 			hHookKeyGlobal.Cleanup();
 			hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
 			IFW_LOG(hHookKeyGlobal.IsValid());
@@ -220,8 +238,9 @@ public:
 				if (!KeyHold::active && !KeyHold::held.empty()) KeyHold::Next();
 			}
 		}
-		if (!keyboard && !Utils::IsDebug()) {
-			LOG_WARN("hook: input {} ms after the hooks last saw any, hooking the mouse again", li.dwTime - lastMouseTick);
+		if (mouse && !Utils::IsDebug()) {
+			LOG_WARN("hook: the mouse hook saw nothing since {} ms ago, hooking the mouse again", now - lastMouseTick);
+			lastRehookMouse = now;
 			hHookMouseGlobal.Cleanup();
 			hHookMouseGlobal = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
 			IFW_LOG(hHookMouseGlobal.IsValid());

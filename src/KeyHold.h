@@ -1,13 +1,15 @@
-// Придержанные нажатия ("ДВе ЗАглавные", TwoCaps.h; автопереключение, AutoSwitch.h). Слово исправляется после
-// пробела (или посреди слова), а пальцы в это время печатают дальше: если их нажатия дойдут до программы, пока движок
-// стирает и перепечатывает слово, буквы перемешаются. Поэтому после такой клавиши хук не пропускает нажатия, а копит
-// их, и поток хука потом отправляет их теми же клавишами и в том же порядке.
+// Придержанные нажатия ("ДВе ЗАглавные", TwoCaps.h; автопереключение, AutoSwitch.h). Слово исправляется в конце
+// (пробел, Enter, Tab или знак сразу после него) или посреди слова, а пальцы в это время печатают дальше: если их
+// нажатия дойдут до программы, пока движок стирает и перепечатывает слово, буквы перемешаются. Поэтому после такой
+// клавиши хук не пропускает нажатия, а копит их, и поток хука потом отправляет их в том же порядке; нажатия с
+// клавиатуры - клавишей, что на том же месте в раскладке, какая стоит при отправке (SendBatch).
 //
 // Всё состояние - в потоке хука: вызовы хука и сообщения его окна идут в нём по очереди, блокировки не нужны. У каждой
 // придержки свой номер (Start): рабочий поток получает его в сообщении о клавише, исправляет, только пока держится она
 // (Allowed), и просит отпустить её же (RequestRelease) - запоздалый ответ (через 3 с всё отпускается само) не тронет
-// следующую. Отпущенное уходит порциями: до конца слова (пробел, Enter, Tab) или клавиши не буквы (Shift, Pause, Ctrl:
-// ею могут нажать сочетание) включительно - она проходит через хук последней в порции, и на ней слово проверяется, а
+// следующую. Отпущенное уходит порциями: до конца слова (пробел, Enter, Tab), клавиши не буквы (Shift, Pause, Ctrl:
+// ею могут нажать сочетание) или нажатия при Ctrl, Alt, Win (сочетание) включительно - она проходит через хук
+// последней в порции, и на ней слово проверяется, а
 // сочетание делается, как набранное руками (сочетание тоже держит придержку, пока движок его не сделает); остальное
 // ждёт - его отправит следующая порция (Next), если эта проверка не начала новую придержку. Новые нажатия, пока что-то
 // держится или возвращается, встают в очередь (Busy).
@@ -100,6 +102,22 @@ struct Held {
 };
 inline std::deque<Held> held;
 inline WORD downAs[512] = {}; // клавиша по месту (scan, 0x100 - расширенная): каким другим VK ушло её нажатие
+inline size_t KeyPlace(DWORD scan, bool ext) { return (scan & 0xFF) | (ext ? 0x100 : 0); }
+// Нажатие или отпускание с клавиатуры прошло мимо очереди - той клавишей, что дала Windows: то, каким VK ушло нажатие
+// этой клавиши раньше, к нему уже не относится. Иначе отпускание её, придержанное потом, ушло бы чужой клавишей, а
+// своя осталась бы нажатой (немецкая или французская раскладка после автопереключения).
+inline void PassedLive(const KBDLLHOOKSTRUCT& k) {
+	if (!(k.flags & LLKHF_INJECTED)) downAs[KeyPlace(k.scanCode, k.flags & LLKHF_EXTENDED)] = 0;
+}
+// Перехват подключили заново, клавиши забыли (Hooker::ClearAllKeys): забыть и это.
+inline void ForgetRemaps() { std::fill(std::begin(downAs), std::end(downAs), WORD(0)); }
+
+// Раскладка поля с фокусом - та же, что у движка (Utils::GetFocusedWndInfo): у окна впереди она бывает другой (окно
+// Магазина - рамка ApplicationFrameHost, консоль - поток другой программы, окна впереди нет - поток хука).
+inline HKL FocusLayout() {
+	if (const HKL lay = Utils::GetFocusedWndInfo().lay) return lay;
+	return GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), nullptr));
+}
 inline size_t replaying = 0;    // столько отправленных заново ещё не прошло через хук
 inline bool batchEnded = false; // последнее отправленное прошло через хук: что дальше - AfterKey
 inline bool flushing = false;   // последняя отправка - всё сразу после неудачи (не в счёт удачи)
@@ -244,16 +262,19 @@ inline void Hold(const KBDLLHOOKSTRUCT& k, bool first = false) {
 // программу раньше, чем вставка или исправление.
 // Клавиши с клавиатуры отправляются той клавишей, что на том же месте в раскладке сейчас: автопереключение могло
 // сменить раскладку, пока они ждали, а в немецкой или французской раскладке на месте русской "н" - Z, а не Y.
+// Сочетания (Ctrl, Alt, Win; не AltGr) - той клавишей, что нажата: Ctrl+Z после переключения на французскую иначе
+// ушёл бы Ctrl+W и закрыл вкладку.
 inline void SendBatch(bool all = false) {
 	auto letter = [](WORD vk) {
 		return (vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9') || (vk >= VK_OEM_1 && vk <= VK_OEM_3) ||
 			(vk >= VK_OEM_4 && vk <= VK_OEM_8) || vk == VK_OEM_102 || vk == VK_SPACE || vk == 0; // 0 - знак Юникода
 	};
-	const bool command = (GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_LWIN) |
-	                      GetAsyncKeyState(VK_RWIN)) & 0x8000;
-	const HKL lay = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), nullptr));
+	auto down = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
+	const bool command = down(VK_CONTROL) || down(VK_MENU) || down(VK_LWIN) || down(VK_RWIN);
+	// Порция кончается на каждом модификаторе: их состояние сейчас - то, при котором нажаты её клавиши.
+	const bool shortcut = (down(VK_CONTROL) && !down(VK_RMENU)) || down(VK_LMENU) || down(VK_LWIN) || down(VK_RWIN);
+	const HKL lay = FocusLayout();
 	std::vector<INPUT> list;
-	std::vector<bool> physical;
 	while (!held.empty()) {
 		Held h = held.front();
 		held.pop_front();
@@ -261,9 +282,9 @@ inline void SendBatch(bool all = false) {
 		const bool up = in.ki.dwFlags & KEYEVENTF_KEYUP;
 		if (h.physical && in.ki.wScan && in.ki.wVk != VK_SPACE && letter(in.ki.wVk)) {
 			const bool ext = in.ki.dwFlags & KEYEVENTF_EXTENDEDKEY;
-			const size_t at = (in.ki.wScan & 0xFF) | (ext ? 0x100 : 0);
+			const size_t at = KeyPlace(in.ki.wScan, ext);
 			if (!up) {
-				const WORD vk = (WORD)MapVirtualKeyExW(in.ki.wScan | (ext ? 0xE000 : 0), MAPVK_VSC_TO_VK_EX, lay);
+				const WORD vk = shortcut ? 0 : (WORD)MapVirtualKeyExW(in.ki.wScan | (ext ? 0xE000 : 0), MAPVK_VSC_TO_VK_EX, lay);
 				const bool other = vk && vk != in.ki.wVk && vk != VK_SPACE && letter(vk);
 				if (other) in.ki.wVk = vk;
 				downAs[at] = other ? vk : 0;
@@ -274,7 +295,6 @@ inline void SendBatch(bool all = false) {
 			}
 		}
 		list.push_back(in);
-		physical.push_back(h.physical);
 		const WORD vk = in.ki.wVk;
 		if (!all && (!letter(vk) || (vk == VK_SPACE && !up) || (command && !up))) break;
 	}
@@ -297,7 +317,8 @@ inline void SendBatch(bool all = false) {
 			Fail();
 		}
 		sendFailed = true;
-		for (size_t i = list.size(); i-- > sent;) held.push_front({ list[i], physical[i] });
+		// Уже названные по месту (и записанные в downAs) - как есть: второй раз их не переназывать.
+		for (size_t i = list.size(); i-- > sent;) held.push_front({ list[i], false });
 		const size_t unsent = list.size() - sent;
 		replaying = replaying > unsent ? replaying - unsent : 0;
 	}
@@ -395,10 +416,22 @@ inline void FocusIn() {
 	if (word.empty() || broken || now() - letterAt > 500) ResetWord();
 }
 
-// Раскладка окна впереди - английская (i - I, fix_lone_i: решает движок, а хук не держит клавиши зря в других).
+// Раскладка поля - английская (i - I, fix_lone_i: решает движок, а хук не держит клавиши зря в других).
 inline bool EnglishLayout() {
-	const HKL lay = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), nullptr));
-	return PRIMARYLANGID(LOWORD((UINT_PTR)lay)) == LANG_ENGLISH;
+	return PRIMARYLANGID(LOWORD((UINT_PTR)FocusLayout())) == LANG_ENGLISH;
+}
+
+// Раскладка поля - латиница (английская, немецкая...): латинские ДВе ЗАглавные в программах из "Без
+// автопереключения" движок не исправляет (там это имена: ILogger, QString) - и держать незачем.
+inline bool LatinLayout() {
+	const UINT c = MapVirtualKeyExW('A', MAPVK_VK_TO_CHAR, FocusLayout()) & 0x7FFF;
+	return c != 0 && c < 0x250;
+}
+
+// Клавиша - буква в раскладке поля (б ю ж э русской на месте , . ; '): слово продолжается, это не знак после него.
+inline bool LetterHere(UINT vk) {
+	const UINT c = MapVirtualKeyExW(vk, MAPVK_VK_TO_CHAR, FocusLayout()) & 0x7FFF;
+	return c != 0 && IsCharAlphaW((wchar_t)c);
 }
 
 // Нажатие, которое движок получает как набор (не пробел). true - в слово добавилась буква. repeat - автоповтор
@@ -417,8 +450,8 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		if (word.empty()) firstKeys[0] = 0;
 		return false;
 	}
-	// Громкость и плеер текст не трогают - слово продолжается (как у движка: AnalyzeTyped.h).
-	if (vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE) return false;
+	// Громкость и плеер, NumLock и ScrollLock текст не трогают - слово продолжается (как у движка: AnalyzeTyped.h).
+	if ((vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE) || vk == VK_NUMLOCK || vk == VK_SCROLL) return false;
 	if (repeat && IsLetterKey(vk)) {
 		broken = true;
 		return false;
@@ -458,7 +491,8 @@ inline bool TwoCapsShape(size_t n) {
 struct WordEnd {
 	bool twoCaps = false; // могло подойти под ДВе ЗАглавные (две заглавные, потом строчные)
 	bool letters = false; // буквы без цифр и команд - его проверит автопереключение (и одну: список "Переключать всегда")
-	bool loneI = false;   // может быть i, i'm, i've, i'll, i'd ('i - с кавычкой): до четырёх клавиш, первая буква - I
+	bool loneI = false;   // может быть i, i'm, i've, i'll, i'd ('i - с кавычкой): до четырёх клавиш, первая буква -
+	                      // строчная i, за ней не буква (in, is, it, if - слова, их не держим)
 	size_t size = 0;      // букв
 	UINT lastLetter = 0;  // клавиша последней
 };
@@ -467,7 +501,10 @@ inline WordEnd EndWord() {
 	// От трёх букв ("ЧТо", "THe"; какие из них исправлять - решает движок: TwoCaps::Matches).
 	end.twoCaps = TwoCapsShape(word.size());
 	end.letters = !broken && !word.empty();
-	end.loneI = end.letters && word.size() <= 4 && (firstKeys[0] == 'I' || (firstKeys[0] == VK_OEM_7 && firstKeys[1] == 'I'));
+	auto alpha = [](UINT vk) { return vk >= 'A' && vk <= 'Z'; };
+	end.loneI = end.letters && word.size() <= 4 &&
+		((firstKeys[0] == 'I' && !word[0] && !alpha(firstKeys[1])) ||
+		 (firstKeys[0] == VK_OEM_7 && firstKeys[1] == 'I' && word.size() >= 2 && !word[1]));
 	end.size = word.size();
 	end.lastLetter = lastLetter;
 	ResetWord();

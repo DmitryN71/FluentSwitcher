@@ -5,9 +5,10 @@
 class CycleRevertList {
 
 	struct TKeyHookInfo {
-		TKeyBaseInfo key;
+		TKeyBaseInfo key; // как на экране: Shift - и после исправления ДВух ЗАглавных
 		bool is_last_revert = false;
 		HKL lay = 0; // раскладка, в которой клавиша сейчас на экране (автопереключение: слова перед словом)
+		bool typedShift = false; // Shift, как набрали: перевод раскладки (и обратно) - от набранного
 	};
 
 	// static const int c_maxWordRevert = 15; // https://github.com/Aegel5/SimpleSwitcher/issues/95
@@ -235,7 +236,7 @@ public: RevertKeysData FillKeyToRevert(HotKeyType typeRevert, bool always_full_t
 	}
 
 	for (int i = always_full_text ? 0 : iLastCorrected; i < ssize(m_symbolList); ++i) {
-		keyList.keys.push_back(m_symbolList[i].key);
+		keyList.keys.push_back(Typed(i));
 	}
 
 	if (prev_correct == iLastCorrected) {
@@ -283,7 +284,7 @@ public: void AddKeyToList(const TKeyBaseInfo& key, HKL lay = 0) {
 		m_symbolList.pop_front();
 	}
 
-	m_symbolList.push_back({ .key = key, .lay = lay });
+	m_symbolList.push_back({ .key = key, .lay = lay, .typedShift = key.is_shift });
 	m_total++;
 	m_changes++;
 }
@@ -333,14 +334,20 @@ public: std::vector<TailWord> TailWords(bool afterSpace, size_t max, bool* fixed
 }
 public: const TKeyBaseInfo& KeyAt(size_t i) const { return m_symbolList[i].key; }
 // Shift клавиш с begin - как у перепечатанных keys (ДВе ЗАглавные исправлены при переводе раскладки): буфер - как на
-// экране.
+// экране. Набранный Shift (typedShift) остаётся: перевод обратно вернёт слово, как его набрали ("PCs" - "Зсы" - "PCs").
 public: void SetShiftFrom(size_t begin, const TKeyRevert& keys) {
 	for (size_t i = 0; i < keys.size() && begin + i < m_symbolList.size(); i++) m_symbolList[begin + i].key.is_shift = keys[i].is_shift;
 }
-// Клавиши с begin до конца набранного.
+// Клавиша i, как её набрали (Shift - набранный, не исправленный): для перевода раскладки.
+private: TKeyBaseInfo Typed(size_t i) const {
+	TKeyBaseInfo key = m_symbolList[i].key;
+	key.is_shift = m_symbolList[i].typedShift;
+	return key;
+}
+// Клавиши с begin до конца набранного - как набраны (перевод раскладки: Shift - набранный).
 public: TKeyRevert KeysFrom(size_t begin) const {
 	TKeyRevert keys;
-	for (size_t i = begin; i < m_symbolList.size(); i++) keys.push_back(m_symbolList[i].key);
+	for (size_t i = begin; i < m_symbolList.size(); i++) keys.push_back(Typed(i));
 	return keys;
 }
 // Клавиши с begin до конца перепечатаны в раскладке lay.

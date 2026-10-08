@@ -7,9 +7,11 @@
 // CaretFlagPoke). Пачка событий сливается в одну проверку через 30-80 мс. В простое процессор не тратится.
 //
 // Где каретка, узнаём по порядку:
-//   1. системная каретка (GetGUIThreadInfo) - почти все обычные программы, мгновенно;
+//   1. системная каретка (GetGUIThreadInfo) - почти все обычные программы и новый Блокнот, мгновенно; ниже 4 точек
+//      (Telegram) - не каретка;
 //   2. MSAA OBJID_CARET - Chrome, Electron;
-//   3. UI Automation, TextPattern2 / TextPattern - новый Блокнот, Word, WinUI.
+//   3. UI Automation, TextPattern2 / TextPattern - Word, WinUI, приложения Магазина (у них - сразу, UiaFirst:
+//      системная каретка там не на месте).
 // 2 и 3 ходят в чужую программу и могут ждать её ответа, поэтому - в своём потоке (CaretProbe) с таймаутами UIA.
 // Каретку не нашли - флажка нет.
 //
@@ -137,6 +139,7 @@ private:
 				}
 				PostMessage(st->notify, CaretFlagDetails::WM_ProbeDone, 0, 0);
 			}
+			s_focusCache = {};
 		}
 		CoUninitialize();
 	}
@@ -319,9 +322,18 @@ private:
 			SUCCEEDED(el->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&text))) && text ? 2 : 0;
 	}
 
+	// Найденный FocusInWindow элемент - только в потоке CaretProbe; отпускается до CoUninitialize (Run): после него
+	// Release мог бы пойти в уже выгруженную UI Automation.
+	struct FocusCache {
+		HWND root = nullptr;
+		CComPtr<IUIAutomationElement> el;
+		ULONGLONG missedAt = 0; // поиск ничего не нашёл (когда кончился): снова - не раньше чем через полсекунды
+	};
+	static inline thread_local FocusCache s_focusCache;
+
 	// Фокус по Windows - рамка, а не поле (focused: тип Pane, Win32, не в фокусе клавиатуры или без размеров): элемент с
 	// фокусом клавиатуры в дереве окна focus (поиск по всему дереву страницы - долгий: найденный помнится, пока у него
-	// фокус; не нашли - снова не раньше чем через полсекунды). Иначе - nullptr.
+	// фокус - ушёл с него, искать сразу; не нашли - снова не раньше чем через полсекунды). Иначе - nullptr.
 	static CComPtr<IUIAutomationElement> FocusInWindow(IUIAutomation* uia, HWND focus, IUIAutomationElement* focused) {
 		CONTROLTYPEID ct = 0;
 		CComBSTR fw;
@@ -335,18 +347,16 @@ private:
 		if (kb && box.right > box.left) return nullptr;
 		const HWND root = focus ? GetAncestor(focus, GA_ROOT) : nullptr;
 		if (!root) return nullptr;
-		static thread_local struct {
-			HWND root = nullptr;
-			CComPtr<IUIAutomationElement> el;
-			ULONGLONG searched = 0;
-		} cache;
+		auto& cache = s_focusCache;
 		if (cache.root == root && cache.el) {
 			BOOL still = FALSE;
 			if (SUCCEEDED(cache.el->get_CurrentHasKeyboardFocus(&still)) && still) return cache.el;
+			cache.el = nullptr; // фокус перешёл (поиск чатов - поле сообщения): искать сразу
+			cache.missedAt = 0;
 		}
-		const ULONGLONG now = GetTickCount64();
-		if (cache.root == root && now - cache.searched < 500) return nullptr;
-		cache = { root, nullptr, now };
+		if (cache.root == root && cache.missedAt && GetTickCount64() - cache.missedAt < 500) return nullptr;
+		cache.root = root;
+		cache.el = nullptr;
 		CComPtr<IUIAutomationElement> top;
 		CComPtr<IUIAutomationCondition> cond;
 		VARIANT yes;
@@ -355,9 +365,12 @@ private:
 		CComPtr<IUIAutomationElement> found;
 		if (FAILED(uia->ElementFromHandle(root, &top)) || !top ||
 			FAILED(uia->CreatePropertyCondition(UIA_HasKeyboardFocusPropertyId, yes, &cond)) || !cond ||
-			FAILED(top->FindFirst(TreeScope_Descendants, cond, &found)) || !found)
+			FAILED(top->FindFirst(TreeScope_Descendants, cond, &found)) || !found) {
+			cache.missedAt = GetTickCount64(); // после поиска: он сам бывает дольше полсекунды
 			return nullptr;
+		}
 		cache.el = found;
+		cache.missedAt = 0;
 		return found;
 	}
 
@@ -522,7 +535,9 @@ private:
 			line = std::lround(size.dblVal * dpiY / 72.0 * 1.3);
 		VariantClear(&size);
 		const LONG h = box.bottom - box.top;
-		if (h <= 2 * line) { // поле в одну строку (адрес и тема в eM Client): текст посередине
+		// Поле в одну строку (адрес и тема в eM Client): текст посередине. Многострочное - выше трёх строк (WeChat - около
+		// семи): однострочное с отступами (40 точек при 10,5 пт) бывает выше двух, и флаг лёг бы на текст.
+		if (h <= 3 * line) {
 			const LONG pad = std::max<LONG>(2, h / 6);
 			rc = { box.left + pad, box.top + pad, box.left + pad + 1, box.bottom - pad };
 		}
@@ -659,8 +674,6 @@ private:
 	std::string Where(HWND fg) {
 		wchar_t cls[96]{};
 		if (fg) GetClassNameW(fg, cls, (int)std::size(cls));
-		DWORD pid = 0;
-		if (fg) GetWindowThreadProcessId(fg, &pid);
 		const std::wstring name = fg == m_excludedFg ? m_excludedName : L"?";
 		return std::format(" in {} [{}]", StrUtils::Convert(name), StrUtils::Convert(std::wstring(cls)));
 	}

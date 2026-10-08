@@ -57,6 +57,16 @@ void TakeEngineLearned(Config& edit, const Config& saved)
             if (!known && std::find(out[key].begin(), out[key].end(), word) == out[key].end())
                 out[key].push_back(word);
         }
+        // And the words the engine took back since (the fix undone right after the third one, gui2 uncount): there when
+        // the window read the file, not on the disk any more - out of what it writes too.
+        if (b != before.end() && b->is_array())
+            for (const auto& word : *b)
+                if (std::find(d->begin(), d->end(), word) == d->end())
+                {
+                    auto& list = out[key];
+                    if (const auto it = std::find(list.begin(), list.end(), word); it != list.end())
+                        list.erase(it);
+                }
     }
     for (const char* key : { "autoswitch_undo", "autoswitch_fix", "two_caps_undo" })
     {
@@ -834,9 +844,10 @@ void SettingsFrame::BuildAutoSwitch()
     // Apps (the engine's Settings.h): autoswitch_off - everything but the automatic switch works there (08.10.2026);
     // autoswitch_console - console apps where it works (ConsolePrograms.h; in "Дополнительно" before 08.10.2026).
     WordList("autoswitch_off", WordKind::Programs, T("Без автопереключения в приложениях"),
-             T("Всё остальное там работает: исправление сочетанием, флаг у курсора, ДВе ЗАглавные"),
+             T("Всё остальное там работает: исправление сочетанием, флаг у курсора, ДВе ЗАглавные кириллицей"),
              T("Приложения, где автопереключение не нужно: редакторы кода, приложения с командами. Исправление "
-               "сочетанием и всё остальное там работает. Имя файла приложения (code.exe) или путь к нему"),
+               "сочетанием и флаг у курсора там работают; латинские имена (ILogger) и i там не исправляются. Имя файла "
+               "приложения (code.exe) или путь к нему"),
              T("Имя файла – как в Диспетчере задач на вкладке «Подробности». Путь – если нужно одно приложение из "
                "нескольких с тем же именем"));
     WordList("autoswitch_console", WordKind::Programs, T("Автопереключение в консоли"),
@@ -902,21 +913,8 @@ void SettingsFrame::BuildTyping()
 {
     Section(kIconTyping, T("Набор текста"));
 
-    // Saved as numbers (the engine's SeparateExtMode): Symbol 0, PossibleSymb_SeveralW 1, PossibleSymb_Always 2, Disabled 3.
-    static const int modes[] = { 0, 3, 1, 2 };
-    const wxArrayString names = { T("По пробелам и знакам препинания"), T("Только по пробелам"),
-                                  T("По пробелам, знакам и «возможным знакам» – при исправлении нескольких слов"),
-                                  T("По пробелам, знакам и «возможным знакам» – всегда") };
-    const int mode = m_edit.GetInt("separate_ext_mode", 0);
-    int selection = 0;
-    for (int i = 0; i < 4; i++)
-        if (modes[i] == mode)
-            selection = i;
-    Choice(T("Где кончается слово"),
-           T("Что исправлять как последнее слово. Знаки в конце слова исправляются вместе с ним: «cnjg?» – «стоп,». "
-             "«Возможный знак» – клавиша, которая в одной раскладке буква, а в другой знак, например б и ,"),
-           names, selection, [this](int i) { m_edit.SetInt("separate_ext_mode", modes[i]); }, true);
-
+    // "Где кончается слово" (separate_ext_mode) is not shown since 1.5.0-rc6 (Дмитрий 08.10.2026: nobody understands
+    // it, and the fixes at punctuation are made for the default): the file keeps its value, and the engine uses it.
     TextField* letters = nullptr;
     AddSettingsCard(m_page, m_column, T("Считать буквами"),
                     T("Эти знаки не разделяют слова: some_name, кто-то"), [&](wxWindow* card) {
@@ -928,7 +926,7 @@ void SettingsFrame::BuildTyping()
     };
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
-    CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, Enter или Tab"),
+    CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, знака препинания, Enter или Tab"),
                    "two_caps", false),
             T("PCs, IDs, GHz, МГц, МВт, eM, iPhone и слова из исключений не трогаются; английские из трёх букв – только "
               "частые слова: THe, WAs; в редакторах кода латинские имена (ILogger) тоже. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. "

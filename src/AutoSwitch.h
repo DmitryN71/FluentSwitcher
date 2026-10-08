@@ -119,19 +119,33 @@ inline bool IsVowel(wchar_t c) {
 	}
 }
 
-// Слово из списка со знаками по краям ("C#", "C++", ".NET") сравнивается целиком, со знаками: от "C#" без знаков
+// Знаки, с которых слово в тексте может начинаться (кавычка, скобка) и какими кончаться (знаки препинания, кавычка,
+// скобка).
+inline constexpr const wchar_t* kLeadSigns = L"'\"(«";
+inline constexpr const wchar_t* kTrailSigns = L".,;:!?'\")»";
+
+// Слово из списка со знаками по краям ("C#", ".NET", "Mr.") сравнивается целиком, со знаками: от "C#" без знаков
 // осталось бы "c", и под него попадал бы каждый предлог "с" (в "Переключать всегда" - переключался бы в "c").
+// ("C++" в набранном не встретится: "+" одинаков в раскладках и делит слова - AnalyzeTyped.)
 inline bool Signed(const std::wstring& entry) {
 	const Part p = Letters(entry);
 	return !p.core.empty() && (p.begin > 0 || p.end < entry.size());
 }
-// ... набранное - это слово (и знак препинания после него: "C#,").
+// ... набранное - это слово, в кавычках или скобках и со знаками препинания после него ("C#,", "\"C#\"", "Mr.,"):
+// знаки снаружи снимаются по одному, пока не совпадёт. Точка в конце записи не обязательна: "etc." - и для "etc".
 inline bool SameSigned(const std::wstring& entry, const std::wstring& word) {
 	const std::wstring el = Lower(entry);
-	std::wstring w = Lower(word);
-	if (w == el) return true;
-	while (!w.empty() && wcschr(L".,;:!?", w.back())) w.pop_back();
-	return w == el;
+	const std::wstring bare = el.size() > 1 && el.back() == L'.' ? el.substr(0, el.size() - 1) : std::wstring();
+	const std::wstring w = Lower(word);
+	for (size_t b = 0;; b++) {
+		std::wstring rest = w.substr(b);
+		while (true) {
+			if (rest == el || (!bare.empty() && rest == bare)) return true;
+			if (rest.empty() || !wcschr(kTrailSigns, rest.back())) break;
+			rest.pop_back();
+		}
+		if (b >= w.size() || !wcschr(kLeadSigns, w[b])) return false;
+	}
 }
 
 // Слово из исключений - в любой из двух форм (cv или см).
@@ -190,8 +204,8 @@ inline const char* Skip(const std::wstring& typed, const std::wstring& there, si
 	// это не слово другой раскладки. В начале можно кавычку и скобку, в конце - знаки после слова ("Руддщю" - "Hello.").
 	for (size_t i = 0; i < there.size() && i < typed.size(); i++) {
 		if (!TwoCaps::IsLetter(typed[i]) || TwoCaps::IsLetter(there[i])) continue;
-		if (i < a.begin && !wcschr(L"'\"(", there[i])) return "a letter turns into a sign at the start";
-		if (i >= a.end && !wcschr(L".,;:!?'\")", there[i])) return "a letter turns into a sign at the end";
+		if (i < a.begin && !wcschr(kLeadSigns, there[i])) return "a letter turns into a sign at the start";
+		if (i >= a.end && !wcschr(kTrailSigns, there[i])) return "a letter turns into a sign at the end";
 	}
 	// Буквы там добавились только из знаков на конце набранного: это точка или запятая после слова, а не буква.
 	if (!t.inner && !t.core.empty() && a.begin >= t.begin && a.end > t.end && t.core.size() < 3)

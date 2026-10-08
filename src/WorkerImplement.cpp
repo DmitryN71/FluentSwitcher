@@ -10,7 +10,8 @@
 #include <fstream>
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
-    m_keyAt = GetTickCount64();
+    // Придержанный Enter / Tab ещё не дошёл до программы - ждать после него нечего (SettleBeforeErase).
+    if (!keyData.held_end) m_keyAt = GetTickCount64();
     m_holdId = keyData.hold || keyData.held_end ? keyData.holdId : 0;
     m_caretBase = KeyHold::caretMoves;
     struct Release {
@@ -102,6 +103,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
             break;
         }
     }
+    if (key.type == KEYTYPE_SPACE && vkCode == VK_SPACE) KeepUndoOverSpace();
 
     if (keyData.hold) {
         // Хук придерживает нажатия после этого пробела (или буквы посреди слова): решить и отпустить, что бы ни случилось.
@@ -238,7 +240,7 @@ bool ConsoleBlocked() {
 // имена (ДВе ЗАглавные). И программа из "Без автопереключения" (autoswitch_off): туда кладут редакторы, которых нет в
 // этом списке (kate, gvim, geany).
 bool IsCodeEditor() {
-    if (conf_get_unsafe()->IsAutoSwitchOffTop()) return true;
+    if (conf_get_unsafe()->IsAutoSwitchOffTop(false)) return true;
     static const wchar_t* const editors[] = {
         L"code.exe", L"code - insiders.exe", L"cursor.exe", L"windsurf.exe", L"devenv.exe", L"idea64.exe",
         L"pycharm64.exe", L"clion64.exe", L"rider64.exe", L"webstorm64.exe", L"goland64.exe", L"phpstorm64.exe",
@@ -306,6 +308,7 @@ void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL res
     for (size_t i = middle; i < m_cycleList.Size(); i++) b.push_back(m_cycleList.KeyAt(i));
     if (a.empty() && b.empty()) return;
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+    m_twoCaps = {}; // слово перепечатано заново - отменять прежнее исправление уже нечего
     TextFixed();
     LiftHeldMods();
     const auto stop = CaretStop();
@@ -341,6 +344,7 @@ void WorkerImplement::TwoCapsInKeys(TKeyRevert& keys, HKL to) {
     if (!conf_get_unsafe()->two_caps) return;
     const auto exceptions = TwoCapsExceptions();
     const std::wstring lang = Utils::GetNameForHKL_simple(to);
+    std::optional<bool> codeEditor; // латинские имена там не трогаем (как в FixTwoCaps)
     for (size_t i = 0; i < keys.size();) {
         const size_t b = i;
         std::wstring w;
@@ -352,6 +356,10 @@ void WorkerImplement::TwoCapsInKeys(TKeyRevert& keys, HKL to) {
         if (i == b) {
             i++;
             continue;
+        }
+        if (TwoCaps::ScriptOf(w[0]) == TwoCaps::Script::Latin) {
+            if (!codeEditor) codeEditor = IsCodeEditor();
+            if (*codeEditor) continue;
         }
         bool fix = TwoCaps::Matches(w, exceptions);
         if (!fix && w.size() == 3 && TwoCaps::IsUpper(w[0]) && TwoCaps::IsUpper(w[1]) && TwoCaps::IsLower(w[2]) &&
@@ -372,6 +380,7 @@ bool WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     TKeyRevert list = m_cycleList.KeysFrom(begin);
     if (list.empty()) return false;
     TwoCapsInKeys(list, to);
+    m_twoCaps = {}; // слово перепечатано заново - отменять прежнее исправление уже нечего
     TextFixed();
     LiftHeldMods();
     IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = to,
@@ -868,7 +877,7 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
 
 void WorkerImplement::AutoWordEnd() {
     m_wordEnds++;
-    m_autoWord.backspace = m_autoWord.moved = m_autoWord.undone = false;
+    m_autoWord.backspace = m_autoWord.moved = m_autoWord.undone = m_autoWord.twoCapsUndone = false;
     m_autoWord.boundary = -1;
     if (!conf_get_unsafe()->autoswitch) return;
     CheckCurLay();
@@ -879,9 +888,21 @@ void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
     GETCONF;
     if ((!cfg->two_caps && !cfg->fix_lone_i) || !KeyHold::Allowed(m_holdId) || cfg->IsSkipProgramTop() || IsPasswordFocus())
         return;
+    // Это слово исправили на знаке после него, и исправление отменили: так и оставить - иначе пробел или Enter исправили
+    // бы его снова.
+    if (m_autoWord.twoCapsUndone) return;
+    std::wstring space = afterSpace ? L" " : L"";
     auto keys = afterSpace ? m_cycleList.LastWordKeys() : m_cycleList.TrailingWordKeys();
+    // Знак, одинаковый во всех раскладках ("!", ")"), - граница слова (AnalyzeTyped): слово - перед ним, а знак стереть и
+    // напечатать вместе с ним, как пробел ("НЕт!" - "Нет!").
+    const bool boundary = atSign && keys.empty() && m_cycleList.EndsWithBoundary();
+    if (boundary) keys = m_cycleList.LastWordKeys();
     if (keys.empty()) return;
     const HKL lay = CurLay();
+    if (boundary) {
+        space = InputSender::KeyText(m_cycleList.KeyAt(m_cycleList.Size() - 1), lay, false);
+        if (space.size() != 1) return;
+    }
     std::wstring text;
     for (auto* key : keys) {
         if (key->is_caps) return; // с CapsLock регистр значит другое
@@ -890,18 +911,34 @@ void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
         text += c;
     }
     // На знаке: эта клавиша в этой раскладке - знак, а не буква (в русской на месте ". , ; '" - ю б ж э): слово ещё пишется.
-    if (atSign && (TwoCaps::IsLetter(text.back()) || iswdigit(text.back()))) return;
+    if (atSign && !boundary && (TwoCaps::IsLetter(text.back()) || iswdigit(text.back()))) return;
+    std::optional<bool> codeEditor;
+    auto inCodeEditor = [&] {
+        if (!codeEditor) codeEditor = IsCodeEditor();
+        return *codeEditor;
+    };
     auto fix = cfg->two_caps ? TwoCaps::Analyze(text, TwoCapsExceptions()) : TwoCaps::Fix{};
     // В редакторе кода латинское слово с двумя заглавными - имя (ILogger, IEnumerable, QString, TForm): не трогаем.
     // Русское (комментарий) - исправляем.
-    if (!fix.tail.empty() && TwoCaps::ScriptOf(fix.word[0]) == TwoCaps::Script::Latin && IsCodeEditor()) {
+    if (!fix.tail.empty() && TwoCaps::ScriptOf(fix.word[0]) == TwoCaps::Script::Latin && inCodeEditor()) {
         LOG_ANY("two caps: a Latin word in a code editor, left as typed");
         fix = {};
     }
+    // На знаке, который бывает и внутри слова ("IList.Count", "NUnit.Framework", "VKontakte.ru"): исправляем, только
+    // если исправленное знает словарь ("OLd." - "Old.", "ЧТо," - "Что,"); нет - на пробеле, когда видно всё слово.
+    if (!fix.tail.empty() && atSign && !boundary && !fix.upper) {
+        std::wstring fixedWord = fix.word;
+        fixedWord[1] = TwoCaps::ToLower(fixedWord[1]);
+        if (SpellCheck::Check(fixedWord, Utils::GetNameForHKL_simple(lay)) != SpellCheck::Result::Word) {
+            LOG_ANY(L"two caps: {} at a sign is not a known word, left for the word end", fixedWord);
+            fix = {};
+        }
+    }
     // Английское i отдельным словом - I; только в английской раскладке и не в консоли или редакторе кода (там i -
-    // переменная: for i in, int i = 0).
-    if (fix.tail.empty() && cfg->fix_lone_i && Utils::GetNameForHKL_simple(lay).starts_with(L"en") && !IsConsole() &&
-        !IsCodeEditor())
+    // переменная: for i in, int i = 0). Не на знаке: "i." может быть началом "i.e.", "i.txt" - решит пробел ("!" и ")" -
+    // граница, слово кончилось).
+    if (fix.tail.empty() && (!atSign || boundary) && cfg->fix_lone_i && Utils::GetNameForHKL_simple(lay).starts_with(L"en") &&
+        !IsConsole() && !inCodeEditor())
         fix = TwoCaps::LoneI(text, TwoCapsExceptions());
     if (fix.tail.empty()) return;
     // Поле пароля в браузере, программе на Electron, WinUI - не окно Edit, IsPasswordFocus его не видит: "PAssword" ушёл
@@ -935,7 +972,6 @@ void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
     TextFixed();
     LiftHeldMods();
     const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
-    const std::wstring space = afterSpace ? L" " : L"";
     const auto stop = CaretStop();
     SettleBeforeErase();
     InputSender::SendVkKeyPaced(VK_BACK, (int)(typed.size() + space.size()), delay, stop); // со второй буквы (и пробел)
@@ -947,7 +983,8 @@ void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
         return;
     }
     keys[fix.from]->is_shift = fix.upper; // и в буфере слов: вторая буква теперь строчная (i - заглавная)
-    // Отмена - после пробела и знака: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
+    // Отмена - после пробела и знака (и пробела после него: KeepUndoOverSpace): после Enter сообщение уже ушло, после Tab
+    // курсор может быть в другом поле.
     if (afterSpace || atSign)
         m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from], m_cycleList.Changes(),
                       fix.upper, space };
@@ -974,10 +1011,19 @@ void WorkerImplement::FixTwoCapsInKeys(TKeyRevert& keys, HKL lay) {
         text += c;
     }
     const std::wstring fixed = TwoCaps::FixText(text, TwoCapsExceptions());
+    if (fixed == text) return;
+    // В редакторе кода латинские слова с двумя заглавными - имена (ILogger, QString): как в FixTwoCaps, не трогаем.
+    const bool codeEditor = IsCodeEditor();
+    std::wstring result = text;
     for (size_t i = 0; i < text.size(); i++) {
-        if (fixed[i] != text[i]) keys[i].is_shift = false;
+        if (fixed[i] == text[i]) continue;
+        size_t b = i;
+        while (b > 0 && TwoCaps::IsLetter(text[b - 1])) b--;
+        if (codeEditor && TwoCaps::ScriptOf(text[b]) == TwoCaps::Script::Latin) continue;
+        keys[i].is_shift = false;
+        result[i] = fixed[i];
     }
-    if (fixed != text) LOG_ANY(L"two caps in the layout fix: {} -> {}", text, fixed);
+    if (result != text) LOG_ANY(L"two caps in the layout fix: {} -> {}", text, result);
 }
 
 bool WorkerImplement::TwoCapsUndoReady() const {
@@ -985,11 +1031,31 @@ bool WorkerImplement::TwoCapsUndoReady() const {
         m_cycleList.Changes() == m_twoCaps.changes;
 }
 
+void WorkerImplement::KeepUndoOverSpace() {
+    const size_t size = m_cycleList.Size(), changes = m_cycleList.Changes();
+    // Этот пробел - единственное, что набрали после исправления (Size() после 90 клавиш не растёт - Changes() растёт).
+    auto onlySpace = [&](size_t was, size_t wasChanges) { return changes == wasChanges + 1 && (size == was + 1 || size == was); };
+    if (!m_twoCaps.word.empty() && m_twoCaps.space.find(L' ') == std::wstring::npos &&
+        onlySpace(m_twoCaps.size, m_twoCaps.changes)) {
+        m_twoCaps.size = size;
+        m_twoCaps.changes = changes;
+        m_twoCaps.space += L" ";
+    }
+    // То же - переключению на знаке после слова (AutoSwitchAtSign): перед пробелом - не пробел (переключено не на пробеле).
+    if (!m_autoSwitched.word.empty() && !m_autoSwitched.early && size >= 2 &&
+        m_cycleList.KeyAt(size - 2).type != KEYTYPE_SPACE && onlySpace(m_autoSwitched.size, m_autoSwitched.changes)) {
+        m_autoSwitched.size = size;
+        m_autoSwitched.changes = changes;
+    }
+}
+
 bool WorkerImplement::UndoTwoCaps() {
-    auto last = std::exchange(m_twoCaps, {});
-    if (last.word.empty() || GetTickCount64() - last.at > 10000 || m_cycleList.Size() != last.size ||
-        m_cycleList.Changes() != last.changes) // и указатель на клавишу (key) годен, только если буфер тот же
+    // И указатель на клавишу (key) годен, только если буфер тот же (TwoCapsUndoReady).
+    if (!TwoCapsUndoReady()) {
+        m_twoCaps = {};
         return false;
+    }
+    auto last = std::exchange(m_twoCaps, {});
     LOG_ANY(L"two caps: {} back, it is an exception now", last.word);
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
     const auto stop = CaretStop();
@@ -998,6 +1064,8 @@ bool WorkerImplement::UndoTwoCaps() {
     InputSender::SendTextPaced(last.typed + last.space, delay, stop);
     if (stop()) return true; // курсор переехал: бросили, не в счёт
     last.key->is_shift = !last.upper;
+    // Исправляли на знаке, слово ещё не кончилось: пробел или Enter после него не должны исправить его снова.
+    if (last.space.empty()) m_autoWord.twoCapsUndone = true;
     PostMessageW(g_guiHandle, WM_TwoCapsLearn, 0, (LPARAM)new std::wstring(last.word));
     return true;
 }
@@ -1241,8 +1309,11 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         // Остальные (раскладка, команды) - без придержки.
         LOG_ANY("hotkey hold {} already let go", keyData.holdId);
         m_holdId = 0;
-        if (IsNeedSavedWords(hk) || hk == hk_RevertSelelected) {
+        if (IsNeedSavedWords(hk) ||
+            Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine)) {
             LOG_ANY("skip hotkey {}: typed text went on meanwhile", key.ToString());
+            // Сочетание всё же было: одиночное нажатие, отложенное ради "дважды", не должно сработать вместо него.
+            m_lastHotKeyTime = GetTickCount64();
             return;
         }
     }
@@ -1438,8 +1509,14 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
             if (undo.tail && undo.from) {
                 // Вернуть ровно то, что переводили (а не "последнее слово" буфера - оно может делиться иначе).
                 const size_t begin = m_cycleList.Size() - undo.tail;
-                if (undo.all)
-                    SwitchTail(begin, undo.from, true);
+                if (undo.all) {
+                    if (!SwitchTail(begin, undo.from, true) && !m_lastUndo.word.empty()) {
+                        // Перепечатку бросили (щелчок, другое окно): отмена не случилась - и не в счёт.
+                        LOG_ANY(L"autoswitch: switching {} back was stopped, not counted", m_lastUndo.word);
+                        PostMessageW(g_guiHandle, WM_AutoSwitchUnlearn, 0, (LPARAM)new std::wstring(m_lastUndo.word));
+                        m_lastUndo = {};
+                    }
+                }
                 else {
                     // "а можно" - "f можно": короткие слова - назад, слово остаётся. Раскладка - та, в которую
                     // переключили: одиночный Shift из "Shift дважды" мог её уже сменить.

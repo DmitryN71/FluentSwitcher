@@ -10,6 +10,7 @@
 #include <fstream>
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
+    m_keyAt = GetTickCount64();
     m_holdId = keyData.hold || keyData.held_end ? keyData.holdId : 0;
     m_caretBase = KeyHold::caretMoves;
     struct Release {
@@ -335,7 +336,7 @@ bool WorkerImplement::ByHandAfterOurs(const std::wstring& typed, bool partial) c
 // автопереключение переводит слово раньше, чем его увидело бы правило). Латинское слово из трёх букв, которого нет в
 // частых (TwoCaps::Matches), - ещё и по словарю: исправляем, если словарь знает его так ("Oxo"), а с двумя заглавными
 // нет (PCs, IDs, IPs словарь знает так и есть). Встроенные исключения - и здесь.
-// Меняется только перепечатываемое: в буфере слово как набрано, и отмена вернёт его как было.
+// Буфер слов потом - как на экране (ProcessRevert, bufferBegin): иначе правило на конце слова исправило бы его ещё раз.
 void WorkerImplement::TwoCapsInKeys(TKeyRevert& keys, HKL to) {
     if (!conf_get_unsafe()->two_caps) return;
     const auto exceptions = TwoCapsExceptions();
@@ -374,7 +375,7 @@ bool WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     TextFixed();
     LiftHeldMods();
     IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = to,
-                            .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE }));
+                            .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE, .bufferBegin = begin }));
     // Щелчок или другое окно посреди перепечатки: её бросили (ProcessRevert) - не записывать как переключение.
     if (CaretStop()()) {
         LOG_ANY("autoswitch: the retyping was stopped, not counted");
@@ -936,6 +937,7 @@ void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
     const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
     const std::wstring space = afterSpace ? L" " : L"";
     const auto stop = CaretStop();
+    SettleBeforeErase();
     InputSender::SendVkKeyPaced(VK_BACK, (int)(typed.size() + space.size()), delay, stop); // со второй буквы (и пробел)
     Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
     InputSender::SendTextPaced(fix.tail + space, delay, stop);
@@ -1486,6 +1488,7 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     // Щелчок или другое окно, пока печатаем: бросить - остальное ушло бы в другое место.
     const auto stop = CaretStop();
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE)) {
+        SettleBeforeErase();
         InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size(), delay, stop);
         Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
     }
@@ -1497,6 +1500,11 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && target != 0 && conf_get_unsafe()->two_caps && !m_is_last_caps) {
         FixTwoCapsInKeys(ctxRevert.keylist, target);
     }
+    // Буфер слов - как будет на экране: заглавные, исправленные при переводе (здесь и TwoCapsInKeys), - и в нём. Иначе ДВе
+    // ЗАглавные в конце слова исправляли то же слово ещё раз: "ЕРщыую" - "Those." на "ю", и на Enter - перепечатано
+    // снова (Дмитрий 08.10.2026).
+    if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && ctxRevert.bufferBegin != SIZE_MAX)
+        m_cycleList.SetShiftFrom(ctxRevert.bufferBegin, ctxRevert.keylist);
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT)) {
         if (conf_get_unsafe()->retype_keys || target == 0) {

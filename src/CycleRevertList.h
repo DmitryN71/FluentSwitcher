@@ -332,6 +332,11 @@ public: std::vector<TailWord> TailWords(bool afterSpace, size_t max, bool* fixed
 	return words;
 }
 public: const TKeyBaseInfo& KeyAt(size_t i) const { return m_symbolList[i].key; }
+// Shift клавиш с begin - как у перепечатанных keys (ДВе ЗАглавные исправлены при переводе раскладки): буфер - как на
+// экране.
+public: void SetShiftFrom(size_t begin, const TKeyRevert& keys) {
+	for (size_t i = 0; i < keys.size() && begin + i < m_symbolList.size(); i++) m_symbolList[begin + i].key.is_shift = keys[i].is_shift;
+}
 // Клавиши с begin до конца набранного.
 public: TKeyRevert KeysFrom(size_t begin) const {
 	TKeyRevert keys;

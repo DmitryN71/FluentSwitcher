@@ -14,6 +14,7 @@ class WorkerImplement {
         TKeyRevert keylist;
         HKL lay = 0;
         uint32_t flags = 0;
+        size_t bufferBegin = SIZE_MAX; // keylist - клавиши буфера слов с этой: исправленные заглавные - и в нём
     };
 
     typedef std::vector<CHotKey> TKeyToRevert;
@@ -113,6 +114,7 @@ class WorkerImplement {
         data.keylist = std::move(to_revert.keys);
         data.flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | (no_backs ? 0 : SW_CLIENT_BACKSPACE);
         data.lay = isNeedLangChange ? nextLng : 0;
+        data.bufferBegin = m_cycleList.Size() - data.keylist.size();
         IFS_LOG(ProcessRevert(std::move(data)));
         AutoLayoutIsOurs();
     }
@@ -252,6 +254,13 @@ class WorkerImplement {
         return [id = m_holdId, base = m_caretBase] { return id ? !KeyHold::Allowed(id) : KeyHold::caretMoves != base; };
     }
     unsigned m_caretBase = 0; // KeyHold::caretMoves в начале сообщения
+    ULONGLONG m_keyAt = 0;    // когда пришло сообщение о последней нажатой клавише (SettleBeforeErase)
+    // Перед стиранием: клавиша, набранная только что (знак после слова), - ещё в пути к программе. Новый Блокнот, получив
+    // Backspace через 6 мс после запятой, иногда его терял: "ЧТо," - "ЧТто," (Дмитрий 08.10.2026). Не раньше 40 мс после неё.
+    void SettleBeforeErase() const {
+        const ULONGLONG since = GetTickCount64() - m_keyAt;
+        if (since < 40) Sleep((DWORD)(40 - since));
+    }
     // Курсор переехал в том же окне (щелчок, стрелки): первое слово дальше может быть дописанной серединой.
     void CaretMoved() {
         m_autoWord.moved = true;

@@ -448,6 +448,12 @@ inline bool EarlyPoint() {
 	return !broken && !earlyDone && word.size() >= 4 && word.size() <= 8;
 }
 
+// Первые n клавиш слова могут быть ДВумя ЗАглавными: две заглавные, потом строчная (от трёх; дальше не смотрим: знак с
+// Shift после слова - "ЧТо," в русской раскладке - хук видит как заглавную, и "ЧТо," не проверялось вовсе).
+inline bool TwoCapsShape(size_t n) {
+	return !broken && n >= 3 && n <= word.size() && word[0] && word[1] && !word[2];
+}
+
 // Конец слова (пробел, Enter, Tab): каким оно было. Слово на этом кончается.
 struct WordEnd {
 	bool twoCaps = false; // могло подойти под ДВе ЗАглавные (две заглавные, потом строчные)
@@ -459,7 +465,7 @@ struct WordEnd {
 inline WordEnd EndWord() {
 	WordEnd end;
 	// От трёх букв ("ЧТо", "THe"; какие из них исправлять - решает движок: TwoCaps::Matches).
-	end.twoCaps = !broken && word.size() >= 3 && word[0] && word[1] && !word[2] && (word.size() < 4 || !word[3]);
+	end.twoCaps = TwoCapsShape(word.size());
 	end.letters = !broken && !word.empty();
 	end.loneI = end.letters && word.size() <= 4 && (firstKeys[0] == 'I' || (firstKeys[0] == VK_OEM_7 && firstKeys[1] == 'I'));
 	end.size = word.size();

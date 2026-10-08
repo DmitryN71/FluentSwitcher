@@ -162,7 +162,8 @@ class WorkerImplement {
 
     // ДВе ЗАглавные (TwoCaps.h): слово перед только что набранным пробелом; хук держит нажатия, пока решаем.
     // afterSpace: слово кончилось набранным пробелом (его тоже стереть и напечатать); иначе - придержанным Enter / Tab.
-    void FixTwoCaps(bool afterSpace = true);
+    // atSign - на знаке после слова ("OLd." - "Old."): последняя клавиша - знак в этой раскладке.
+    void FixTwoCaps(bool afterSpace = true, bool atSign = false);
     // Исключения из настроек - для TwoCaps.h.
     static std::vector<std::wstring> TwoCapsExceptions();
     // ДВе ЗАглавные и при переводе раскладки: "LDe[" -> "ДВух" -> "Двух" - вторые буквы без Shift.
@@ -180,6 +181,7 @@ class WorkerImplement {
         TKeyBaseInfo* key = nullptr; // клавиша второй буквы в буфере слов
         size_t changes = 0;      // CycleRevertList::Changes() после исправления (Size() после 90 клавиш не растёт)
         bool upper = false;      // исправление сделало букву заглавной (i - I): отмена - строчной
+        std::wstring space;      // пробел после слова (" "), на знаке - ничего: отмена стирает и печатает и его
     } m_twoCaps;
 
     // Автопереключение (AutoSwitch.h): слово перед только что набранным пробелом (afterSpace) или придержанным

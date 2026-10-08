@@ -102,8 +102,10 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 			}
 			if (it.type == KEYTYPE_LETTER_OR_SPACE) {
 				it.digits = !it.p->key.space_on_extended;
-				// не разделяем слово без надобности.
-				it.type = (i > 0 && i < std::ssize(zipped) - 1 && Utils::is_all(KEYTYPE_LETTER, zipped[i - 1].type, zipped[i + 1].type))
+				// не разделяем слово без надобности. Буква и с той стороны - и клавиша, что буква в одной раскладке и знак в
+				// другой (ю - точка): "КС1ю" исправлялось в "КС1." - цифра делила слово, и "ю" была словом одна (Дмитрий 08.10).
+				auto letterish = [](TKeyType t) { return Utils::is_in(t, KEYTYPE_LETTER, KEYTYPE_LETTER_OR_CUSTOM); };
+				it.type = (i > 0 && i < std::ssize(zipped) - 1 && letterish(zipped[i - 1].type) && letterish(zipped[i + 1].type))
 					? KEYTYPE_LETTER
 					: KEYTYPE_SPACE;
 			}

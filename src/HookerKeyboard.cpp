@@ -378,8 +378,13 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				// Клавиша, которая в другой раскладке бывает знаком после слова (б ю ж э - , . ; ', "/ ?" - . ,, Shift с
 				// цифрой - ? : ; "): слово проверяется сразу, как в конце, без пробела ("ПшеРгию" - "GitHub.", "b xnj&" -
 				// "и что?"; Дмитрий 06.10). Решает движок (AutoSwitchAtSign): знак ли это там и не начало ли слова здесь.
-				sign = !command && cfg->autoswitch && g_enabled.IsEnabled() && KeyHold::SignKey(vkCode, curk.HasMod(VK_SHIFT)) &&
-					!KeyHold::broken && KeyHold::word.size() >= 2 && KeyHold::CanStart() && canHold() && autoswitchHere();
+				// И ДВе ЗАглавные: слово до этой клавиши (она могла добавиться буквой) - две заглавные, потом строчная: "OLd." -
+				// "Old.", не дожидаясь пробела (Дмитрий 08.10). Буква ли это в этой раскладке (ю, б) - решает движок.
+				const bool signKey = !command && g_enabled.IsEnabled() && KeyHold::SignKey(vkCode, curk.HasMod(VK_SHIFT)) &&
+					!KeyHold::broken && KeyHold::CanStart();
+				const bool signCaps = signKey && cfg->two_caps && KeyHold::TwoCapsShape(KeyHold::word.size() - (letter ? 1 : 0));
+				const bool signAuto = signKey && cfg->autoswitch && KeyHold::word.size() >= 2;
+				sign = (signCaps || signAuto) && canHold() && (signCaps || autoswitchHere());
 				hold = early || sign;
 				if (hold) {
 					if (sign) {

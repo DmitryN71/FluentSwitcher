@@ -107,7 +107,10 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         Release release{ keyData.holdId };
         if (keyData.sign || keyData.early) {
             // Знак после слова в другой раскладке - слово целиком; не он - посреди слова, если это буква там.
-            if (!(keyData.sign && AutoSwitchAtSign()) && keyData.early) AutoSwitchEarly();
+            const bool switched = keyData.sign && AutoSwitchAtSign();
+            // ДВе ЗАглавные - и на знаке после слова, не дожидаясь пробела: "OLd." - "Old." (Дмитрий 08.10.2026).
+            if (!switched && keyData.sign) FixTwoCaps(false, true);
+            if (!switched && keyData.early) AutoSwitchEarly();
         }
         else if (!AutoSwitchLastWord())
             FixTwoCaps();
@@ -871,7 +874,7 @@ void WorkerImplement::AutoWordEnd() {
     m_autoWord.lay = CurLay();
 }
 
-void WorkerImplement::FixTwoCaps(bool afterSpace) {
+void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
     GETCONF;
     if ((!cfg->two_caps && !cfg->fix_lone_i) || !KeyHold::Allowed(m_holdId) || cfg->IsSkipProgramTop() || IsPasswordFocus())
         return;
@@ -885,6 +888,8 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
         if (c.size() != 1) return; // клавиша = один символ, иначе не сосчитать, что стирать
         text += c;
     }
+    // На знаке: эта клавиша в этой раскладке - знак, а не буква (в русской на месте ". , ; '" - ю б ж э): слово ещё пишется.
+    if (atSign && (TwoCaps::IsLetter(text.back()) || iswdigit(text.back()))) return;
     auto fix = cfg->two_caps ? TwoCaps::Analyze(text, TwoCapsExceptions()) : TwoCaps::Fix{};
     // В редакторе кода латинское слово с двумя заглавными - имя (ILogger, IEnumerable, QString, TForm): не трогаем.
     // Русское (комментарий) - исправляем.
@@ -940,10 +945,10 @@ void WorkerImplement::FixTwoCaps(bool afterSpace) {
         return;
     }
     keys[fix.from]->is_shift = fix.upper; // и в буфере слов: вторая буква теперь строчная (i - заглавная)
-    // Отмена - только после пробела: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
-    if (afterSpace)
+    // Отмена - после пробела и знака: после Enter сообщение уже ушло, после Tab курсор может быть в другом поле.
+    if (afterSpace || atSign)
         m_twoCaps = { fix.word, typed, fix.tail, GetTickCount64(), m_cycleList.Size(), keys[fix.from], m_cycleList.Changes(),
-                      fix.upper };
+                      fix.upper, space };
     else
         m_twoCaps = {};
 }
@@ -986,9 +991,9 @@ bool WorkerImplement::UndoTwoCaps() {
     LOG_ANY(L"two caps: {} back, it is an exception now", last.word);
     const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
     const auto stop = CaretStop();
-    InputSender::SendVkKeyPaced(VK_BACK, (int)last.fixed.size() + 1, delay, stop);
+    InputSender::SendVkKeyPaced(VK_BACK, (int)(last.fixed.size() + last.space.size()), delay, stop);
     Sleep(c_afterErase);
-    InputSender::SendTextPaced(last.typed + L" ", delay, stop);
+    InputSender::SendTextPaced(last.typed + last.space, delay, stop);
     if (stop()) return true; // курсор переехал: бросили, не в счёт
     last.key->is_shift = !last.upper;
     PostMessageW(g_guiHandle, WM_TwoCapsLearn, 0, (LPARAM)new std::wstring(last.word));

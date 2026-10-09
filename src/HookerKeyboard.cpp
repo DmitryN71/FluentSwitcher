@@ -239,6 +239,20 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				}
 			}
 
+			// Alt или Win одни - наше сочетание (раскладки на левый и правый Alt): по их отпусканию Windows открыла бы меню
+			// программы (первый набранный потом знак пропадал, со звуком) или «Пуск». Как в AutoHotkey: сразу после нажатия -
+			// «пустая» клавиша vkE8 (ничему не назначена), и отпускание уже не одинокое (форум, 09.10.2026). Отправляет
+			// рабочий поток - после того, как само нажатие ушло в программу.
+			if (found_hk && curk.Size() == 1 && Utils::is_in(vkCode, VK_LMENU, VK_RMENU, VK_LWIN, VK_RWIN) && !curKeys.IsHold()) {
+				LOG_ANY("mask the lone {} with vkE8", CHotKey::ToString(vkCode));
+				Worker()->PostMsg([](auto) {
+					InputSender sender;
+					sender.Add(0xE8, KEY_STATE_DOWN);
+					sender.Add(0xE8, KEY_STATE_UP);
+					sender.Send();
+				});
+			}
+
 			if (msg_hotkey.IsEmpty()) {
 
 				// ctrl + alt

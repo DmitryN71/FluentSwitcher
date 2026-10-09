@@ -103,7 +103,10 @@ public:
 			return;
 		}
 		m_last = lay;
-		if (otherWindow || GetTickCount64() - m_fixAt < 1500) return;
+		if (otherWindow || GetTickCount64() - m_fixAt < 1500) {
+			LOG_ANY("sound: no switch sound - {}", otherWindow ? "another window" : "the fix has its own");
+			return;
+		}
 		const int volume = conf_get_unsafe()->sound_switch;
 		if (volume <= 0) return;
 		const std::wstring name = Lower(Utils::GetNameForHKL_simple(lay)); // "ru-ru"

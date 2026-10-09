@@ -141,14 +141,19 @@ class WorkerImplement {
         } else {
             if (old_lay != topWndInfo2.lay) {
                 // Окно - то, где раскладка менялась в прошлый раз, а не при прошлом опросе: щелчок по флагу на миг
-                // делает активной панель задач, а переключение всё равно в том же окне.
-                const bool otherWindow = m_layWindow && topWndInfo2.hwnd_top != m_layWindow;
-                m_layWindow = topWndInfo2.hwnd_top;
+                // делает активной панель задач, а переключение всё равно в том же окне. Окно целиком (GA_ROOT), а не
+                // элемент с фокусом: Alt в новых приложениях Windows (Блокнот) переносит фокус внутри окна - и смена
+                // раскладки сочетанием на Alt считалась переходом в другое окно, без звука (Дмитрий 09.10.2026).
+                // Переключили мы сами (SetNewLay, последняя секунда) - это переключение в любом окне.
+                const HWND root = topWndInfo2.hwnd_top ? GetAncestor(topWndInfo2.hwnd_top, GA_ROOT) : nullptr;
+                const bool otherWindow = m_layWindow && root != m_layWindow && GetTickCount64() - m_ourSwitchAt > 1000;
+                m_layWindow = root;
                 new_layout_request(topWndInfo2.lay, otherWindow);
             }
         }
     }
-    HWND m_layWindow = nullptr; // окно впереди при последней смене раскладки
+    HWND m_layWindow = nullptr;   // окно впереди (целиком) при последней смене раскладки
+    ULONGLONG m_ourSwitchAt = 0;  // когда раскладку в последний раз переключили мы (SetNewLay)
 
     // Исправление текста начинается: звук исправления, а смена раскладки из-за него - без звука переключения.
     static void TextFixed() { PostMessage(g_guiHandle, WM_TextFixed, 0, 0); }
@@ -330,6 +335,7 @@ class WorkerImplement {
 
     void SetNewLay(HKL lay) {
         LOG_ANY(L"Try set {} lay", (void*)lay);
+        m_ourSwitchAt = GetTickCount64();
 
         if (conf_get_unsafe()->AlternativeLayoutChange) {
             SwitchLangByEmulate(lay);

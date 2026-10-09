@@ -119,6 +119,33 @@ inline HKL FocusLayout() {
 	return GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), nullptr));
 }
 inline size_t replaying = 0;    // столько отправленных заново ещё не прошло через хук
+// Нажатия других программ (AutoHotkey, Claude Enter Swap), отправленные заново, - с их собственной меткой (dwExtraInfo):
+// по ней программа узнаёт своё и не принимает его за нажатое человеком. С нашей меткой AutoHotkey принимал наш повтор
+// своего Enter за настоящий Enter, срабатывало его правило "Enter - Shift+Enter", и Ctrl+Enter в Claude отправлял
+// сообщение только с третьего раза (а Shift залипал; Дмитрий 09.10.2026). Свои повторы таких нажатий узнаём по порядку:
+// они возвращаются через хук в том же порядке, в каком ушли.
+inline std::deque<INPUT> foreignOut;
+// Отправленные заново больше не ждём (не вернулись, таймаут, перехват подключили заново).
+inline void ReplaysGone() {
+	replaying = 0;
+	foreignOut.clear();
+}
+// Нажатие от программы (LLKHF_INJECTED) - наш повтор её нажатия? Да - вычеркнуть его (и пропавшие перед ним: их съел
+// чужой перехват).
+inline bool ForeignReplay(const KBDLLHOOKSTRUCT& k) {
+	if (!(k.flags & LLKHF_INJECTED)) return false;
+	const bool up = k.flags & LLKHF_UP;
+	for (size_t i = 0; i < foreignOut.size(); i++) {
+		const KEYBDINPUT& o = foreignOut[i].ki;
+		const bool unicode = o.dwFlags & KEYEVENTF_UNICODE;
+		if (o.dwExtraInfo != k.dwExtraInfo || ((o.dwFlags & KEYEVENTF_KEYUP) != 0) != up) continue;
+		if (unicode ? (k.vkCode == VK_PACKET && k.scanCode == o.wScan) : k.vkCode == o.wVk) {
+			foreignOut.erase(foreignOut.begin(), foreignOut.begin() + i + 1);
+			return true;
+		}
+	}
+	return false;
+}
 inline bool batchEnded = false; // последнее отправленное прошло через хук: что дальше - AfterKey
 inline bool flushing = false;   // последняя отправка - всё сразу после неудачи (не в счёт удачи)
 inline bool sending = false;    // поток хука внутри SendInput (SendBatch): хук сейчас зовётся из него
@@ -219,7 +246,7 @@ inline void CheckTimeout() {
 	const ULONGLONG waited = now() - since;
 	if (replaying > 0 && !sending && waited > 1000) {
 		LOG_WARN("hold: {} sent keys did not come back in 1 s, not waiting for them", replaying);
-		replaying = 0;
+		ReplaysGone();
 		Fail();
 		if (!active && !held.empty()) Next();
 	}
@@ -242,7 +269,8 @@ inline void Hold(const KBDLLHOOKSTRUCT& k, bool first = false) {
 	in.ki.wVk = (WORD)k.vkCode;
 	in.ki.wScan = (WORD)k.scanCode;
 	in.ki.dwFlags = ((k.flags & LLKHF_UP) ? KEYEVENTF_KEYUP : 0) | ((k.flags & LLKHF_EXTENDED) ? KEYEVENTF_EXTENDEDKEY : 0);
-	in.ki.dwExtraInfo = c_Replayed;
+	// С клавиатуры - наша метка; от другой программы - её собственная (foreignOut).
+	in.ki.dwExtraInfo = (k.flags & LLKHF_INJECTED) ? k.dwExtraInfo : c_Replayed;
 	if (k.vkCode == VK_PACKET) { // знак Юникода от другой программы (KeePass, экранная клавиатура): он - в scanCode
 		in.ki.wVk = 0;
 		in.ki.dwFlags = (in.ki.dwFlags & KEYEVENTF_KEYUP) | KEYEVENTF_UNICODE;
@@ -304,6 +332,8 @@ inline void SendBatch(bool all = false) {
 	flushing = all;
 	Watch();
 	replaying += list.size(); // до отправки: они возвращаются через хук ещё внутри SendInput
+	for (const INPUT& in : list)
+		if (in.ki.dwExtraInfo != c_Replayed) foreignOut.push_back(in);
 	sending = true;
 	const UINT sent = sendInput((UINT)list.size(), list.data(), sizeof(INPUT));
 	const DWORD error = GetLastError();
@@ -318,7 +348,10 @@ inline void SendBatch(bool all = false) {
 		}
 		sendFailed = true;
 		// Уже названные по месту (и записанные в downAs) - как есть: второй раз их не переназывать.
-		for (size_t i = list.size(); i-- > sent;) held.push_front({ list[i], false });
+		for (size_t i = list.size(); i-- > sent;) {
+			held.push_front({ list[i], false });
+			if (list[i].ki.dwExtraInfo != c_Replayed && !foreignOut.empty()) foreignOut.pop_back(); // не ушло - не ждать
+		}
 		const size_t unsent = list.size() - sent;
 		replaying = replaying > unsent ? replaying - unsent : 0;
 	}
@@ -327,7 +360,7 @@ inline void SendBatch(bool all = false) {
 	// Хук отработал внутри SendInput (так в Windows), а вернулись не все: остальные съел чужой хук - не ждать их.
 	if (replaying > 0 && replaying < sent) {
 		LOG_WARN("hold: {} sent keys did not come back (another program's hook?), not waiting for them", replaying);
-		replaying = 0;
+		ReplaysGone();
 		if (!active && !held.empty()) Next();
 	}
 }
@@ -338,7 +371,7 @@ inline void OnRelease(unsigned id, bool timeout) {
 	current = 0;
 	active = false;
 	if (timeout) {
-		replaying = 0; // отправленные заново не вернулись - не ждать их
+		ReplaysGone(); // отправленные заново не вернулись - не ждать их
 		Fail();
 		SendBatch(true); // что-то не так - отдать клавиатуру сразу, без порций
 		return;

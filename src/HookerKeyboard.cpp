@@ -54,7 +54,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 		}
 
 		// "ДВе ЗАглавные": пока движок исправляет слово, нажатия придерживаются и уходят потом (KeyHold.h).
-		const bool replayed = k->dwExtraInfo == KeyHold::c_Replayed;
+		const bool replayed = k->dwExtraInfo == KeyHold::c_Replayed || KeyHold::ForeignReplay(*k);
 		if (replayed) {
 			KeyHold::OnReplayed();
 		}

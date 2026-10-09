@@ -234,7 +234,7 @@ public:
 			ClearAllKeys();
 			KeyHold::ResetWord();
 			if (KeyHold::replaying > 0) { // отправленное, пока перехвата не было, уже не вернётся - не ждать его
-				KeyHold::replaying = 0;
+				KeyHold::ReplaysGone();
 				if (!KeyHold::active && !KeyHold::held.empty()) KeyHold::Next();
 			}
 		}

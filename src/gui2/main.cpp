@@ -297,6 +297,21 @@ void StartGui() {
 				return 0;
 			}
 
+			if (msg == WM_ToggleAutoswitch) {
+				// Автопереключение вкл./выкл. (форум, 09.10.2026, AlexPORTrb): движку - сразу, в файл - только это поле (как
+				// выученные слова - saveMerged). Сочетанием (wParam) - уведомлением у значка, его не видно иначе; из меню у
+				// значка - галочка видна и так.
+				const bool on = !conf_gui()->autoswitch;
+				conf_gui()->autoswitch = on;
+				cfg_details::ApplyGuiConfig();
+				saveMerged([on](ProgramConfig& disk) { disk.autoswitch = on; }, true);
+				LOG_ANY("autoswitch: turned {} {}", on ? "on" : "off", wParam ? "with the hotkey" : "from the menu");
+				if (wParam)
+					trayIcon.Notify(L"FluentSwitcher", StrUtils::Convert(std::string(LOC(on ? "Auto switch is on" : "Auto switch is off"))),
+					                [] { show_main_wind(); });
+				return 0;
+			}
+
 			if (msg == WM_UpdateChecked) {
 				auto state = Update::Load(folder);
 				notifyUpdate(state, true);

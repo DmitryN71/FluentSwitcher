@@ -28,6 +28,8 @@ const std::vector<HotkeyAction>& HotkeyActions()
              "отпускании, а с буквой – нет") },
         { "hk_EmulateCapsLock", N_("Нажать CapsLock"), N_("Если CapsLock занят под сочетание, включить его можно так") },
         { "hk_ToggleEnabled", N_("Включить / выключить FluentSwitcher"), N_("Работает и когда приложение выключено") },
+        { "hk_ToggleAutoswitch", N_("Включить / выключить автопереключение"),
+          N_("Включено ли – видно в меню у значка у часов, там же его можно и переключить") },
         { "hk_ShowMainWindow", N_("Открыть настройки"), N_("Это окно") },
     };
     return actions;

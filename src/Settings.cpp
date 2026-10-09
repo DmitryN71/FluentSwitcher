@@ -140,6 +140,7 @@ namespace nlohmann {
 			treat_as_letters,
 			retype_keys,
 			work_in_remote,
+			settings_window,
 			retype_delay_ms,
 			caret_flag,
 			caret_flag_size,

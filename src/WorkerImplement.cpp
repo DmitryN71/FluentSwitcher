@@ -1374,6 +1374,11 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         return;
     }
 
+    if (hk == hk_ToggleAutoswitch) { // настройки и уведомление - на потоке окна движка (gui2/main.cpp)
+        PostMessage(g_guiHandle, WM_ToggleAutoswitch, 1, 0);
+        return;
+    }
+
     if (hk == hk_ShowMainWindow) {
         show_main_wind();
         return;

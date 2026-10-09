@@ -1,7 +1,7 @@
 #include <utility>
 #include <array>
 
-constexpr std::array<std::pair<const char*, const char*>, 104> _Localization_Russian = {{
+constexpr std::array<std::pair<const char*, const char*>, 108> _Localization_Russian = {{
     {"More info:", "Подробнее:"},
     {"❤ Support ❤", "❤ Поддержать ❤"},
     {"The program develops only thanks to your support! 🤝", "Приложение развивается только благодаря вашей поддержке! 🤝"},
@@ -105,5 +105,9 @@ constexpr std::array<std::pair<const char*, const char*>, 104> _Localization_Rus
     {"It is in \"Always switch\" of the layout auto switch: Settings, Auto switch", "Слово – в списке «Переключать всегда»: Настройки, Автопереключение"},
     {"switched", "само"},
     {"switched back", "вернули"},
-    {"by hand", "вручную"}
+    {"by hand", "вручную"},
+    {"Auto switch", "Автопереключение"},
+    {"Auto switch is on", "Автопереключение включено"},
+    {"Auto switch is off", "Автопереключение выключено"},
+    {"Enable/Disable auto switch", "Вкл./выкл. автопереключение"}
 }};

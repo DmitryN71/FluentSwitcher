@@ -16,6 +16,7 @@ enum HotKeyType : uint32_t {
 	hk_InsertWithoutFormat,
 	hk_Fix_RAlt,
 	hk_RevertLine, // текст от начала строки до курсора: Shift+Home, дальше как выделенный
+	hk_ToggleAutoswitch, // автопереключение вкл./выкл. (форум, 09.10.2026, AlexPORTrb); по умолчанию - без сочетания
 
 	hk_hotkeys_end,
 
@@ -107,6 +108,7 @@ inline const char* GetGuiTextForHk(HotKeyType hk) {
 	case hk_ShowRemainderWnd: return LOC("Show/hide Reminder");
 	case hk_InsertWithoutFormat: return LOC("Paste text without formatting");
 	case hk_RevertLine: return LOC("Change layout from the start of the line");
+	case hk_ToggleAutoswitch: return LOC("Enable/Disable auto switch");
 	}
 	return "Error";
 }

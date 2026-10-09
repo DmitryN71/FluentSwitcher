@@ -29,5 +29,9 @@
   "It is in \"Always switch\" of the layout auto switch: Settings, Auto switch": "Слово – у списку «Перемикати завжди»: Налаштування, Автоперемикання",
   "switched": "само",
   "switched back": "повернули",
-  "by hand": "вручну"
+  "by hand": "вручну",
+  "Auto switch": "Автоперемикання",
+  "Auto switch is on": "Автоперемикання увімкнено",
+  "Auto switch is off": "Автоперемикання вимкнено",
+  "Enable/Disable auto switch": "Увімк./вимк. автоперемикання"
 }

@@ -17,6 +17,8 @@ static const UINT WM_AutoSwitchUnlearn = 0xBFFF - 22; // lParam - std::wstring*:
 static const UINT WM_JournalLine = 0xBFFF - 21; // lParam - std::string* (UTF-8): строка журнала автопереключения - в файл
 static const UINT WM_AutoSwitchLearnForce = 0xBFFF - 20; // lParam - std::wstring*: слово исправили вручную - в счёт
                                                          // "Переключать всегда" (на третий раз - туда)
+static const UINT WM_ToggleAutoswitch = 0xBFFF - 18; // автопереключение вкл./выкл.: wParam 1 - сочетанием (уведомление),
+                                                     // 0 - из меню у значка (там видна галочка); gui2/main.cpp
 static const UINT WM_AutoSwitchUnlearnForce = 0xBFFF - 19; // lParam - std::wstring*: ... и тут же исправили обратно - снять
 
 static const UINT c_timerKeyloggerDefence = 12;

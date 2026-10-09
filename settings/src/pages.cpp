@@ -14,6 +14,7 @@
 #include <wx/ffile.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
+#include <wx/tokenzr.h>
 #include <wx/tooltip.h>
 #include <wx/utils.h>
 
@@ -528,7 +529,59 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     ShowSection(section);
     SetSize(FromDIP(wxSize(860, 660)));
     SetMinSize(FromDIP(wxSize(720, 560))); // the eleven sections and "Закрыть FluentSwitcher" under them
-    CentreOnScreen();
+    if (!RestorePlacement())
+        CentreOnScreen();
+    Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& e) {
+        SavePlacement();
+        e.Skip();
+    });
+}
+
+// The window's place and size (forum, 09.10.2026, AlexPORTrb: "чтобы окно настроек запоминало размер и положение"):
+// "settings_window" in FluentSwitcher.json - its normal rectangle (GetWindowPlacement: workspace coordinates, screen
+// points) and whether it was maximized, "left,top,right,bottom,maximized". Written on closing, this field alone, into
+// the file as it is on the disk then: what the window did not save stays unsaved. The engine keeps it (Settings.h).
+bool SettingsFrame::RestorePlacement()
+{
+    long v[5] = {};
+    wxStringTokenizer parts(m_saved.GetString("settings_window", wxString()), ",");
+    for (long& n : v)
+        if (!parts.HasMoreTokens() || !parts.GetNextToken().ToLong(&n))
+            return false;
+    RECT rc{ v[0], v[1], v[2], v[3] };
+    const wxSize min = GetMinSize();
+    if (rc.right - rc.left < min.x || rc.bottom - rc.top < min.y || !MonitorFromRect(&rc, MONITOR_DEFAULTTONULL))
+        return false; // smaller than it can be (another scale) or on a screen that is gone
+    WINDOWPLACEMENT wp{ sizeof(wp) };
+    if (!GetWindowPlacement(GetHWND(), &wp))
+        return false;
+    wp.rcNormalPosition = rc;
+    wp.showCmd = SW_HIDE; // main.cpp shows it
+    if (!SetWindowPlacement(GetHWND(), &wp))
+        return false;
+    if (v[4])
+        Maximize();
+    return true;
+}
+
+void SettingsFrame::SavePlacement()
+{
+    WINDOWPLACEMENT wp{ sizeof(wp) };
+    if (!GetWindowPlacement(GetHWND(), &wp))
+        return;
+    const bool maximized = wp.showCmd == SW_SHOWMAXIMIZED ||
+                           (wp.showCmd == SW_SHOWMINIMIZED && (wp.flags & WPF_RESTORETOMAXIMIZED));
+    const RECT& r = wp.rcNormalPosition;
+    const wxString value = wxString::Format("%ld,%ld,%ld,%ld,%d", r.left, r.top, r.right, r.bottom, maximized ? 1 : 0);
+    if (value == m_saved.GetString("settings_window", wxString()) || !wxFileExists(m_saved.Path()))
+        return;
+    ConfigLock lock;
+    Config disk;
+    wxString error;
+    if (!disk.Load(m_saved.Path(), &error))
+        return;
+    disk.SetString("settings_window", value);
+    disk.Save(&error);
 }
 
 // ---------------------------------------------------------------------------------------------

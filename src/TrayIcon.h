@@ -103,6 +103,10 @@ public:
 			res.push_back({ .name = LOC("Settings"), .callback = []() { show_main_wind(); }, .icon = 0xE713 });
 			res.push_back({ .name = LOC("Enabled"), .callback = []() { try_toggle_enable(); }, .is_checkbox = true,
 			                .edit_val = g_enabled.IsEnabled(), .icon = 0xE765, .state = []() { return g_enabled.IsEnabled(); } });
+			// Автопереключение (форум, 09.10.2026, AlexPORTrb: "и в контекстное меню значка в трее"): значок - две стрелки.
+			res.push_back({ .name = LOC("Auto switch"), .callback = []() { SendMessage(g_guiHandle, WM_ToggleAutoswitch, 0, 0); },
+			                .is_checkbox = true, .edit_val = conf_get_unsafe()->autoswitch, .icon = 0xE8AB,
+			                .state = []() { return conf_get_unsafe()->autoswitch; } });
 			res.push_back({ .is_separator = true });
 			res.push_back({ .name = LOC("Exit"), .callback = []() { PostQuitMessage(0); }, .icon = 0xF3B1 });
 			return res;

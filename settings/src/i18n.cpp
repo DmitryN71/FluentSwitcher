@@ -48,6 +48,9 @@ const std::unordered_map<std::string, const char*>& English()
         { "Если CapsLock занят под сочетание, включить его можно так", "If CapsLock is taken by a hotkey, this turns it on" },
         { "Включить / выключить FluentSwitcher", "Turn FluentSwitcher on / off" },
         { "Работает и когда приложение выключено", "Works even while the app is off" },
+        { "Включить / выключить автопереключение", "Turn the auto switch on / off" },
+        { "Включено ли – видно в меню у значка у часов, там же его можно и переключить",
+          "Whether it is on shows in the tray icon's menu, where it can be switched too" },
         { "Открыть настройки", "Open settings" },
         { "Это окно", "This window" },
 

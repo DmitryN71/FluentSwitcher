@@ -41,6 +41,7 @@ public:
 		// hk_InsertWithoutFormat ("вставить без оформления") не нужен переключателю раскладки: это есть у
 		// менеджера буфера (FluentClipper: Ctrl+Shift+Insert).
 		add(hk_RevertLine);
+		add(hk_ToggleAutoswitch);
     }
 
     std::set <std::wstring> disableInPrograms;
@@ -215,6 +216,9 @@ public:
 	// 06.10.2026: слово исправляли обе копии). С 06.10 по 09.10.2026 молчали всегда - форум (Ivan_Strelec): работать
 	// по удалённым подключениям, как обычно.
 	bool work_in_remote = true;
+	// Место и размер окна настроек ("left,top,right,bottom,maximized" - settings/src/pages.cpp, RestorePlacement). Движок
+	// его только хранит: без поля в ProgramConfig его запись файла стирала бы его.
+	string settings_window;
 	// Перепечатывать исправленное клавишами (как в SimpleSwitcher), а не готовыми символами.
 	// Символы не зависят от Shift и от того, успела ли смениться раскладка: новый Блокнот
 	// Windows 11 терял Shift в быстрой пачке клавиш ("?" -> "." вместо ",").

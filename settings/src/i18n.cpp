@@ -96,7 +96,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Выключенный не исправляет текст и не отвечает на сочетания, кроме «Включить / выключить»",
           "When off, it fixes no text and answers no hotkeys except “Turn on / off”" },
         { "Запускать вместе с Windows", "Start with Windows" },
-        { "Приложение стартует при входе в Windows, видно только значок в трее",
+        { "Приложение стартует при входе в Windows, видно только значок у часов",
           "Starts when you sign in to Windows; only the tray icon shows" },
         { "Работать в приложениях, запущенных от имени администратора", "Work in apps run as administrator" },
         { "FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один раз, дальше "
@@ -123,8 +123,8 @@ const std::unordered_map<std::string, const char*>& English()
         { "Обычный", "Normal" },
         { "Крупный", "Large" },
         { "Очень крупный", "Extra large" },
-        { "Значок в трее", "Tray icon" },
-        { "Показывать значок в трее", "Show the tray icon" },
+        { "Значок у часов", "Tray icon" },
+        { "Показывать значок у часов", "Show the tray icon" },
         { "В области уведомлений, у часов: раскладка, меню и уведомления FluentSwitcher. Без значка настройки "
           "открывает сочетание «Открыть настройки»",
           "In the notification area, by the clock: the layout, the menu and the notifications of FluentSwitcher. "
@@ -143,7 +143,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Прозрачность", "Transparency" },
         { "Звуки", "Sounds" },
         { "Флаг английской раскладки", "Flag of the English layout" },
-        { "В трее и у текстового курсора", "In the tray and at the text cursor" },
+        { "У часов и у текстового курсора", "In the tray and at the text cursor" },
         { "Американский", "American" },
         { "Британский", "British" },
         { "Браузер: назад", "Browser back" },
@@ -272,7 +272,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Средний", "Medium" },
         { "Громкий", "Loud" },
         { "Звук при переключении раскладки", "Sound when the layout is switched" },
-        { "Сочетанием FluentSwitcher или Windows, щелчком по значку в трее. Звук – switch.wav в папке sounds рядом с "
+        { "Сочетанием FluentSwitcher или Windows, щелчком по значку у часов. Звук – switch.wav в папке sounds рядом с "
           "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой",
           "With a hotkey of FluentSwitcher or Windows, with a click on the tray icon. The sound is switch.wav in the "
           "sounds folder next to the app; put en.wav, ru.wav there for a sound of each language" },
@@ -294,7 +294,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "При масштабе 100 %; на экранах с большим масштабом он крупнее",
           "At 100 % scale; on screens with a larger scale it is larger" },
         { "Язык", "Language" },
-        { "Этого окна и меню значка в трее. Окно откроется на новом языке после сохранения",
+        { "Этого окна и меню значка у часов. Окно откроется на новом языке после сохранения",
           "Of this window and of the tray icon's menu. The window reopens in the new language after saving" },
         { "Тема", "Theme" },
         { "Этого окна. Оно откроется в новой теме после сохранения",

@@ -24,6 +24,12 @@ red stick out on the left, white on the right; a zoomed screenshot does not show
 alike: the sides are straight. Dmitry chose a light grey side of four variants (tools/flags-compare/edges.png in the
 work folder), then, as "thinner", the half-grey one of six (edges2.png, 07.10.2026).
 
+The US flag up to 32 px is drawn by points here, not by Flagpack (us_small). Flagpack's was blurred in the tray next to
+the British one (forum, gutasiho, and Dmitry, 09.10.2026): its 50 stars made a checkerboard of blue and white points,
+and 13 stripes in 15 or 18 rows came out one point and two points wide. Here the stripes are equal and odd in number
+(red at the top and at the bottom), the stars - sparse white points. Dmitry chose this one of three variants
+(tools/flags-compare/us_flags.png in the work folder, "B").
+
     python tools/make_flagpack_flags.py [--preview preview.png]
 """
 import argparse
@@ -36,7 +42,7 @@ import shutil
 import subprocess
 import tempfile
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "tools", "flagpack")
@@ -120,6 +126,28 @@ const SOURCES = %s, JOBS = %s;
     return out
 
 
+US_RED, US_WHITE, US_BLUE = (227, 29, 28, 255), (247, 252, 255, 255), (46, 66, 165, 255)  # Flagpack's colours
+# Size -> (stripes, points each): one point at 16 and 20, two from 24.
+US_STRIPES = {16: (11, 1), 20: (15, 1), 24: (9, 2), 28: (11, 2), 32: (13, 2)}
+
+
+def us_small(size):
+    """The US flag by points: equal stripes, the canton over the upper half of them (7 of 13) and about 57 % of the
+    width (as on the flag: 0.76 of the height of 13 stripes), in it white points a step apart - one in four."""
+    n, t = US_STRIPES[size]
+    flag = Image.new("RGBA", (size, n * t), US_WHITE)
+    d = ImageDraw.Draw(flag)
+    for i in range(0, n, 2):
+        d.rectangle([0, i * t, size - 1, i * t + t - 1], fill=US_RED)
+    ch, cw = (n // 2 + 1) * t, round(size * 0.57)
+    d.rectangle([0, 0, cw - 1, ch - 1], fill=US_BLUE)
+    step = 2 if t == 1 else 3
+    for y in range(1, ch - 1, step):
+        for x in range(1 + (y // step % 2), cw - 1, step):
+            flag.putpixel((x, y), US_WHITE)
+    return flag
+
+
 SIDE = 200        # light grey
 SIDE_TINT = 0.5   # how much of the point's own colour stays in it
 
@@ -166,6 +194,8 @@ def main():
     args = ap.parse_args()
     countries = sorted(set(LANGUAGES.values()))
     drawn = render_all(countries)
+    for size in US_STRIPES:
+        drawn[("US", size)] = us_small(size)
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
     os.makedirs(OUT)

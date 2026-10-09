@@ -654,7 +654,7 @@ void SettingsFrame::BuildGeneral()
         Changed();
     };
     AddSettingsCard(m_page, m_column, T("Запускать вместе с Windows"),
-                    T("Приложение стартует при входе в Windows, видно только значок в трее"),
+                    T("Приложение стартует при входе в Windows, видно только значок у часов"),
                     [&](wxWindow* card) { return m_autostartSwitch = new ToggleSwitch(card, m_autostart); });
     m_autostartSwitch->onChange = [this] {
         m_autostart = m_autostartSwitch->IsOn();
@@ -669,7 +669,7 @@ void SettingsFrame::BuildGeneral()
     const wxArrayString langValues = { "Russian", "English", "Ukrainian" };
     const wxArrayString langNames = { wxString::FromUTF8("Русский"), wxString("English"),
                                       wxString::FromUTF8("Українська") };
-    Choice(T("Язык"), T("Этого окна и меню значка в трее. Окно откроется на новом языке после сохранения"), langNames,
+    Choice(T("Язык"), T("Этого окна и меню значка у часов. Окно откроется на новом языке после сохранения"), langNames,
            (int)CurrentLanguage(), [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
 
     // "" - as Windows; main.cpp reads it when the window starts.
@@ -1078,7 +1078,7 @@ void SettingsFrame::BuildLayouts()
     };
 
     // The flag of English in the tray and at the text cursor (the engine's IconManager.h): the US or the British one.
-    Choice(T("Флаг английской раскладки"), T("В трее и у текстового курсора"), { T("Американский"), T("Британский") },
+    Choice(T("Флаг английской раскладки"), T("У часов и у текстового курсора"), { T("Американский"), T("Британский") },
            m_edit.GetBool("useBritishFlag", false) ? 1 : 0, [this](int i) { m_edit.SetBool("useBritishFlag", i == 1); });
     FinishPage();
 }
@@ -1087,9 +1087,9 @@ void SettingsFrame::BuildTray()
 {
     // The icon in the notification area, by the clock (the engine's TrayIcon.h): whether it shows, which, its clicks.
     // Apart from the flag at the text cursor since 07.10.2026 (forum: hiding the tray icon hid that flag too).
-    Section(kIconTray, T("Значок в трее"));
+    Section(kIconTray, T("Значок у часов"));
     ToggleSwitch* shown = nullptr;
-    AddSettingsCard(m_page, m_column, T("Показывать значок в трее"),
+    AddSettingsCard(m_page, m_column, T("Показывать значок у часов"),
                     T("В области уведомлений, у часов: раскладка, меню и уведомления FluentSwitcher. Без значка "
                       "настройки открывает сочетание «Открыть настройки»"),
                     [&](wxWindow* card) {
@@ -1149,7 +1149,7 @@ void SettingsFrame::BuildSounds()
     // The engine's LayoutSound.h: sound_switch, sound_fix - per cent, 0 - none.
     Section(kIconSounds, T("Звуки"));
     Numbers(T("Звук при переключении раскладки"),
-            T("Сочетанием FluentSwitcher или Windows, щелчком по значку в трее. Звук – switch.wav в папке sounds рядом "
+            T("Сочетанием FluentSwitcher или Windows, щелчком по значку у часов. Звук – switch.wav в папке sounds рядом "
               "с приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
             "sound_switch", 0, { 0, 30, 60, 100 }, { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") });
     Numbers(T("Звук при исправлении текста"),

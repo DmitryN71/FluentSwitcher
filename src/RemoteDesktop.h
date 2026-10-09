@@ -3,14 +3,21 @@
 // другой компьютер со своей раскладкой и, может быть, своим FluentSwitcher. Там FluentSwitcher этого компьютера
 // работает, как везде, если не выключено "Работать в окнах удалённого доступа" (work_in_remote, Settings.h); выключено -
 // молчит, как в программах из disableInPrograms: у кого FluentSwitcher и там, слово исправляли бы обе копии (Дмитрий
-// 06.10: Блокнот дома по RDP - "b xnj" на миг стало "и что", а потом пробелами). Нажатия там не придерживаются
-// всегда (KeyHold::CanHold), флага у курсора нет (CaretFlag: курсор там не этого компьютера).
+// 06.10: Блокнот дома по RDP - "b xnj" на миг стало "и что", а потом пробелами). Флага у курсора там нет (CaretFlag:
+// курсор там не этого компьютера).
+// Клиент во весь экран (mstsc) забирает клавиатуру своим перехватом, ставя его при каждом переходе в своё окно, и
+// повторяет от себя Shift, Ctrl, Alt (и шлёт VK_FF): наш перехват подключается заново (Hooker::RemoteFront), а нажатия,
+// которые клиент посылает сам, мы пропускаем без разбора (inFront, HookerKeyboard.cpp) - Дмитрий 09.10.2026, rc7/rc8.
 #pragma once
 
 #include <windows.h>
+#include <atomic>
 #include <string>
 
 namespace RemoteDesktop {
+
+// Впереди - окно такого клиента (Hooker::WinEventProc, поток перехвата; на старте - Hooker::StartHook).
+inline std::atomic<bool> inFront{ false };
 
 // Имя файла программы строчными: mstsc.exe.
 inline bool IsClient(const std::wstring& name) {

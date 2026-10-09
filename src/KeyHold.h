@@ -195,10 +195,10 @@ inline bool IsConsoleWindow(HWND w) {
 }
 
 // Окно впереди запущено от администратора, а мы нет: Windows не даст отправить ему нажатия - придерживать нельзя,
-// они бы пропали. Окно удалённого рабочего стола или виртуальной машины (RemoteDesktop.h): не придерживаем, даже
-// когда там работаем (work_in_remote) - клиент во весь экран сам перехватывает клавиатуру, повтор нажатий через него не
-// проверялся; исправляем там, как до 1.5.0, без придержки. Консоль: там мы ничего не исправляем - придерживать
-// незачем; консоль из списка consolePrograms (autoswitch_console) - можно.
+// они бы пропали. Окно удалённого рабочего стола или виртуальной машины (RemoteDesktop.h): придерживаем, если там
+// работаем (work_in_remote; без придержки нет и автопереключения - Дмитрий 09.10.2026, rc8), иначе там молчим.
+// Консоль: там мы ничего не исправляем - придерживать незачем; консоль из списка consolePrograms (autoswitch_console)
+// - можно.
 inline bool CanHold(const std::set<std::wstring>* consolePrograms = nullptr) {
 	const HWND fg = GetForegroundWindow();
 	if (IsConsoleWindow(fg) && !(consolePrograms && ConsolePrograms::Allowed(fg, *consolePrograms))) return false;
@@ -206,10 +206,13 @@ inline bool CanHold(const std::set<std::wstring>* consolePrograms = nullptr) {
 	GetWindowThreadProcessId(fg, &pid);
 	HANDLE process = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
 	if (!process) return Utils::IsSelfElevated();
-	const bool remote = RemoteDesktop::IsClientProcess(process);
-	if (remote || Utils::IsSelfElevated()) {
+	if (RemoteDesktop::IsClientProcess(process)) {
 		CloseHandle(process);
-		return !remote;
+		return conf_get_unsafe()->work_in_remote;
+	}
+	if (Utils::IsSelfElevated()) {
+		CloseHandle(process);
+		return true;
 	}
 	bool elevated = false;
 	HANDLE token = nullptr;

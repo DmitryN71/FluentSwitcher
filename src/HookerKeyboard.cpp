@@ -53,6 +53,14 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			return;
 		}
 
+		// Впереди окно удалённого рабочего стола: его клиент во весь экран повторяет от себя Shift, Ctrl, Alt и шлёт VK_FF
+		// (RemoteDesktop.h) - не человек и не мы: мимо, без разбора (иначе второе нажатие Shift для "Shift дважды" было
+		// повтором первого - "double Shift canceled", Дмитрий 09.10.2026, rc8). Свои повторённые - дальше.
+		if (isInjected && RemoteDesktop::inFront && k->dwExtraInfo != KeyHold::c_Replayed) {
+			LOG_ANY(L"skip keys the remote desktop client sends itself");
+			return;
+		}
+
 		// "ДВе ЗАглавные": пока движок исправляет слово, нажатия придерживаются и уходят потом (KeyHold.h).
 		const bool replayed = k->dwExtraInfo == KeyHold::c_Replayed || KeyHold::ForeignReplay(*k);
 		if (replayed) {
@@ -81,7 +89,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 		}
 
 		// SkipLowLevelInjectKeys (нажатия от программ с правами ниже наших - мимо) больше не действует: он был для
-		// полноэкранного RDP, а окна удалённого рабочего стола теперь исключены сами (RemoteDesktop.h). С ним
+		// полноэкранного RDP, а повторы его клиента теперь пропускаются выше (RemoteDesktop::inFront). С ним
 		// FluentSwitcher от администратора не видел того, что посылает AutoHotkey без прав, - Enter, отправляющий
 		// сообщение, уходил мимо проверки слова (Дмитрий 06.10: Ctrl+Enter его скрипта в Claude Desktop).
 		if (is_low_inject) LOG_ANY(L"low_inject");

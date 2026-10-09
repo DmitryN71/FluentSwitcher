@@ -484,18 +484,48 @@ private:
 	// Поле пустое, а в нём подсказка - текст-заглушка (поле поиска Проводника Windows 11: "Search This PC", TextBlock
 	// внутри TextBox): текст начнётся там же, где она, там и каретка. Иначе флажок вставал по краю поля с отступом -
 	// левее каретки (Дмитрий 10.10.2026). Подсказка - ребёнок поля типа Text внутри его прямоугольника.
+	// Подсказки нет (строка адреса Проводника, очищенная), а поле - TextBox XAML (WinUI): текст там начинается с его
+	// отступа от края содержимого (ScrollViewer внутри поля) - 10 и 5 точек при 100 % (TextControlThemePadding; у поля
+	// поиска по подсказке так и выходит: 13 точек при 125 %).
+	// Дети поля - обходом "сырого" дерева: ScrollViewer - часть шаблона поля, в обычном (FindFirst) его нет.
 	static bool Placeholder(IUIAutomation* uia, IUIAutomationElement* el, const RECT& box, RECT& out) {
-		CComPtr<IUIAutomationCondition> text;
-		CComPtr<IUIAutomationElement> hint;
-		if (!uia || FAILED(uia->CreatePropertyCondition(UIA_ControlTypePropertyId, CComVariant((int)UIA_TextControlTypeId),
-			&text)) || !text || FAILED(el->FindFirst(TreeScope_Children, text, &hint)) || !hint)
+		CComPtr<IUIAutomationTreeWalker> walker;
+		if (!uia || FAILED(uia->get_RawViewWalker(&walker)) || !walker) return false;
+		bool hint = false, scroll = false;
+		RECT r{}, hintRc{}, scrollRc{};
+		CComPtr<IUIAutomationElement> child;
+		walker->GetFirstChildElement(el, &child);
+		for (int i = 0; child && i < 16 && !hint; i++) {
+			CONTROLTYPEID ct = 0;
+			CComBSTR cls;
+			if (SUCCEEDED(child->get_CurrentBoundingRectangle(&r)) && r.bottom - r.top >= 4 && r.left >= box.left &&
+				r.left < box.right && r.top >= box.top && r.bottom <= box.bottom) {
+				if (SUCCEEDED(child->get_CurrentControlType(&ct)) && ct == UIA_TextControlTypeId) {
+					hint = true;
+					hintRc = r;
+				}
+				else if (!scroll && SUCCEEDED(child->get_CurrentClassName(&cls)) && cls && wcscmp(cls, L"ScrollViewer") == 0) {
+					scroll = true;
+					scrollRc = r;
+				}
+			}
+			CComPtr<IUIAutomationElement> next;
+			walker->GetNextSiblingElement(child, &next);
+			child = next;
+		}
+		if (hint) {
+			out = hintRc;
+			return true;
+		}
+		CComBSTR fw;
+		if (!scroll || FAILED(el->get_CurrentFrameworkId(&fw)) || !fw || wcscmp(fw, L"XAML") != 0)
 			return false;
-		RECT r{};
-		if (FAILED(hint->get_CurrentBoundingRectangle(&r)) || r.bottom - r.top < 4 || r.left < box.left || r.left >= box.right ||
-			r.top < box.top || r.bottom > box.bottom)
-			return false;
-		out = r;
-		return true;
+		r = scrollRc;
+		UINT dpiX = 96, dpiY = 96;
+		GetDpiForMonitor(MonitorFromRect(&box, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+		out = { r.left + MulDiv(10, dpiX, 96), r.top + MulDiv(5, dpiY, 96), r.left + MulDiv(10, dpiX, 96) + 1,
+			r.bottom - MulDiv(5, dpiY, 96) };
+		return out.bottom - out.top >= 4;
 	}
 
 	// Каретка в текстовом элементе UI Automation. editable - элемент уже проверен как поле ввода (браузер): без

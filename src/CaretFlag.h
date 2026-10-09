@@ -516,10 +516,16 @@ private:
 				rc = { r.left, r.top, r.left + 1, r.bottom };
 				return true;
 			}
-			// Пустой диапазон часто без прямоугольника: символ после каретки - она у его левого края...
+			// Пустой диапазон часто без прямоугольника: символ после каретки - она у его левого края... В конце текста
+			// символа после неё нет, и Telegram (Qt), поле поиска Проводника расширяют диапазон назад, до символа перед
+			// ней: тогда она у его правого края (Дмитрий 10.10.2026: в пустом поле флажок на месте, а после первой буквы
+			// не сдвигается - всё время на букву левее; форум, AlexPORTrb, s1n).
 			CComPtr<IUIAutomationTextRange> ch;
 			if (SUCCEEDED(range->Clone(&ch)) && ch && SUCCEEDED(ch->ExpandToEnclosingUnit(TextUnit_Character)) && Rects(ch, r)) {
-				rc = { r.left, r.top, r.left + 1, r.bottom };
+				int cmp = 0;
+				const bool behind = SUCCEEDED(ch->CompareEndpoints(TextPatternRangeEndpoint_Start, range,
+					TextPatternRangeEndpoint_Start, &cmp)) && cmp < 0;
+				rc = behind ? RECT{ r.right, r.top, r.right + 1, r.bottom } : RECT{ r.left, r.top, r.left + 1, r.bottom };
 				return true;
 			}
 			// ...а в конце текста - символ перед ней, каретка у его правого края.

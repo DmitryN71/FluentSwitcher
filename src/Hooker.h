@@ -97,6 +97,44 @@ private: inline static HookerKeyboard hookerKeyb;
 		KeyHold::caretMoves++; // а печатающееся исправление ушло бы туда
 		KeyHold::ResetWord();  // и слово там начинается заново
 		Worker()->PostMsg(Message_ChangeForeg{ hwnd });
+		if (HWND w = KeyHold::window) SetTimer(w, kTimerRemote, 500, nullptr); // не окно ли удалённого доступа (RemoteFront)
+	}
+
+public:
+	inline static constexpr UINT_PTR kTimerRemote = 7; // таймер окна потока хука: впереди новое окно (RemoteFront)
+
+	// Впереди - окно удалённого рабочего стола (RemoteDesktop.h), полсекунды как: его клиент (mstsc) при каждом переходе в
+	// его окно ставит свой перехват клавиатуры - тот встаёт перед нашим и забирает нажатия себе, мы их не видим (Дмитрий,
+	// 09.10.2026, rc7: в окне RDP при "Работать в окнах удалённого доступа" ничего не исправлялось). Там работаем
+	// (work_in_remote) - подключаем свой заново: новый перехват встаёт первым. Не работаем - не трогаем.
+	void RemoteFront() {
+		if (!conf_get_unsafe()->work_in_remote) return;
+		DWORD pid = 0;
+		GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+		HANDLE process = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
+		const bool remote = RemoteDesktop::IsClientProcess(process);
+		if (process) CloseHandle(process);
+		if (!remote) return;
+		LOG_ANY("hook: a remote desktop window in front, hooking the keyboard again - before its client's hook");
+		RehookKeyboard();
+	}
+
+private:
+	// Перехват клавиатуры - заново (Watch, RemoteFront). Состояние клавиш - заново: отпускания, пока его не было, мы не
+	// видели (иначе клавиша "нажата" до 10 с).
+	void RehookKeyboard() {
+		lastRehookKey = GetTickCount();
+		rawUnseen = 0;
+		hHookKeyGlobal.Cleanup();
+		hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
+		IFW_LOG(hHookKeyGlobal.IsValid());
+		lastKeyTick = lastRehookKey;
+		ClearAllKeys();
+		KeyHold::ResetWord();
+		if (KeyHold::replaying > 0) { // отправленное, пока перехвата не было, уже не вернётся - не ждать его
+			KeyHold::ReplaysGone();
+			if (!KeyHold::active && !KeyHold::held.empty()) KeyHold::Next();
+		}
 	}
 
 	// Фокус перешёл в другое поле (в том же окне или в новом): слово там начинается заново. Сочетание, которым туда
@@ -225,18 +263,7 @@ public:
 				LOG_WARN("hook: input {} ms after the hooks last saw any (no raw input yet), hooking the keyboard again",
 				         li.dwTime - lastKeyTick);
 			}
-			lastRehookKey = now;
-			rawUnseen = 0;
-			hHookKeyGlobal.Cleanup();
-			hHookKeyGlobal = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
-			IFW_LOG(hHookKeyGlobal.IsValid());
-			lastKeyTick = now;
-			ClearAllKeys();
-			KeyHold::ResetWord();
-			if (KeyHold::replaying > 0) { // отправленное, пока перехвата не было, уже не вернётся - не ждать его
-				KeyHold::ReplaysGone();
-				if (!KeyHold::active && !KeyHold::held.empty()) KeyHold::Next();
-			}
+			RehookKeyboard();
 		}
 		if (mouse && !Utils::IsDebug()) {
 			LOG_WARN("hook: the mouse hook saw nothing since {} ms ago, hooking the mouse again", now - lastMouseTick);

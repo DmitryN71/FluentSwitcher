@@ -58,6 +58,10 @@ class CoreWorker {
 				else if (timerId == 6) {
 					hooker.Watch();
 				}
+				else if (timerId == Hooker::kTimerRemote) {
+					IFW_LOG(KillTimer(m_hWnd, timerId));
+					hooker.RemoteFront();
+				}
 			}else if (msg.message == WM_INPUT) {
 				Hooker::OnRawKey(msg.time);
 				DefWindowProcW(msg.hwnd, msg.message, msg.wParam, msg.lParam); // Raw Input убирает за собой

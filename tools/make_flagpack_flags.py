@@ -30,10 +30,19 @@ and 13 stripes in 15 or 18 rows came out one point and two points wide. Here the
 (red at the top and at the bottom), the stars - sparse white points. Dmitry chose this one of three variants
 (tools/flags-compare/us_flags.png in the work folder, "B").
 
+The second set - bin_files/flags/Waving/<language>/<country><size>.png, "Флаги с переливом" in the settings: the same
+flags as Punto's glossy ones look (Punto with the forum's flags; Dmitry chose that look over three of our own,
+09.10.2026, tools/flag-try in the work folder - a tray icon to compare them). Our drawing over our flags, measured by
+Punto's 1049 point by point, not Punto's pictures: the body 14x10 in 16 (waving_dims), its colour pure and bright, folds
+across it from Punto's (PUNTO_FOLDS: one row of them; each next row half a point to the left; scaled to the body), the
+light - the colour with 40 % white, the dark - 60 % of it; a soft shadow a point right and down (fitted to Punto's
+alpha). Drawn for every size, not one 16 stretched.
+
     python tools/make_flagpack_flags.py [--preview preview.png]
 """
 import argparse
 import base64
+import colorsys
 import io
 import json
 import os
@@ -42,11 +51,12 @@ import shutil
 import subprocess
 import tempfile
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "tools", "flagpack")
 OUT = os.path.join(ROOT, "bin_files", "flags", "Flagpack")
+OUT_WAVING = os.path.join(ROOT, "bin_files", "flags", "Waving")
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 SIZES = list(range(16, 65, 4))
 
@@ -80,7 +90,8 @@ def crisp(text):
 
 
 def render_all(countries):
-    """{(country, size): RGBA picture of the flag, size x size*3/4}, drawn by Edge."""
+    """RGBA pictures drawn by Edge: (country, size) - the flag, size x size*3/4; (country, size, "waving") - the body of
+    the waving one (waving_dims)."""
     jobs, sources = [], {}
     for cc in countries:
         for size in SIZES:
@@ -89,7 +100,9 @@ def render_all(countries):
             if key not in sources:
                 text = crisp(open(os.path.join(SRC, kind, f"{cc}.svg"), encoding="utf-8").read())
                 sources[key] = "data:image/svg+xml;base64," + base64.b64encode(text.encode()).decode()
-            jobs.append({"cc": cc, "size": size, "src": key, "w": size, "h": size * 3 // 4})
+            jobs.append({"id": f"{cc}|{size}|", "src": key, "w": size, "h": size * 3 // 4})
+            w, h, _ = waving_dims(size)
+            jobs.append({"id": f"{cc}|{size}|waving", "src": key, "w": w, "h": h})
     page = """<!doctype html><meta charset="utf-8"><body><pre id="out"></pre><script>
 const SOURCES = %s, JOBS = %s;
 (async () => {
@@ -99,7 +112,7 @@ const SOURCES = %s, JOBS = %s;
   for (const j of JOBS) {
     const c = document.createElement('canvas'); c.width = j.w; c.height = j.h;
     c.getContext('2d').drawImage(imgs[j.src], 0, 0, j.w, j.h);
-    out.push(j.cc + '|' + j.size + '|' + c.toDataURL('image/png'));
+    out.push(j.id + '|' + c.toDataURL('image/png'));
   }
   document.getElementById('out').textContent = '@@BEGIN@@\\n' + out.join('\\n') + '\\n@@END@@';
 })();
@@ -119,10 +132,11 @@ const SOURCES = %s, JOBS = %s;
     body = dom[dom.index("@@BEGIN@@") + len("@@BEGIN@@"):dom.index("@@END@@")]
     out = {}
     for line in body.strip().splitlines():
-        cc, size, url = line.split("|", 2)
-        out[(cc, int(size))] = Image.open(io.BytesIO(base64.b64decode(url.split(",", 1)[1]))).convert("RGBA")
-    if len(out) != len(countries) * len(SIZES):
-        raise SystemExit(f"Edge drew {len(out)} of {len(countries) * len(SIZES)} pictures")
+        cc, size, tag, url = line.split("|", 3)
+        out[(cc, int(size), tag) if tag else (cc, int(size))] = \
+            Image.open(io.BytesIO(base64.b64decode(url.split(",", 1)[1]))).convert("RGBA")
+    if len(out) != len(jobs):
+        raise SystemExit(f"Edge drew {len(out)} of {len(jobs)} pictures")
     return out
 
 
@@ -131,21 +145,76 @@ US_RED, US_WHITE, US_BLUE = (227, 29, 28, 255), (247, 252, 255, 255), (46, 66, 1
 US_STRIPES = {16: (11, 1), 20: (15, 1), 24: (9, 2), 28: (11, 2), 32: (13, 2)}
 
 
-def us_small(size):
+def us_small(size, width=None):
     """The US flag by points: equal stripes, the canton over the upper half of them (7 of 13) and about 57 % of the
-    width (as on the flag: 0.76 of the height of 13 stripes), in it white points a step apart - one in four."""
+    width (as on the flag: 0.76 of the height of 13 stripes), in it white points a step apart - one in four. width -
+    narrower than the size (the waving flag's body)."""
     n, t = US_STRIPES[size]
-    flag = Image.new("RGBA", (size, n * t), US_WHITE)
+    width = width or size
+    flag = Image.new("RGBA", (width, n * t), US_WHITE)
     d = ImageDraw.Draw(flag)
     for i in range(0, n, 2):
-        d.rectangle([0, i * t, size - 1, i * t + t - 1], fill=US_RED)
-    ch, cw = (n // 2 + 1) * t, round(size * 0.57)
+        d.rectangle([0, i * t, width - 1, i * t + t - 1], fill=US_RED)
+    ch, cw = (n // 2 + 1) * t, round(width * 0.57)
     d.rectangle([0, 0, cw - 1, ch - 1], fill=US_BLUE)
     step = 2 if t == 1 else 3
     for y in range(1, ch - 1, step):
         for x in range(1 + (y // step % 2), cw - 1, step):
             flag.putpixel((x, y), US_WHITE)
     return flag
+
+
+# Punto's glossy 1049 by points (body 14x10): how light its first row is, column by column (0 - the darkest fold,
+# 1 - the lightest), and further right; each next row is the same, half a point to the left.
+PUNTO_FOLDS = [0.31, 0.62, 0.85, 0.99, 1.0, 0.88, 0.66, 0.34, 0.06, 0.0, 0.16, 0.48, 0.77, 0.95, 1.0, 0.92, 0.72, 0.45,
+               0.2, 0.05, 0.0]
+
+
+def folds(u):
+    u = max(0.0, min(len(PUNTO_FOLDS) - 1.0, u))
+    i = min(int(u), len(PUNTO_FOLDS) - 2)
+    return PUNTO_FOLDS[i] + (PUNTO_FOLDS[i + 1] - PUNTO_FOLDS[i]) * (u - i)
+
+
+def waving_dims(size):
+    """The waving flag's body (width, height) and the room for its shadow: 14x10 and 2 at 16, as Punto's."""
+    shadow = round(size / 8)
+    w = size - shadow
+    return w, round(w / 1.4), shadow
+
+
+def waving(body, size):
+    """The waving flag in a square picture: the body's colour pure and bright (saturation x1.35, brightness x1.55),
+    Punto's folds over it, the light - the colour with 40 % white, the dark - 60 % of it; under it a shadow."""
+    w, h = body.size
+    img = body.copy()
+    px = img.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            hh, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+            if s > 0.15:
+                s = min(1.0, s * 1.35)
+            c = [255 * k for k in colorsys.hsv_to_rgb(hh, s, min(1.0, v * 1.55))]
+            t = folds((x + 0.5) * 14 / w - 0.5 + 0.5 * ((y + 0.5) * 10 / h - 0.5))
+            light = [k + 0.4 * (255 - k) for k in c]
+            dark = [0.6 * k for k in c]
+            px[x, y] = tuple(round(d + (l - d) * t) for d, l in zip(dark, light)) + (a,)
+    _, _, shadow = waving_dims(size)
+    gap = size - h - shadow
+    top = gap - gap // 4  # Punto's at 16: three rows above, one below
+    # The shadow: the body a point right and down, blurred by a point, 144 strong - fitted to Punto's at 16 (106 / 38
+    # right, 104 / 35 below, softer at the corners). Drawn 8 times larger and made smaller, so that at 20, 28 px it
+    # moves by parts of a point.
+    k = 8
+    mask = Image.new("L", (size * k, size * k))
+    step = size / 16 * k
+    mask.paste(Image.new("L", (w * k, h * k), 144), (round(step), round(top * k + step)))
+    mask = mask.filter(ImageFilter.BoxBlur(step)).resize((size, size), Image.BOX)
+    square_ = Image.new("RGBA", (size, size))
+    square_.paste((0, 0, 0, 255), (0, 0), mask)
+    square_.alpha_composite(img, (0, top))
+    return square_
 
 
 SIDE = 200        # light grey
@@ -183,6 +252,7 @@ def preview(drawn, path):
             x = 8
             for size in SIZES:
                 sheet.alpha_composite(square(drawn[(cc, size)], size), (x, y + 4))
+                sheet.alpha_composite(waving(drawn[(cc, size, "waving")], size), (x, y + 4 + size + 2))
                 x += size + 8
     sheet.save(path)
     print(f"preview -> {path}")
@@ -196,16 +266,19 @@ def main():
     drawn = render_all(countries)
     for size in US_STRIPES:
         drawn[("US", size)] = us_small(size)
-    if os.path.isdir(OUT):
-        shutil.rmtree(OUT)
-    os.makedirs(OUT)
-    shutil.copy(os.path.join(SRC, "LICENSE"), os.path.join(OUT, "LICENSE-Flagpack.txt"))
-    for lang, cc in LANGUAGES.items():
-        folder = os.path.join(OUT, lang)
-        os.makedirs(folder)
-        for size in SIZES:
-            square(drawn[(cc, size)], size).save(os.path.join(folder, f"{cc.lower()}{size}.png"), optimize=True)
-    print(f"{len(LANGUAGES)} languages x {len(SIZES)} sizes -> {OUT}")
+        drawn[("US", size, "waving")] = us_small(size, waving_dims(size)[0])
+    for out, picture in ((OUT, lambda cc, size: square(drawn[(cc, size)], size)),
+                         (OUT_WAVING, lambda cc, size: waving(drawn[(cc, size, "waving")], size))):
+        if os.path.isdir(out):
+            shutil.rmtree(out)
+        os.makedirs(out)
+        shutil.copy(os.path.join(SRC, "LICENSE"), os.path.join(out, "LICENSE-Flagpack.txt"))
+        for lang, cc in LANGUAGES.items():
+            folder = os.path.join(out, lang)
+            os.makedirs(folder)
+            for size in SIZES:
+                picture(cc, size).save(os.path.join(folder, f"{cc.lower()}{size}.png"), optimize=True)
+        print(f"{len(LANGUAGES)} languages x {len(SIZES)} sizes -> {out}")
     if args.preview:
         preview(drawn, args.preview)
 

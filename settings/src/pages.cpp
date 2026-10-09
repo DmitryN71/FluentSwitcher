@@ -584,7 +584,8 @@ wxWindow* SettingsFrame::Numbers(const wxString& title, const wxString& descript
 
 wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon)
 {
-    // The sets: the folders in "flags" next to the program - Flagpack, or a folder of the user's own. Glossy, Fluent,
+    // The sets: the folders in "flags" next to the program - Flagpack (regular flags), Waving (the same with folds and a
+    // shadow, as Punto's glossy ones; tools\make_flagpack_flags.py), or a folder of the user's own. Glossy, Fluent,
     // Round, Square - the sets before 1.5.0 (and SimpleSwitcher's), left by an older version unpacked over: the engine
     // takes Flagpack instead (Settings.h, NormalizeFlags), so they are not offered.
     wxArrayString values, names;
@@ -599,10 +600,11 @@ wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& descrip
     if (values.Index("Flagpack") == wxNOT_FOUND)
         values.Add("Flagpack");
     values.Sort([](const wxString& a, const wxString& b) {
-        return a == "Flagpack" ? -1 : b == "Flagpack" ? 1 : a.CmpNoCase(b);
+        const auto rank = [](const wxString& v) { return v == "Flagpack" ? 0 : v == "Waving" ? 1 : 2; };
+        return rank(a) != rank(b) ? rank(a) - rank(b) : a.CmpNoCase(b);
     });
     for (const wxString& v : values)
-        names.Add(v == "Flagpack" ? T("Флаги") : v);
+        names.Add(v == "Flagpack" ? T("Обычные флаги") : v == "Waving" ? T("Флаги с переливом") : v);
     // Letters instead of a flag (the engine's LetterIcons.h); the tray may also show the app's icon.
     values.Add("Letters");
     names.Add(T("Буквы: EN, RU"));

@@ -34,8 +34,8 @@ free and open source under GPL-3.0.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
   a mouse click; a flag or the letters on a dark badge, below or above the cursor, four sizes, transparency. In
   browsers only in text fields. Set apart from the tray icon.
-- **A tray icon**: flags for 74 languages (Flagpack, each size on the screen's pixels), the British flag for English
-  if you like, the letters EN, RU in the taskbar's text colour or the app's icon; it can be hidden. A click and a
+- **A tray icon**: flags for 74 languages (Flagpack, each size on the screen's pixels), regular or waving – with folds and a shadow, the British flag for English
+  if you like, the letters EN, RU in the taskbar's text color or the app's icon; it can be hidden. A click and a
   double click on it do what you choose: the menu, the next layout (of the window you were typing in), on / off,
   settings.
 - **A Windows 11 style menu by the icon**: rounded corners, icons, an "Enabled" toggle that keeps the menu open; the

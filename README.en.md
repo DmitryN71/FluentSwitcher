@@ -23,6 +23,7 @@ free and open source under GPL-3.0.
   you keep fixing by hand goes to "Always switch" the third time. The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked. The journal
   of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the
   reason; its mistakes make a report for the forum topic - you see and can edit the text, the app sends nothing.
+  It is turned on and off with a hotkey of its own and with a check item in the tray icon's menu too.
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, punctuation, Enter or Tab (three letters too: "THe" - "The" for frequent English words, "НЕт" - "Нет"). PCs, IDs, GHz, eM, iPhone, and Latin names like ILogger in code editors and apps without the automatic switch, are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives
@@ -32,14 +33,14 @@ free and open source under GPL-3.0.
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
-  a mouse click; a flag or the letters on a dark badge, below or above the cursor, four sizes, transparency. In
+  a mouse click; a flag (regular or waving) or the letters on a dark badge, below or above the cursor, four sizes, transparency. In
   browsers only in text fields. Set apart from the tray icon.
 - **A tray icon**: flags for 74 languages (Flagpack, each size on the screen's pixels), regular or waving – with folds and a shadow, the British flag for English
   if you like, the letters EN, RU in the taskbar's text color or the app's icon; it can be hidden. A click and a
   double click on it do what you choose: the menu, the next layout (of the window you were typing in), on / off,
   settings.
-- **A Windows 11 style menu by the icon**: rounded corners, icons, an "Enabled" toggle that keeps the menu open; the
-  theme follows the taskbar.
+- **A Windows 11 style menu by the icon**: rounded corners, icons, "Enabled" and "Auto switch" toggles that keep the
+  menu open; the theme follows the taskbar.
 - **Sounds**, as in Punto: a click when the layout is switched (with a hotkey of FluentSwitcher or Windows, with a
   click on the tray icon) and a double click when FluentSwitcher fixes text, each with a volume of its own. The sounds
   are the project's own (tools/make_sounds.py) and can be replaced with any WAV files in `sounds`; with `en.wav`,
@@ -57,6 +58,7 @@ free and open source under GPL-3.0.
   runs on that computer too, turn off "Advanced" – "Work in remote access windows" here, otherwise both copies fix
   the word.
 - The settings window and the flag's menu are in English, Russian and Ukrainian, the theme as in Windows, light or dark.
+  The settings window opens where and as large as it was closed.
 - **Update check**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
   it tells about a new version with a notification by the clock, whether to download and install it is up to
   you. Turned off in "About", where "Check now" is too.
@@ -93,7 +95,8 @@ Download from the [Releases](https://github.com/DmitryN71/FluentSwitcher/release
   Settings → Apps.
 - `FluentSwitcher-<version>.zip` – no installation: unpack anywhere and run `FluentSwitcher.exe`.
 
-The program is not signed, so Windows SmartScreen may warn about an unknown publisher. The settings live in
+The program is not signed, so Windows SmartScreen may warn about an unknown publisher. If the computer has Kaspersky
+Standard and hangs when FluentSwitcher starts, add the FluentSwitcher folder to the antivirus exclusions. The settings live in
 `FluentSwitcher.json` next to the program.
 
 ## Build from source

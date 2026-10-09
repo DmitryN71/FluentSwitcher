@@ -245,12 +245,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// рабочий поток - после того, как само нажатие ушло в программу.
 			if (found_hk && curk.Size() == 1 && Utils::is_in(vkCode, VK_LMENU, VK_RMENU, VK_LWIN, VK_RWIN) && !curKeys.IsHold()) {
 				LOG_ANY("mask the lone {} with vkE8", CHotKey::ToString(vkCode));
-				Worker()->PostMsg([](auto) {
-					InputSender sender;
-					sender.Add(0xE8, KEY_STATE_DOWN);
-					sender.Add(0xE8, KEY_STATE_UP);
-					sender.Send();
-				});
+				Worker()->PostMsg([](auto) { InputSender::SendVkKey(0xE8); });
 			}
 
 			if (msg_hotkey.IsEmpty()) {

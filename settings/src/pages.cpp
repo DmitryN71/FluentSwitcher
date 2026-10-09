@@ -1332,6 +1332,13 @@ void SettingsFrame::BuildAdvanced()
                "«Без автопереключения в приложениях»"),
              T("Имя файла – как в Диспетчере задач на вкладке «Подробности». Путь – если нужно одно приложение из "
                "нескольких с тем же именем"));
+    // Windows of remote desktop clients and virtual machines (the engine's RemoteDesktop.h, work_in_remote): typed there
+    // goes to the other computer. On - FluentSwitcher works there as anywhere (as before 1.5.0); off - as in the apps of
+    // the list above, for those who run FluentSwitcher on both computers (Dmitry, 06.10.2026: both copies fixed a word).
+    Toggle(T("Работать в окнах удалённого доступа"),
+           T("Удалённый рабочий стол, AnyDesk, TeamViewer, виртуальные машины. Выключите, если FluentSwitcher стоит и "
+             "на том компьютере – иначе слово исправят обе копии"),
+           "work_in_remote", true);
 
     Toggle(T("Сочетания с Ctrl + Alt в раскладках с AltGr"),
            T("Windows принимает Ctrl + Alt за правый Alt (AltGr) и печатает символ вместо сочетания: в немецкой, "

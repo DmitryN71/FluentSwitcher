@@ -4,6 +4,8 @@
 
 #include <wx/tokenzr.h>
 
+#include <algorithm>
+
 const std::vector<HotkeyAction>& HotkeyActions()
 {
     static const std::vector<HotkeyAction> actions = {
@@ -112,6 +114,28 @@ std::vector<wxString> SplitHotkeys(const wxString& stored)
 
 HotkeyEditor* HotkeyEditor::s_recording = nullptr;
 HHOOK HotkeyEditor::s_hook = nullptr;
+
+namespace
+{
+// The marks of the keys FluentSwitcher sends itself (the engine's dwExtraInfo: its process id ^ 0xACE1F345AABBCCDD,
+// the keys it holds and sends again - that ^ 0x5EB1A7ED; src/consts.h, src/KeyHold.h) - of every engine running, taken
+// when recording starts. Only these keys are not recorded.
+std::vector<ULONG_PTR> s_engineMarks;
+
+void TakeEngineMarks()
+{
+    s_engineMarks.clear();
+    HWND engine = nullptr;
+    while ((engine = FindWindowExW(HWND_MESSAGE, engine, L"SimpleSwitcher_Timer_001", nullptr)) != nullptr)
+    {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(engine, &pid);
+        const ULONG_PTR mark = (ULONG_PTR)(pid ^ 0xACE1F345AABBCCDD);
+        s_engineMarks.push_back(mark);
+        s_engineMarks.push_back(mark ^ (ULONG_PTR)0x5EB1A7EDu);
+    }
+}
+}
 unsigned long HotkeyEditor::s_doubleMs = 280;
 
 namespace
@@ -219,6 +243,7 @@ void HotkeyEditor::Record(int slot)
     m_recordingSlot = slot;
     m_recordingSince = GetTickCount();
     m_recorder.Start(m_sides, s_doubleMs);
+    TakeEngineMarks();
     s_recording = this;
     if (!s_hook)
         s_hook = SetWindowsHookExW(WH_KEYBOARD_LL, HookProc, GetModuleHandleW(nullptr), 0);
@@ -283,11 +308,12 @@ LRESULT CALLBACK HotkeyEditor::HookProc(int code, WPARAM wParam, LPARAM lParam)
     if (code != HC_ACTION || !s_recording)
         return CallNextHookEx(nullptr, code, wParam, lParam);
     const KBDLLHOOKSTRUCT* k = reinterpret_cast<const KBDLLHOOKSTRUCT*>(lParam);
-    // Typed by a program, not by a person - but the multimedia keys (browser, volume, player, mail, calculator:
-    // VK_BROWSER_BACK - VK_LAUNCH_APP2) of many keyboards come marked so from Windows' own HID service (forum,
-    // 08.10.2026: "нельзя задействовать мультимедийные клавиши (Избранной, Домой)"; the engine takes them anyway).
-    const bool multimedia = k->vkCode >= VK_BROWSER_BACK && k->vkCode <= VK_LAUNCH_APP2;
-    if ((k->flags & LLKHF_INJECTED) && !multimedia)
+    // Sent by FluentSwitcher itself - not recorded. Sent by other programs - recorded, as the engine takes them: remote
+    // access sends every key so (forum, 09.10.2026: through Lite Manager and AnyDesk no hotkey could be recorded; before,
+    // all keys sent by programs were skipped), and so do the multimedia keys of many keyboards (Windows' own HID
+    // service; 08.10.2026: "нельзя задействовать мультимедийные клавиши (Избранной, Домой)").
+    if ((k->flags & LLKHF_INJECTED) &&
+        std::find(s_engineMarks.begin(), s_engineMarks.end(), k->dwExtraInfo) != s_engineMarks.end())
         return CallNextHookEx(nullptr, code, wParam, lParam);
     const bool down = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
     if (k->scanCode == 0x21D)

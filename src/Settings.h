@@ -101,7 +101,8 @@ public:
         if (log) LOG_ANY(L"No automatic switch in {}: autoswitch_off", name);
         return true;
     }
-    // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h).
+    // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h),
+    // если там не работаем (work_in_remote).
     bool IsSkipProgramTop() const {
 
         const auto& col = disableInPrograms;
@@ -116,8 +117,8 @@ public:
             return false;
         }
 
-        if (RemoteDesktop::IsClient(name)) {
-            LOG_ANY(L"Skip process {}: a remote desktop or a virtual machine", name);
+        if (!work_in_remote && RemoteDesktop::IsClient(name)) {
+            LOG_ANY(L"Skip process {}: a remote desktop or a virtual machine (work_in_remote off)", name);
             return true;
         }
 
@@ -209,6 +210,11 @@ public:
 		: PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_UKRAINIAN ? "Ukrainian" : "English";
 	bool useBritishFlag = false;
 	string treat_as_letters = "_-";
+	// Работать в окнах удалённого рабочего стола и виртуальных машин (RemoteDesktop.h), как везде (до 1.5.0 - так). Выключено
+	// - там молчим, как в disableInPrograms (IsSkipProgramTop): для тех, у кого FluentSwitcher и на том компьютере (Дмитрий
+	// 06.10.2026: слово исправляли обе копии). С 06.10 по 09.10.2026 молчали всегда - форум (Ivan_Strelec): работать
+	// по удалённым подключениям, как обычно.
+	bool work_in_remote = true;
 	// Перепечатывать исправленное клавишами (как в SimpleSwitcher), а не готовыми символами.
 	// Символы не зависят от Shift и от того, успела ли смениться раскладка: новый Блокнот
 	// Windows 11 терял Shift в быстрой пачке клавиш ("?" -> "." вместо ",").

@@ -53,8 +53,9 @@ free and open source under GPL-3.0.
 - **Works in apps run as administrator**: Windows asks once, after that FluentSwitcher starts through the Task
   Scheduler without asking.
 - **Remote desktops and virtual machines** (Remote Desktop Connection, Windows App, Hyper-V, VMware, VirtualBox,
-  TeamViewer, AnyDesk, RustDesk, Parsec, VNC): in their windows FluentSwitcher of this computer stays out – the
-  text and the layout there belong to the other computer. To fix text there too, install FluentSwitcher on it.
+  TeamViewer, AnyDesk, RustDesk, Parsec, VNC): FluentSwitcher works in their windows as anywhere. If FluentSwitcher
+  runs on that computer too, turn off "Advanced" – "Work in remote access windows" here, otherwise both copies fix
+  the word.
 - The settings window and the flag's menu are in English, Russian and Ukrainian, the theme as in Windows, light or dark.
 - **Update check**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
   it tells about a new version with a notification by the clock, whether to download and install it is up to

@@ -195,8 +195,10 @@ inline bool IsConsoleWindow(HWND w) {
 }
 
 // Окно впереди запущено от администратора, а мы нет: Windows не даст отправить ему нажатия - придерживать нельзя,
-// они бы пропали. Окно удалённого рабочего стола или виртуальной машины (RemoteDesktop.h) и консоль: там мы ничего не
-// исправляем - придерживать незачем; консоль из списка consolePrograms (autoswitch_console) - можно.
+// они бы пропали. Окно удалённого рабочего стола или виртуальной машины (RemoteDesktop.h): не придерживаем, даже
+// когда там работаем (work_in_remote) - клиент во весь экран сам перехватывает клавиатуру, повтор нажатий через него не
+// проверялся; исправляем там, как до 1.5.0, без придержки. Консоль: там мы ничего не исправляем - придерживать
+// незачем; консоль из списка consolePrograms (autoswitch_console) - можно.
 inline bool CanHold(const std::set<std::wstring>* consolePrograms = nullptr) {
 	const HWND fg = GetForegroundWindow();
 	if (IsConsoleWindow(fg) && !(consolePrograms && ConsolePrograms::Allowed(fg, *consolePrograms))) return false;

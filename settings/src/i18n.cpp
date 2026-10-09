@@ -474,6 +474,11 @@ const std::unordered_map<std::string, const char*>& English()
           "Windows takes Ctrl + Alt for the right Alt (AltGr) and types a character instead of the hotkey: in German, "
           "Polish layouts, in Russian – ₽ on Ctrl + Alt + 8. FluentSwitcher switches the layout for a moment, and the "
           "app gets the hotkey" },
+        { "Работать в окнах удалённого доступа", "Work in remote access windows" },
+        { "Удалённый рабочий стол, AnyDesk, TeamViewer, виртуальные машины. Выключите, если FluentSwitcher стоит и "
+          "на том компьютере – иначе слово исправят обе копии",
+          "Remote Desktop, AnyDesk, TeamViewer, virtual machines. Turn it off if FluentSwitcher runs on that computer "
+          "too – otherwise both copies fix the word" },
         { "Перепечатывать исправленное клавишами", "Retype fixes with keys" },
         { "Старый способ. Обычно исправленное слово вставляется готовыми символами: так новый Блокнот Windows 11 "
           "не теряет Shift. Включите, если какое-то приложение не принимает такую вставку",

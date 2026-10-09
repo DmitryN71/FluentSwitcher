@@ -175,7 +175,7 @@ private:
 		else if (Msaa(req.focus, rc)) {
 			how = "msaa";
 		}
-		else if (UiaCaret(el, rc, true)) {
+		else if (UiaCaret(el, rc, true, uia)) {
 			how = "uia";
 		}
 		else {
@@ -273,7 +273,7 @@ private:
 		if (FAILED(uia->GetFocusedElement(&el)) || !el) return false;
 		int elPid = 0;
 		if (FAILED(el->get_CurrentProcessId(&elPid)) || (DWORD)elPid != pid) return false;
-		return UiaCaret(el, rc, editable);
+		return UiaCaret(el, rc, editable, uia);
 	}
 
 	// Браузер: в фокусе поле ввода? 1 - да, 0 - нет (текст страницы, ссылка, кнопка, список), -1 - фокус не в этой
@@ -481,9 +481,26 @@ private:
 		return rc.bottom > rc.top ? 1 : -1;
 	}
 
+	// Поле пустое, а в нём подсказка - текст-заглушка (поле поиска Проводника Windows 11: "Search This PC", TextBlock
+	// внутри TextBox): текст начнётся там же, где она, там и каретка. Иначе флажок вставал по краю поля с отступом -
+	// левее каретки (Дмитрий 10.10.2026). Подсказка - ребёнок поля типа Text внутри его прямоугольника.
+	static bool Placeholder(IUIAutomation* uia, IUIAutomationElement* el, const RECT& box, RECT& out) {
+		CComPtr<IUIAutomationCondition> text;
+		CComPtr<IUIAutomationElement> hint;
+		if (!uia || FAILED(uia->CreatePropertyCondition(UIA_ControlTypePropertyId, CComVariant((int)UIA_TextControlTypeId),
+			&text)) || !text || FAILED(el->FindFirst(TreeScope_Children, text, &hint)) || !hint)
+			return false;
+		RECT r{};
+		if (FAILED(hint->get_CurrentBoundingRectangle(&r)) || r.bottom - r.top < 4 || r.left < box.left || r.left >= box.right ||
+			r.top < box.top || r.bottom > box.bottom)
+			return false;
+		out = r;
+		return true;
+	}
+
 	// Каретка в текстовом элементе UI Automation. editable - элемент уже проверен как поле ввода (браузер): без
 	// символов у каретки - у края поля, какого бы типа он ни был.
-	static bool UiaCaret(IUIAutomationElement* el, RECT& rc, bool editable = false) {
+	static bool UiaCaret(IUIAutomationElement* el, RECT& rc, bool editable = false, IUIAutomation* uia = nullptr) {
 		CComPtr<IUIAutomationTextRange> range;
 		CComPtr<IUIAutomationTextPattern2> tp2;
 		CComPtr<IUIAutomationTextPattern> tp;
@@ -553,6 +570,10 @@ private:
 		}
 		RECT box{};
 		if (FAILED(el->get_CurrentBoundingRectangle(&box)) || box.bottom - box.top < 8 || box.right <= box.left) return false;
+		if (Placeholder(uia, el, box, r)) {
+			rc = { r.left, r.top, r.left + 1, r.bottom };
+			return true;
+		}
 		// Высота строки: размер шрифта поля (UI Automation) с межстрочным, нет его - 20 точек при 96 dpi.
 		UINT dpiX = 96, dpiY = 96;
 		GetDpiForMonitor(MonitorFromRect(&box, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);

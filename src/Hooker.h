@@ -172,8 +172,10 @@ private:
 				}
 				// И после прокрутки (буфер очищен, а каретка там же): дописанное дальше - кусок слова, как после щелчка.
 				Worker()->PostMsg(Message_ClearWorlds{ .click = true });
-				// Где была каретка до щелчка (флажок в PowerPoint: сдвинулась ли она от него, CaretFlag.h).
-				if (wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN) CaretMark();
+				// Где была каретка до щелчка или прокрутки (флажок в PowerPoint: сдвинулась ли она от них, CaretFlag.h). При
+				// прокрутке PowerPoint свою каретку не двигает - текст уезжает, флажок стоял на месте (Дмитрий, 11.10.2026).
+				if (wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN || wParam == WM_MOUSEWHEEL || wParam == WM_MOUSEHWHEEL)
+					CaretMark();
 				// Щелчок или прокрутка двигают каретку. Отпустили левую - курсор могли поставить в поле: в режиме
 				// "ненадолго" флажок показывается и от этого (браузеры о фокусе внутри страницы Windows не сообщают).
 				CaretFlagPoke(80, wParam == WM_LBUTTONUP);

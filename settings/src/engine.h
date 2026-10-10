@@ -15,6 +15,7 @@ enum : long
     StateElevated = 0x2,   // it runs as administrator
     StateAutostart = 0x4,
     StateLogging = 0x8,    // the debug log is on
+    StateReport = 0x10,    // it records for the report to the developer (no typed text)
 };
 
 // The engine's window: of the process `pid` when it is not 0 (tests), else of FluentSwitcher.exe in
@@ -33,6 +34,9 @@ bool Quit(HWND engine);
 bool RunCommand(HWND engine, int index);
 // The debug log (log\FluentSwitcher.exe.log next to the engine), until the engine quits.
 bool SetLogging(HWND engine, bool on);
+// The recording for the report to the developer (log\FluentSwitcher-report.log: what the engine does, no typed text;
+// it stops by itself after an hour). Off answers when the file is written.
+bool SetReport(HWND engine, bool on);
 // The window checked for updates (update.json): the engine tells the answer with a note by the flag.
 bool UpdateChecked(HWND engine);
 

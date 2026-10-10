@@ -52,7 +52,8 @@ free and open source under GPL-3.0.
 - **Commands**: run programs and paste text with a hotkey.
 - **Lists of apps**: where FluentSwitcher does not work at all (games; Advanced), where only the automatic switch is off (code editors) and in which console apps it works (Auto switch).
 - **Works in apps run as administrator**: Windows asks once, after that FluentSwitcher starts through the Task
-  Scheduler without asking.
+  Scheduler without asking. Under an administrator account only: under a standard one Windows would run it as
+  another user.
 - **Remote desktops and virtual machines** (Remote Desktop Connection, Windows App, Hyper-V, VMware, VirtualBox,
   TeamViewer, AnyDesk, RustDesk, Parsec, VNC): FluentSwitcher works in their windows as anywhere. If FluentSwitcher
   runs on that computer too, turn off "Advanced" – "Work in remote access windows" here, otherwise both copies fix
@@ -62,6 +63,11 @@ free and open source under GPL-3.0.
 - **Update check**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
   it tells about a new version with a notification by the clock, whether to download and install it is up to
   you. Turned off in "About", where "Check now" is too.
+- **Report to the developer** (Advanced): if something works wrong – "Start recording", repeat the error, "Save
+  the report". The recording has no typed text: only the number of letters instead of them, passwords never get
+  into it. The report is a text file on the desktop that you can read; a letter to the developer opens, and the file
+  is attached to it. The app sends nothing by itself.
+- FluentSwitcher turned off (Win + F8, the flag's menu) stays off after a restart too.
 
 The default hotkeys: Shift twice – the last word, or the selected text when no word was typed;
 Shift + CapsLock – several words, Ctrl + CapsLock – all recent text, Win + F8 – on / off, Win + Shift –

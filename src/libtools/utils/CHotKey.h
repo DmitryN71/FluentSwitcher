@@ -307,3 +307,41 @@ private:
 
 static_assert(sizeof(CHotKey) == 12);
 
+// Клавиша управления: модификаторы, F1-F24, Esc, Tab, Enter, Backspace, пробел, стрелки и Home-End, CapsLock, NumLock,
+// клавиши ввода иероглифов, мультимедийные, кнопки мыши, свои коды (Win). Остальные - клавиши текста: буквы, цифры,
+// знаки, цифровой блок, VK_PACKET (символ в коде сканирования), коды производителей.
+inline bool IsControlKey(TKeyCode vk) {
+	if (vk > 0xFF) return true;
+	return (vk >= 0x01 && vk <= 0x06) || (vk >= 0x08 && vk <= 0x2F) || (vk >= 0x5B && vk <= 0x5F) ||
+		(vk >= 0x70 && vk <= 0x91) || (vk >= 0x97 && vk <= 0xB9) || (vk >= 0xC1 && vk <= 0xDA) || vk == 0xE0 ||
+		vk == 0xE5 || vk == 0xE8 || vk >= 0xF6;
+}
+
+// Клавиша - в безопасный журнал (Logger.h, LogSafe): управления - по имени, текста - "‹key›".
+inline LogPlainA LogKey(TKeyCode vk) {
+	return LogPlain(LogSafe() && !IsControlKey(vk) ? std::string("\xE2\x80\xB9key\xE2\x80\xBA") : CHotKey::ToString(vk));
+}
+
+// Сочетание - в безопасный журнал: клавиша текста с Ctrl, Win или Alt - сочетание (Ctrl + C), видна; одна, с Shift, с
+// Ctrl + Alt или правым Alt (AltGr: так печатают буквы в польской, немецкой раскладках) - "‹key›".
+inline LogPlainA LogHotKey(const CHotKey& hk) {
+	if (!LogSafe()) return LogPlain(hk.ToString());
+	bool ctrl = false, alt = false, win = false, altGr = false;
+	for (TKeyCode k : hk) {
+		const TKeyCode n = CHotKey::Normalize(k);
+		ctrl = ctrl || n == VK_CONTROL;
+		alt = alt || n == VK_MENU;
+		win = win || n == VKE_WIN;
+		altGr = altGr || k == VK_RMENU;
+	}
+	const bool shortcut = (ctrl || alt || win) && !(ctrl && alt) && !altGr;
+	std::string s;
+	for (TKeyCode k : hk) {
+		if (!s.empty()) s += " + ";
+		s += shortcut || IsControlKey(k) ? CHotKey::ToString(k) : std::string("\xE2\x80\xB9key\xE2\x80\xBA");
+	}
+	if (hk.GetKeyup()) s += " #up";
+	if (hk.IsDouble()) s += " #double";
+	return LogPlain(s);
+}
+

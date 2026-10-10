@@ -373,7 +373,7 @@ class WorkerImplement {
             }
 
             if (GetTickCount64() - start >= maxWait) {
-                LOG_WARN(L"WaitLay: timeout language change for proc {}", m_sTopProcName.c_str());
+                LOG_WARN(L"WaitLay: timeout language change for proc {}", LogPlain(m_sTopProcName));
                 return 0;
             }
 

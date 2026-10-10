@@ -3,6 +3,7 @@
 #include "ConfigData.h"
 #include "ConfigData_hk.h"
 #include "RemoteDesktop.h"
+#include "CanElevate.h"
 
 enum class SeparateExtMode {
 	Disabled = 3,
@@ -99,7 +100,7 @@ public:
         if (Utils::GetProcLowerNameByPid(Utils::GetFocusedWndInfo().pid_top, path, name) != SW_ERR_SUCCESS || name.empty())
             return false;
         if (!autoswitch_off.contains(name) && !autoswitch_off.contains(path)) return false;
-        if (log) LOG_ANY(L"No automatic switch in {}: autoswitch_off", name);
+        if (log) LOG_ANY(L"No automatic switch in {}: autoswitch_off", LogPlain(name));
         return true;
     }
     // Программа впереди - из disableInPrograms или окно удалённого рабочего стола, виртуальной машины (RemoteDesktop.h),
@@ -119,12 +120,12 @@ public:
         }
 
         if (!work_in_remote && RemoteDesktop::IsClient(name)) {
-            LOG_ANY(L"Skip process {}: a remote desktop or a virtual machine (work_in_remote off)", name);
+            LOG_ANY(L"Skip process {}: a remote desktop or a virtual machine (work_in_remote off)", LogPlain(name));
             return true;
         }
 
         if (col.contains(name)) {
-            LOG_ANY(L"Skip process by name {} because of disableInProcess", name);
+            LOG_ANY(L"Skip process by name {} because of disableInProcess", LogPlain(name));
             return true;
         }
 
@@ -143,6 +144,9 @@ public:
     bool fixRAlt = false;
     HKL fixRAlt_lay_ = (HKL)0x4090409;
     bool isMonitorAdmin = false;
+    // "Работать в приложениях от имени администратора" - если своя учётная запись может получить эти права
+    // (CanElevate.h); под обычной - как выключено: без запроса пароля администратора при каждом запуске.
+    bool MonitorAdmin() const { return isMonitorAdmin && (Utils::IsSelfElevated() || CanElevateSelf()); }
     bool force_DbgMode              = false;
     bool fClipboardClearFormat = false;
     bool disableAccessebility    = false;
@@ -219,6 +223,10 @@ public:
 	// Место и размер окна настроек ("left,top,right,bottom,maximized" - settings/src/pages.cpp, RestorePlacement). Движок
 	// его только хранит: без поля в ProgramConfig его запись файла стирала бы его.
 	string settings_window;
+	// FluentSwitcher выключили (Win+F8, меню у значка, окно настроек) - после перезапуска он остаётся выключенным (форум,
+	// gutasiho, 10.10.2026). Пишет движок, когда его включают или выключают (gui2/main.cpp, WM_EnabledChanged); окно
+	// настроек берёт это поле из файла как есть (TakeEngineLearned).
+	bool enabled = true;
 	// Перепечатывать исправленное клавишами (как в SimpleSwitcher), а не готовыми символами.
 	// Символы не зависят от Shift и от того, успела ли смениться раскладка: новый Блокнот
 	// Windows 11 терял Shift в быстрой пачке клавиш ("?" -> "." вместо ",").

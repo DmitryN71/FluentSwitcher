@@ -84,10 +84,10 @@ public:
 			return;
 		string str;
 		for (const auto& key : all_keys) {
-			str += CHotKey::ToString(key.first);
+			str += LogKey(key.first).s;
 			str += " ";
 		}
-		LOG_ANY("all={}, one_value={}", str, one_value.ToString());
+		LOG_ANY("all={}, one_value={}", LogPlain(str), LogHotKey(one_value));
 	}
 
 	void Update(TKeyCode vkCode, bool isDown, bool isInjected) {
@@ -133,7 +133,7 @@ public:
 		else {
 			one_value.Remove(vkCode);
 			if (all_keys.erase(vkCode) == 0) {
-				LOG_WARN("Key was already upped {}", CHotKey::ToString(vkCode));
+				LOG_WARN("Key was already upped {}", LogKey(vkCode));
 			}
 		}
 
@@ -157,7 +157,7 @@ private:
 			// придержанные нажатия возвращаются как эмулированные): иначе такая клавиша оставалась "нажатой" навсегда, и
 			// Shift дважды выглядел бы как сочетание с ней.
 			if (info.time.DeltTo(now)>=10s && !(GetAsyncKeyState(code) & 0x8000)) {
-				LOG_WARN("delete key because it not down now {}", CHotKey::ToString(code));
+				LOG_WARN("delete key because it not down now {}", LogKey(code));
 				one_value.Remove(code);
 				return true;
 			}

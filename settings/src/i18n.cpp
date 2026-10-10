@@ -106,6 +106,12 @@ const std::unordered_map<std::string, const char*>& English()
           "он запускается через планировщик заданий без вопросов",
           "FluentSwitcher then runs as administrator: Windows asks once, after that it starts through the Task "
           "Scheduler without asking" },
+        { "Нужна учётная запись администратора. Под обычной Windows запустила бы FluentSwitcher от "
+          "имени другого пользователя и спрашивала бы его пароль при каждом запуске",
+          "Needs an administrator account. Under a standard one, Windows would run FluentSwitcher as another user and "
+          "ask for that user's password at every start" },
+        { "Под обычной учётной записью Windows этот режим не работает",
+          "This mode does not work under a standard Windows account" },
         { "Чтобы работать в приложениях, запущенных от имени администратора, FluentSwitcher перезапустится "
           "с правами администратора. Windows спросит разрешения один раз: дальше приложение запускается "
           "через планировщик заданий, без вопросов",
@@ -502,6 +508,47 @@ const std::unordered_map<std::string, const char*>& English()
           "app folder. Don't type passwords meanwhile; after the check, turn it off and delete the log" },
         { "Журнал отладки не переключился. ", "The debug log did not switch. " },
         { "FluentSwitcher не запущен: журнал вести некому", "FluentSwitcher is not running: nothing can keep the log" },
+        { "Отчёт для разработчика", "Report to the developer" },
+        { "Если что-то работает не так: начните запись, повторите ошибку и сохраните отчёт. В записи нет "
+          "набранного текста – вместо букв только их число, пароли в неё не попадают. Отчёт появится на "
+          "рабочем столе – его можно прочитать, – и откроется письмо разработчику, приложите отчёт к нему",
+          "If something works wrong: start recording, repeat the error and save the report. The recording has no "
+          "typed text – only the number of letters instead of them, passwords never get into it. The report appears on "
+          "the desktop – you can read it – and a letter to the developer opens; attach the report to it" },
+        { "Остановить запись", "Stop recording" },
+        { "Начать запись", "Start recording" },
+        { "Сохранить отчёт", "Save the report" },
+        { "FluentSwitcher не запущен: записывать некому", "FluentSwitcher is not running: nothing can record" },
+        { "FluentSwitcher не ответил", "FluentSwitcher did not answer" },
+        { "Запись остановлена: сохраните отчёт", "Recording stopped: save the report" },
+        { "Идёт запись. Повторите ошибку и нажмите «Сохранить отчёт». Через час запись остановится сама",
+          "Recording. Repeat the error and click “Save the report”. The recording stops by itself in an hour" },
+        { "Записи ещё нет: нажмите «Начать запись» и повторите ошибку",
+          "Nothing recorded yet: click “Start recording” and repeat the error" },
+        { "Не удалось сохранить отчёт на рабочем столе", "Could not save the report on the desktop" },
+        { "Отчёт на рабочем столе: %s. Приложите его к письму на %s",
+          "The report is on the desktop: %s. Attach it to a letter to %s" },
+        { "Отправьте этот файл на %s", "Send this file to %s" },
+        { "отчёт для разработчика", "report to the developer" },
+        { "учётная запись: ", "account: " },
+        { "администратор", "administrator" },
+        { "обычная", "standard" },
+        { "Сочетания Windows для смены: ", "Windows hotkeys for switching: " },
+        { "языка – %s, раскладки – %s", "language – %s, layout – %s" },
+        { "как по умолчанию", "default" },
+        { "не назначено", "not assigned" },
+        { "Программы, которые тоже работают с клавиатурой: ", "Other programs that work with the keyboard: " },
+        { "нет", "none" },
+        { "Настройки (без списков слов и текстов команд)", "Settings (without the word lists and the commands' texts)" },
+        { "не прочитались: ", "could not be read: " },
+        { "Запись (без набранного текста: вместо букв – их число)",
+          "Recording (no typed text: the number of letters instead of them)" },
+        { "FluentSwitcher %s – отчёт", "FluentSwitcher %s – report" },
+        { "Что делали:", "What you did:" },
+        { "Что ожидали:", "What you expected:" },
+        { "Что получилось:", "What happened:" },
+        { "Отчёт – файл %s на рабочем столе, приложите его к письму.",
+          "The report is the file %s on the desktop; please attach it to this letter." },
 
         // About
         { "О приложении", "About" },

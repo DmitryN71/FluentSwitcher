@@ -152,7 +152,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	COM::CAutoCOMInitialize autoCom;
 	IFS_LOG(autoCom.Init());
 
-	if (conf_get_unsafe()->isMonitorAdmin && !Utils::IsSelfElevated() && RunElevatedCopy()) {
+	if (conf_get_unsafe()->MonitorAdmin() && !Utils::IsSelfElevated() && RunElevatedCopy()) {
 		LOG_ANY("an elevated copy took over");
 		return 0;
 	}
@@ -165,7 +165,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ApplyLocalization();
 	ApplyAcessebil();
 
-	if (IsAdminOk()) {
+	if (!conf_get_unsafe()->enabled) {
+		LOG_ANY("enabled: no, turned off before the restart"); // значок серый, включают как обычно
+	}
+	else if (IsAdminOk()) {
 		if (Utils::IsDebug() && !g_enabled.TryEnable()) {
 			auto hk = conf_get_unsafe()->GetHk(hk_ToggleEnabled).keys.key();
 			for (auto& it : hk) if (it == VKE_WIN) it = VK_LWIN;

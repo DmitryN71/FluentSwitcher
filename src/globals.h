@@ -15,12 +15,14 @@ inline std::atomic<bool> g_enableTouched = false;
 // inline std::atomic_bool hk_edit_now = false; // пока не нужно.
 // otherWindow: раскладка другая потому, что впереди другое окно со своей раскладкой (звука переключения нет).
 inline void new_layout_request(HKL layout = 0, bool otherWindow = false) { PostMessage(g_guiHandle, WM_LayNotif, (WPARAM)layout, otherWindow); }
-inline void try_toggle_enable() { g_enableTouched = true; if (g_enabled.TryToggle()) new_layout_request(); } // todo not thread safe
+// Включили или выключили сами (сочетание, меню у значка, окно настроек): запомнить до следующего запуска (enabled).
+inline void enabled_changed() { PostMessage(g_guiHandle, WM_EnabledChanged, 0, 0); }
+inline void try_toggle_enable() { g_enableTouched = true; if (g_enabled.TryToggle()) { new_layout_request(); enabled_changed(); } } // todo not thread safe
 inline void show_main_wind(int mode = 0) {
 	WinUtils::PostMsg(g_guiHandle, WM_ShowWindow, mode);
 }
 
 inline void ApplyAcessebil() {	AllowAccessibilityShortcutKeys(!conf_get_unsafe()->disableAccessebility);}
-inline bool IsAdminOk() { return Utils::IsSelfElevated() || !conf_get_unsafe()->isMonitorAdmin; }
+inline bool IsAdminOk() { return Utils::IsSelfElevated() || !conf_get_unsafe()->MonitorAdmin(); }
 
 

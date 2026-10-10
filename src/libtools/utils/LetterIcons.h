@@ -141,7 +141,8 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 	}
 	const float tw = measure(text, size);
 
-	const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+	// Процессором, как меню у значка (FluentMenu.h): видеокарта ради значка в 32 точки - десятки МБ драйвера в движке.
+	const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
 		D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
 	ComPtr<ID2D1DCRenderTarget> rt;
 	ComPtr<ID2D1SolidColorBrush> brush;

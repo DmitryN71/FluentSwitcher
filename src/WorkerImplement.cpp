@@ -44,7 +44,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
 
     const auto& cur_hotkey = keyData.cur_hotKey;
 
-    LOG_ANY("ProcessKeyMsg {} curState={}", CHotKey::ToString(vkCode), cur_hotkey.ToString());
+    LOG_ANY("ProcessKeyMsg {} curState={}", LogKey(vkCode), LogHotKey(cur_hotkey));
 
     m_is_last_caps =
         keyData.is_caps;  // сохраним последнее известное значение. Нажатие caps по идее должно нам привести сюда.
@@ -490,12 +490,12 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
                 shortWord = AutoSwitch::ShortWord(typed, there, Utils::GetNameForHKL_simple(lay),
                                                   Utils::GetNameForHKL_simple(other), context(), dictionary(lay));
                 if (shortWord != AutoSwitch::Short::No) {
-                    LOG_ANY(L"autoswitch: {} / {}: a short word, {}", typed, there, std::wstring(why, why + strlen(why)));
+                    LOG_ANY(L"autoswitch: {} / {}: a short word, {}", typed, there, LogPlain(std::wstring(why, why + strlen(why))));
                     why = nullptr;
                 }
             }
             if (why) {
-                LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, std::wstring(why, why + strlen(why)));
+                LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, LogPlain(std::wstring(why, why + strlen(why))));
                 m_autoNo = { typed, why };
                 continue;
             }
@@ -664,7 +664,7 @@ void WorkerImplement::AutoSwitchEarly() {
             later = later || verdict.what == AutoSwitch::Early::NotYet;
             LOG_ANY(L"autoswitch early: {} / {}: {}, {}", typed, there,
                     verdict.what == AutoSwitch::Early::NotYet ? L"not yet" : L"no",
-                    std::wstring(verdict.why, verdict.why + strlen(verdict.why)));
+                    LogPlain(std::wstring(verdict.why, verdict.why + strlen(verdict.why))));
             continue;
         }
         if (IsPasswordUia()) return never("a password field");
@@ -1313,7 +1313,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         m_holdId = 0;
         if (IsNeedSavedWords(hk) ||
             Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine)) {
-            LOG_ANY("skip hotkey {}: typed text went on meanwhile", key.ToString());
+            LOG_ANY("skip hotkey {}: typed text went on meanwhile", LogHotKey(key));
             // Сочетание всё же было: одиночное нажатие, отложенное ради "дважды", не должно сработать вместо него.
             m_lastHotKeyTime = GetTickCount64();
             return;
@@ -1321,7 +1321,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
     }
 
     if (keyData.delayed_from != 0 && keyData.delayed_from <= m_lastHotKeyTime) {
-        LOG_ANY("skip hotkey {} possible was double press", key.ToString());
+        LOG_ANY("skip hotkey {} possible was double press", LogHotKey(key));
         return;
     }
     m_lastHotKeyTime = GetTickCount64();
@@ -1362,7 +1362,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
 
     m_lastRevertRequest = hk;
 
-    LOG_ANY("Hotkey start {}({})", HotKeyTypeName(hk), (int)hk);
+    LOG_ANY("Hotkey start {}({})", LogPlain(HotKeyTypeName(hk)), (int)hk);
 
     if (!g_enabled.IsEnabled() && hk != hk_ToggleEnabled) {
         LOG_ANY("Skip hk because disabled");
@@ -1427,12 +1427,12 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
                 // Перевод слова сам поставит раскладку, и она та же, что уже дал одиночный Shift: не переключать туда
                 // и обратно (новый Блокнот теряет символы, когда раскладка меняется несколько раз подряд), а только
                 // считать от прежней - ProcessRevert увидит, что нужная уже стоит.
-                LOG_ANY("double {} after the single press: counted from {:x}, no switch back", key.ToString(),
+                LOG_ANY("double {} after the single press: counted from {:x}, no switch back", LogHotKey(key),
                         (ULONGLONG)single.lay);
                 topWndInfo2.lay = single.lay;
             }
             else if (CurLay() != single.lay) {
-                LOG_ANY("double {} after the single press: layout back to {:x}", key.ToString(), (ULONGLONG)single.lay);
+                LOG_ANY("double {} after the single press: layout back to {:x}", LogHotKey(key), (ULONGLONG)single.lay);
                 IFS_RET(ProcessRevert({.lay = single.lay, .flags = SW_CLIENT_SetLang}));
                 // CurLay() - запомненная раскладка, сама она обновится только через 100 мс (TimerCheckLay);
                 // исправление ниже должно считать от возвращённой, иначе напечатает слово как было.
@@ -1663,7 +1663,7 @@ void WorkerImplement::SwitchLangByEmulate(HKL lay) {
         return;
     }
 
-    LOG_ANY("Emulate with {}", altshift.ToString());
+    LOG_ANY("Emulate with {}", LogHotKey(altshift));
 
     InputSender::SendHotKey(altshift);
 
@@ -1693,7 +1693,7 @@ TStatus WorkerImplement::AnalizeTopWnd() {
     IFS_LOG(Utils::GetProcLowerNameByPid(topWndInfo2.pid_top, m_sTopProcPath, m_sTopProcName));
 
     LOG_ANY(L"AnalizeTopWnd pid_top={}, pid_default={}, lay={:x} prg={}", topWndInfo2.pid_top, topWndInfo2.pid_default,
-            (ULONGLONG)topWndInfo2.lay, m_sTopProcName);
+            (ULONGLONG)topWndInfo2.lay, LogPlain(m_sTopProcName));
 
     RETURN_SUCCESS;
 }
@@ -1712,7 +1712,7 @@ TStatus WorkerImplement::FixCtrlAlt(CHotKey key) {
     if (cfg->layouts_info.GetLayoutInfo(lay) == nullptr) {
         auto str = std::format(L"{:x}", (size_t)lay);
         // const TChar* s = L"00000409";
-        LOG_ANY(L"load temp layout {}", str);
+        LOG_ANY(L"load temp layout {}", LogPlain(str));
         temp = LoadKeyboardLayout(str.c_str(), KLF_ACTIVATE);
         IFW_LOG(temp != NULL);
 

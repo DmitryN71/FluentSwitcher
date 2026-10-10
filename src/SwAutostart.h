@@ -162,13 +162,13 @@ inline bool autostart_get() {
 	bool isAdminHasTask = false;
 	IFS_LOG(CheckSchedule(isAdminAllOk, isAdminHasTask));
 
-	return conf_get_unsafe()->isMonitorAdmin ? isAdminAllOk && !isUserHasTask
+	return conf_get_unsafe()->MonitorAdmin() ? isAdminAllOk && !isUserHasTask
 		: isUserAllOk && !isAdminHasTask;
 
 }
 inline bool autostart_set(bool enable) {
 	auto func = [enable]() -> TStatus {
-		if (conf_get_unsafe()->isMonitorAdmin) {
+		if (conf_get_unsafe()->MonitorAdmin()) {
 			IFS_RET(DelRegRun());
 			if (enable) {
 				IFS_RET(SetSchedule());

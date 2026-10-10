@@ -90,6 +90,11 @@ bool SetLogging(HWND engine, bool on)
     return Command(engine, L"SimpleSwitcher.SetLogging", on);
 }
 
+bool SetReport(HWND engine, bool on)
+{
+    return Command(engine, L"SimpleSwitcher.SetLogging", on ? 2 : 0);
+}
+
 bool UpdateChecked(HWND engine)
 {
     return Command(engine, L"SimpleSwitcher.UpdateChecked");

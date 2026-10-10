@@ -9,6 +9,9 @@
 #include <source_location>
 #include <print>
 #include <csignal>
+#include <filesystem>
+#include <tuple>
+#include <vector>
 
 enum TLogLevel {
 	LOG_LEVEL_DISABLE = 0,  
@@ -25,7 +28,95 @@ namespace _log_int {
 inline TLogLevel GetLogLevel() { return _log_int::log_level;}
 inline void SetLogLevel(TLogLevel val) { _log_int::log_level = val; }
 
+// Безопасный журнал - "Отчёт для разработчика" (1.5.2; Дмитрий, 11.10.2026: "debug log, который они смогут включать, не
+// опасаясь, что пароли и т.д. в логе будут"). Набранного текста в нём нет ни в каком виде: пароль не везде виден как
+// пароль (браузер, игра, удалённый стол). Строки в значениях записей по умолчанию закрыты - вместо них число символов,
+// "‹6›". Открыты: строки-константы программы (они в её памяти только для чтения - InReadOnlyImage), числа и LogPlain(...) -
+// то, что проверено: имена программ и классов окон, причины решений, версии, клавиши управления (LogKey, LogHotKey в
+// CHotKey.h). Клавиши текста - буквы, цифры, знаки - без названия и кода. Пропущенная строка закрыта, а не открыта.
 namespace _log_int {
+	inline constinit std::atomic<bool> safe = false;
+}
+inline bool LogSafe() { return _log_int::safe; }
+
+// Проверенное значение - в безопасный журнал как есть.
+struct LogPlainW { std::wstring s; };
+struct LogPlainA { std::string s; };
+inline LogPlainW LogPlain(std::wstring s) { return { std::move(s) }; }
+inline LogPlainW LogPlain(std::wstring_view s) { return { std::wstring(s) }; }
+inline LogPlainW LogPlain(const wchar_t* s) { return { s ? s : L"" }; }
+inline LogPlainA LogPlain(std::string s) { return { std::move(s) }; }
+inline LogPlainA LogPlain(std::string_view s) { return { std::string(s) }; }
+inline LogPlainA LogPlain(const char* s) { return { s ? s : "" }; }
+
+template<> struct std::formatter<LogPlainW, wchar_t> : std::formatter<std::wstring_view, wchar_t> {
+	auto format(const LogPlainW& p, auto& ctx) const { return std::formatter<std::wstring_view, wchar_t>::format(p.s, ctx); }
+};
+template<> struct std::formatter<LogPlainA, char> : std::formatter<std::string_view, char> {
+	auto format(const LogPlainA& p, auto& ctx) const { return std::formatter<std::string_view, char>::format(p.s, ctx); }
+};
+
+namespace _log_int {
+
+	// Адрес - в памяти программы только для чтения (код, константы): там строки-литералы ("off", L"a letter", LOC(...)),
+	// набранного там не бывает.
+	inline bool InReadOnlyImage(const void* p) {
+		struct Range { uintptr_t from, to; };
+		static const std::vector<Range> ranges = [] {
+			std::vector<Range> r;
+			const auto base = (const BYTE*)GetModuleHandleW(nullptr);
+			const auto nt = (const IMAGE_NT_HEADERS*)(base + ((const IMAGE_DOS_HEADER*)base)->e_lfanew);
+			const IMAGE_SECTION_HEADER* sec = IMAGE_FIRST_SECTION(nt);
+			for (WORD i = 0; i < nt->FileHeader.NumberOfSections; i++, sec++)
+				if (!(sec->Characteristics & IMAGE_SCN_MEM_WRITE))
+					r.push_back({ (uintptr_t)base + sec->VirtualAddress, (uintptr_t)base + sec->VirtualAddress + sec->Misc.VirtualSize });
+			return r;
+		}();
+		const auto a = (uintptr_t)p;
+		for (const auto& x : ranges)
+			if (a >= x.from && a < x.to) return true;
+		return false;
+	}
+
+	// Вместо строки - число её символов: "‹6›".
+	inline std::wstring MaskW(size_t n) { return std::format(L"‹{}›", n); }
+	inline std::string MaskA(std::string_view utf8) {
+		size_t n = 0;
+		for (unsigned char c : utf8) n += (c & 0xC0) != 0x80;
+		return std::format("\xE2\x80\xB9{}\xE2\x80\xBA", n);
+	}
+
+	// Значение записи - каким оно идёт в строку журнала (выше: что закрыто в безопасном).
+	template<class T> auto Guard(bool hide, T&& v) {
+		using D = std::remove_cvref_t<T>;
+		using E = std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>;
+		if constexpr (std::is_same_v<D, LogPlainW> || std::is_same_v<D, LogPlainA>) {
+			return D(v);
+		}
+		else if constexpr (std::is_same_v<D, std::wstring> || std::is_same_v<D, std::wstring_view>) {
+			return !hide || InReadOnlyImage(std::wstring_view(v).data()) ? std::wstring(v) : MaskW(std::wstring_view(v).size());
+		}
+		else if constexpr (std::is_same_v<D, std::string> || std::is_same_v<D, std::string_view>) {
+			return !hide || InReadOnlyImage(std::string_view(v).data()) ? std::string(v) : MaskA(v);
+		}
+		else if constexpr (std::is_pointer_v<std::decay_t<T>> && std::is_same_v<E, wchar_t>) {
+			const wchar_t* p = v ? v : L"";
+			return !hide || InReadOnlyImage(p) ? std::wstring(p) : MaskW(wcslen(p));
+		}
+		else if constexpr (std::is_pointer_v<std::decay_t<T>> && std::is_same_v<E, char>) {
+			const char* p = v ? v : "";
+			return !hide || InReadOnlyImage(p) ? std::string(p) : MaskA(p);
+		}
+		else if constexpr (std::is_same_v<D, std::filesystem::path>) {
+			return !hide ? v.wstring() : MaskW(v.native().size());
+		}
+		else if constexpr (std::is_same_v<D, wchar_t> || std::is_same_v<D, char>) {
+			return hide ? D('*') : D(v);
+		}
+		else {
+			return D(v);
+		}
+	}
 
 	// Строка журнала собирается в том потоке, который пишет, а в файл её пишет свой поток (SwLogger::Writer): запись на
 	// диск иногда ждёт сотни миллисекунд, а журнал пишет и перехват клавиш и мыши - Windows ждёт его на каждое нажатие и
@@ -50,14 +141,18 @@ namespace _log_int {
 			s += std::format(L"{:02}.{:02}|{:02}:{:02}:{:02}.{:03}|{:05} ", st.wDay, st.wMonth, st.wHour, st.wMinute,
 				st.wSecond, st.wMilliseconds, GetCurrentThreadId());
 		}
+		// Значения - через Guard: в безопасном журнале строки закрыты (выше).
 		template<typename... Args>
 		void AppendFormat(const std::wformat_string<Args...>& f, Args&&... v) {
-			s += std::vformat(f.get(), std::make_wformat_args(v...));
+			auto guarded = std::make_tuple(Guard(safe, std::forward<Args>(v))...);
+			std::apply([&](auto&... a) { s += std::vformat(f.get(), std::make_wformat_args(a...)); }, guarded);
 		}
 		template<typename... Args>
 		void AppendFormat(const std::format_string<Args...>& f, Args&&... v) {
-			Append(std::vformat(f.get(), std::make_format_args(v...)).c_str());
+			auto guarded = std::make_tuple(Guard(safe, std::forward<Args>(v))...);
+			std::apply([&](auto&... a) { Append(std::vformat(f.get(), std::make_format_args(a...)).c_str()); }, guarded);
 		}
+		bool safe = _log_int::safe; // строка собрана в безопасном журнале (SwLogger: в файл отчёта - только такие)
 	};
 
 	class SwLogger {
@@ -67,15 +162,15 @@ namespace _log_int {
 			static SwLogger* logger = new SwLogger();
 			return *logger;
 		}
-		// Готовая строка (с \n) - в очередь; держит только очередь, не файл.
-		void Push(std::wstring&& line) {
+		// Готовая строка (с \n) - в очередь; держит только очередь, не файл. safe - собрана в безопасном журнале.
+		void Push(std::wstring&& line, bool safe) {
 			{
 				std::lock_guard lock(m_mtx);
 				if (m_queue.size() >= 50000) { // диск совсем встал - не копить память
 					m_dropped++;
 					return;
 				}
-				m_queue.push_back(std::move(line));
+				m_queue.push_back({ std::move(line), safe });
 				if (!m_started) {
 					m_started = true;
 					std::thread([this] { Writer(); }).detach();
@@ -96,19 +191,50 @@ namespace _log_int {
 			}
 			m_cv.notify_one();
 		}
+		// Файл безопасного журнала (LogSafe) - log\FluentSwitcher-report.log, новый при каждом включении; в него - только
+		// строки, собранные в безопасном режиме (обычные, оставшиеся в очереди, - мимо). Выключили - дальше в обычный
+		// файл, он дописывается.
+		void SetReportFile(bool on) {
+			std::lock_guard lock(m_mtx);
+			m_report = on;
+			m_targetGen++;
+		}
+		// Дождаться, пока очередь записана (не дольше секунды).
+		void Flush() { Finish(); }
+		static std::wstring Folder() {
+			wchar_t path[MAX_PATH * 2] = {};
+			if (!GetModuleFileNameEx(GetCurrentProcess(), GetCurrentModule(), path, (DWORD)std::size(path))) return {};
+			if (wchar_t* last = wcsrchr(path, L'\\')) *last = 0;
+			return std::wstring(path) + L"\\log";
+		}
+		static std::wstring ReportPath() { return Folder() + L"\\FluentSwitcher-report.log"; }
 
 	private:
+		struct Queued {
+			std::wstring line;
+			bool safe = false;
+		};
 		void Writer() {
 			std::unique_lock lock(m_mtx);
 			while (true) {
 				m_cv.wait(lock, [this] { return !m_queue.empty(); });
-				std::deque<std::wstring> batch;
+				std::deque<Queued> batch;
 				batch.swap(m_queue);
 				const size_t dropped = std::exchange(m_dropped, 0);
+				const bool report = m_report;
+				const int gen = m_targetGen;
 				m_writing = true;
 				lock.unlock();
+				if (gen != m_openGen) { // файл сменился (SetReportFile)
+					if (m_fp) fclose(m_fp);
+					m_fp = NULL;
+					m_tryOpen = false;
+					m_openGen = gen;
+					m_openReport = report;
+				}
 				if (FILE* fp = LazyOpen()) {
-					for (const auto& line : batch) fputws(line.c_str(), fp);
+					for (const auto& q : batch)
+						if (q.safe || !m_openReport) fputws(q.line.c_str(), fp);
 					if (dropped) fwprintf_s(fp, L"[log: %zu lines dropped, the disk did not keep up]\n", dropped);
 					fflush(fp);
 				}
@@ -134,37 +260,37 @@ namespace _log_int {
 				if (!m_tryOpen) {
 					m_tryOpen = true;
 
-					static const size_t nSize = 0x1000;
-					std::unique_ptr<TChar[]> buf(new TChar[nSize]);
-					TChar* sFolder = buf.get();
-					if (!sFolder) {
+					const std::wstring folder = Folder();
+					if (folder.empty())
+						return NULL;
+					CreateDirectory(folder.c_str(), NULL);
+					if (m_openReport) {
+						m_fp = _wfsopen(ReportPath().c_str(), L"wt, ccs=UTF-8", _SH_DENYNO);
 						return m_fp;
 					}
-
-					if (!GetModuleFileNameEx(GetCurrentProcess(), GetCurrentModule(), sFolder, nSize))
-						return NULL;
-					TChar* sLast = wcsrchr(sFolder, L'\\');
-					if (sLast)
-						*sLast = 0;
-					wcscat_s(sFolder, nSize, L"\\log");
-					CreateDirectory(sFolder, NULL);
 					TChar base[512];
 					base[0] = 0;
 					GetModuleBaseName(GetCurrentProcess(), NULL, base, std::ssize(base));
 
-					auto path = std::format(L"{}\\{}.log", sFolder, base);
-					m_fp = _wfsopen(path.c_str(), L"wt, ccs=UTF-8", _SH_DENYNO);
+					auto path = std::format(L"{}\\{}.log", folder, base);
+					// Первый раз за запуск - заново; после безопасного журнала - дописать.
+					m_fp = _wfsopen(path.c_str(), m_mainOpened ? L"at, ccs=UTF-8" : L"wt, ccs=UTF-8", _SH_DENYNO);
+					m_mainOpened = m_mainOpened || m_fp;
 				}
 			}
 			return m_fp;
 		}
 		std::mutex m_mtx; // очередь
 		std::condition_variable m_cv, m_idleCv;
-		std::deque<std::wstring> m_queue;
+		std::deque<Queued> m_queue;
 		size_t m_dropped = 0;
 		bool m_started = false, m_writing = false;
+		bool m_report = false; // под m_mtx: файл безопасного журнала (SetReportFile)
+		int m_targetGen = 0;
 		FILE* m_fp = NULL; // только поток записи
 		bool m_tryOpen = false;
+		bool m_openReport = false, m_mainOpened = false; // только поток записи
+		int m_openGen = 0;
 	};
 
 	inline SwLogger& SwLoggerGlobal() { return SwLogger::Get(); }
@@ -175,7 +301,7 @@ namespace _log_int {
 		if constexpr (iswarn) line.Append("[WARN] ");
 		line.AppendFormat(FORWARD(v)...);
 		line.s += L'\n';
-		SwLoggerGlobal().Push(std::move(line.s));
+		SwLoggerGlobal().Push(std::move(line.s), line.safe);
 	}
 
 	class WinErrBOOL {
@@ -246,7 +372,7 @@ namespace _log_int {
 		line.AppendFormat("file={}({})", cur ? cur + 1 : file, loc.line());
 		line.AppendFormat(s, FORWARD(v)...);
 		line.s += L'\n';
-		SwLoggerGlobal().Push(std::move(line.s));
+		SwLoggerGlobal().Push(std::move(line.s), line.safe);
 	}
 
 	inline void __Log_Err_Common(const auto& err, std::source_location loc) { __Log_Err_Common(err, loc, L""); }
@@ -279,6 +405,23 @@ namespace _log_int {
 
 #define IFH_RET(X, ...) _SW_ERR_RET(_log_int::WinErrHRESULT, X, __VA_ARGS__)
 #define IFH_LOG(X, ...) _SW_ERR_LOG(_log_int::WinErrHRESULT, X, __VA_ARGS__)
+
+// Безопасный журнал (LogSafe) - вкл./выкл.: свой файл, свой уровень (3: строки LOG_ANY_4 - посимвольные - не пишутся).
+// Выключение ждёт, пока его строки записаны, - файл можно читать сразу.
+inline void SetLogSafe(bool on) {
+	if (on) {
+		SetLogLevel(LOG_LEVEL_DISABLE);
+		_log_int::SwLoggerGlobal().SetReportFile(true);
+		_log_int::safe = true;
+		SetLogLevel(LOG_LEVEL_3);
+	}
+	else {
+		SetLogLevel(LOG_LEVEL_DISABLE);
+		_log_int::safe = false;
+		_log_int::SwLoggerGlobal().Flush();
+		_log_int::SwLoggerGlobal().SetReportFile(false);
+	}
+}
 
 #define LOG_ANY(...) if (GetLogLevel() >= LOG_LEVEL_2) {_log_int::LOG_ANY_CMN(__VA_ARGS__);}
 #define LOG_ANY_4(...) if (GetLogLevel() >= LOG_LEVEL_4) [[unlikely]] {_log_int::LOG_ANY_CMN(__VA_ARGS__);}

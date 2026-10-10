@@ -32,9 +32,16 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 		bool isDown = curKeyState == KEY_STATE_DOWN;
 		if (isDown) iscaps = Utils::IsCapslockEnabled() ? 1 : 0;
 
-		LOG_ANY(
-			"KEY_MSG: {}({:x}) {},scan=0x{:x},inject={},low_inject={},altdown={},syskey={},extended={},is_pressed={},flags=0x{:b},caps={}",
-			CHotKey::ToString(vkCode),
+		// Безопасный журнал (Logger.h): клавиша текста - без имени, кода и кода сканирования (по ним видна буква); чья
+		// она - метка программы, приславшей её (dwExtraInfo: AutoHotkey, наши) - видна.
+		if (LogSafe() && !IsControlKey(vkCode)) {
+			LOG_ANY("KEY_MSG: {} {},inject={},low_inject={},altdown={},extended={},extra=0x{:x}", LogKey(vkCode),
+			        (curKeyState == KEY_STATE_UP ? "UP" : "DOWN"), isInjected, is_low_inject, isAltDown, isExtended,
+			        (ULONGLONG)k->dwExtraInfo);
+		}
+		else LOG_ANY(
+			"KEY_MSG: {}({:x}) {},scan=0x{:x},inject={},low_inject={},altdown={},syskey={},extended={},is_pressed={},flags=0x{:b},caps={},extra=0x{:x}",
+			LogKey(vkCode),
 			vkCode,
 			(curKeyState == KEY_STATE_UP ? "UP" : "DOWN"),
 			scan_code,
@@ -45,7 +52,8 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			isExtended,
 			is_pressed,
 			k->flags,
-			iscaps
+			iscaps,
+			(ULONGLONG)k->dwExtraInfo
 		);
 
 		if (k->dwExtraInfo == c_MyInjectedId) {
@@ -128,7 +136,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			}
 
 			need_disable_event = true;
-			LOG_ANY("Key {} was disabled({})", CHotKey::ToString(vkCode), isDown ? "down": "up");
+			LOG_ANY("Key {} was disabled({})", LogKey(vkCode), isDown ? "down": "up");
 		};
 
 		curKeys.DebugPrint();
@@ -137,12 +145,12 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 		if (pending_double_vk != 0) {
 			if (isDown) {
 				// другая клавиша или автоповтор этой (удерживают) - уже не "дважды"
-				LOG_ANY("double {} canceled by {}", pending_double.ToString(), CHotKey::ToString(vkCode));
+				LOG_ANY("double {} canceled by {}", LogHotKey(pending_double), LogKey(vkCode));
 				pending_double_vk = 0;
 			} else if (vkCode == pending_double_vk) {
 				pending_double_vk = 0;
 				if (last_mouse_click_time > pending_double_time) {
-					LOG_ANY("double {} canceled by mouse click", pending_double.ToString());
+					LOG_ANY("double {} canceled by mouse click", LogHotKey(pending_double));
 				} else {
 					msg_hotkey.hotkey = pending_double;
 					msg_hotkey.hk = pending_double_hk;
@@ -221,7 +229,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 										pending_double_hk = hk;
 										pending_double_vk = vkCode;
 										pending_double_time.SetToNow();
-										LOG_ANY("double {} waits for the release", key.ToString());
+										LOG_ANY("double {} waits for the release", LogHotKey(key));
 										break;
 									}
 									msg_hotkey.hotkey = key;
@@ -252,7 +260,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// «пустая» клавиша vkE8 (ничему не назначена), и отпускание уже не одинокое (форум, 09.10.2026). Отправляет
 			// рабочий поток - после того, как само нажатие ушло в программу.
 			if (found_hk && curk.Size() == 1 && Utils::is_in(vkCode, VK_LMENU, VK_RMENU, VK_LWIN, VK_RWIN) && !curKeys.IsHold()) {
-				LOG_ANY("mask the lone {} with vkE8", CHotKey::ToString(vkCode));
+				LOG_ANY("mask the lone {} with vkE8", LogKey(vkCode));
 				Worker()->PostMsg([](auto) { InputSender::SendVkKey(0xE8); });
 			}
 
@@ -304,7 +312,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			}
 			else if (msg_hotkey.hotkey.GetKeyup() && last_mouse_click_time > curKeys.StartOfLastHotKey()) {
 				// Possible Ctrl+Click in IDE
-				LOG_ANY("HotKey {} was canceled by mouse click", msg_hotkey.hotkey.ToString());
+				LOG_ANY("HotKey {} was canceled by mouse click", LogHotKey(msg_hotkey.hotkey));
 			}
 			else {
 				int delay = 0;
@@ -313,7 +321,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					msg_hotkey.delayed_from = GetTickCount64();
 				}
 
-				LOG_ANY("post {} {}. has_double {}", msg_hotkey.hotkey.ToString(), (int)msg_hotkey.hk, double_exists);
+				LOG_ANY("post {} {}. has_double {}", LogHotKey(msg_hotkey.hotkey), (int)msg_hotkey.hk, double_exists);
 				// Нажато среди придержанных (последней в порции): клавиши после него ждут, пока движок его не сделает,
 				// иначе "Исправить последнее слово" стёрло бы уже набранные за ним буквы. Кроме отложенного одиночного
 				// (ждёт, не будет ли второго нажатия): второе нажатие не должно ждать за ним.

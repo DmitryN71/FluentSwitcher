@@ -93,6 +93,7 @@ private:
     ToggleSwitch* m_enabledSwitch = nullptr;
     ToggleSwitch* m_autostartSwitch = nullptr;
     ToggleSwitch* m_loggingSwitch = nullptr;
+    FluentButton* m_reportStart = nullptr; // "Начать запись" / "Остановить запись" of the report to the developer
     wxWindow* m_notRunningCard = nullptr;
 
     SectionNav* m_nav = nullptr;

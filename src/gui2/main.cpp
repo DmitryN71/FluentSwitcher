@@ -77,7 +77,7 @@ void StartGui() {
 		ProgramConfig disk;
 		const bool read = exists && cfg_details::LoadConfig(disk, false) == TStatus::SW_ERR_SUCCESS;
 		if (!read && (exists || ec) && !whole) {
-			LOG_WARN("config: can't read the file{}, fix counts wait", ec ? " (" + ec.message() + ")" : std::string());
+			LOG_WARN("config: can't read the file{}, fix counts wait", LogPlain(ec ? " (" + ec.message() + ")" : std::string()));
 			fixCountsChanged = true;
 			return;
 		}
@@ -122,6 +122,11 @@ void StartGui() {
 	};
 	timer.CycleTimer([&] {
 		if (fixCountsChanged) saveFixCounts();
+		// Запись для отчёта (SettingsIpc.h) - не дольше часа: о ней могли забыть. Записанное остаётся в файле.
+		if (LogSafe() && GetTickCount64() - SettingsIpc::reportSince > SettingsIpc::kReportMs) {
+			LOG_ANY("report: an hour has passed, recording stopped");
+			SetLogSafe(false);
+		}
 	}, 60 * 1000);
 
 	// Буквы вместо флага - цвета текста панели задач: сменилась её тема (светлая / тёмная) - перерисовать значок.
@@ -169,7 +174,7 @@ void StartGui() {
 			const auto title = StrUtils::Convert(std::vformat(LOC("FluentSwitcher {} is out"), std::make_format_args(state.latest)));
 			const auto text = StrUtils::Convert(std::string(LOC("Click to open the download page")));
 			const bool shown = trayIcon.Notify(title, text, [page = state.page] { OpenAsUser(page); });
-			LOG_ANY("update: note about {} shown {}", state.latest, shown);
+			LOG_ANY("update: note about {} shown {}", LogPlain(state.latest), shown);
 			if (shown)
 				state.notified = state.latest;
 		}
@@ -211,10 +216,10 @@ void StartGui() {
 				std::unique_ptr<Update::Result> result(reinterpret_cast<Update::Result*>(lParam));
 				updates.busy = false;
 				if (!result->ok) {
-					LOG_WARN("update check: {}", result->error);
+					LOG_WARN("update check: {}", LogPlain(result->error));
 					return 0;
 				}
-				LOG_ANY("update check: latest {}", result->latest);
+				LOG_ANY("update check: latest {}", LogPlain(result->latest));
 				auto state = Update::Load(folder);
 				Update::Apply(state, *result, false);
 				notifyUpdate(state, false);
@@ -309,6 +314,15 @@ void StartGui() {
 				if (wParam)
 					trayIcon.Notify(L"FluentSwitcher", StrUtils::Convert(std::string(LOC(on ? "Auto switch is on" : "Auto switch is off"))),
 					                [] { show_main_wind(); });
+				return 0;
+			}
+
+			if (msg == WM_EnabledChanged) {
+				// Включили или выключили сами: в файл только это поле - после перезапуска так же (форум, gutasiho, 10.10.2026).
+				const bool on = g_enabled.IsEnabled();
+				conf_gui()->enabled = on;
+				saveMerged([on](ProgramConfig& disk) { disk.enabled = on; }, true);
+				LOG_ANY("enabled {}: kept for the next start", on);
 				return 0;
 			}
 

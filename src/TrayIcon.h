@@ -142,7 +142,7 @@ public:
 		}
 
 		auto id  = Utils::GetNameForHKL_simple(curlay);
-		LOG_ANY(L"mainguid new layout: {}, name={}", (void*)lay, id);
+		LOG_ANY(L"mainguid new layout: {}, name={}", (void*)lay, LogPlain(id));
 
 		if (!id.empty()) {
 			auto icon = IconMgr::Inst().GetIcon(id.c_str(), GetSize(), !g_enabled.IsEnabled());

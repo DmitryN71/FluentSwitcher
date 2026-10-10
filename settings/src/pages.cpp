@@ -19,9 +19,12 @@
 #include <wx/utils.h>
 
 #include "../../src/Update.h" // after wxWidgets: Windows headers of its own
+#include "../../src/CanElevate.h"
 #include "../../src/ConfigLock.h"
 #include <shlwapi.h>          // SHLoadIndirectString: the names of keyboards
 #pragma comment(lib, "shlwapi.lib")
+#include <shlobj.h>           // the report to the developer: the desktop, Explorer
+#include <tlhelp32.h>         // ... the running programs
 
 namespace
 {
@@ -69,7 +72,8 @@ void TakeEngineLearned(Config& edit, const Config& saved)
                         list.erase(it);
                 }
     }
-    for (const char* key : { "autoswitch_undo", "autoswitch_fix", "two_caps_undo" })
+    // And on / off kept for the next start ("enabled": Win+F8, the menu, the switch here - the engine writes it).
+    for (const char* key : { "autoswitch_undo", "autoswitch_fix", "two_caps_undo", "enabled" })
     {
         const auto d = now.find(key);
         if (d != now.end())
@@ -217,6 +221,181 @@ wxString JournalReport(const wxString& folder, const Config& config, int* errors
     for (size_t i = skip; i < found.size(); i++)
         text += found[i] + "\n";
     return text;
+}
+
+// ----- The report to the developer (1.5.2; Dmitry, 11.10.2026: a debug log people can turn on "не опасаясь, что пароли и
+// т.д. в логе будут", sent by mail) -----
+// The engine records what it does with no typed text (its safe log, Logger.h: log\FluentSwitcher-report.log); the window
+// adds what is needed around it, saves it as a text file on the desktop, shows it in Explorer and opens a new letter to
+// the developer. The user may read the file first and attaches it; nothing is sent by itself.
+
+// "+fluentswitcher": the same mailbox, Gmail sorts the reports by it.
+const wchar_t* const kReportMail = L"dmitry.novikov71+fluentswitcher@gmail.com";
+
+// Windows' own hotkeys for switching (HKCU\Keyboard Layout\Toggle): between languages and between the layouts of one.
+wxString WindowsSwitchHotkeys()
+{
+    auto read = [](const wchar_t* name) -> wxString {
+        wchar_t value[16] = {};
+        DWORD size = sizeof(value);
+        if (RegGetValueW(HKEY_CURRENT_USER, L"Keyboard Layout\\Toggle", name, RRF_RT_REG_SZ, nullptr, value, &size) !=
+            ERROR_SUCCESS)
+            return T("как по умолчанию");
+        const wxString v(value);
+        return v == "1" ? wxString("Alt + Shift") : v == "2" ? wxString("Ctrl + Shift") : v == "3" ? T("не назначено")
+             : v == "4" ? wxString("`") : v;
+    };
+    return wxString::Format(T("языка – %s, раскладки – %s"), read(L"Language Hotkey"), read(L"Layout Hotkey"));
+}
+
+// Running programs that also take the keyboard (switchers, remappers, keyboard and mouse software): one of them may
+// catch the keys first (forum, 10.10.2026: hotkeys did not work after Caramba).
+wxString KeyboardPrograms()
+{
+    static const char* const known[] = { "caramba", "punto", "ps64ldr", "autohotkey", "everylang", "orfo",
+                                         "keyboardninja", "arumswitcher", "simpleswitcher", "langbar", "keyran",
+                                         "sharpkeys", "keytweak", "powertoys.keyboardmanager", "logioptions", "logi_",
+                                         "lghub", "setpoint", "icue", "razer", "steelseries", "x-mouse" };
+    wxArrayString found;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE)
+        return wxString();
+    PROCESSENTRY32W entry = { sizeof(entry) };
+    for (BOOL ok = Process32FirstW(snap, &entry); ok; ok = Process32NextW(snap, &entry))
+    {
+        const wxString name = wxString(entry.szExeFile).Lower();
+        for (const char* k : known)
+            if (name.Contains(k) && found.Index(name) == wxNOT_FOUND)
+            {
+                found.Add(name);
+                break;
+            }
+    }
+    CloseHandle(snap);
+    wxString list;
+    for (const wxString& name : found)
+        list += (list.empty() ? "" : ", ") + name;
+    return list.empty() ? T("нет") : list;
+}
+
+// The settings without what is personal: the learned words and the lists of words, the commands' programs and texts,
+// the place of the window; the user's folder in paths as %USERPROFILE%.
+wxString SettingsForReport(const wxString& path)
+{
+    Config config;
+    wxString error;
+    if (!config.Load(path, &error))
+        return T("не прочитались: ") + error;
+    nlohmann::json json = std::as_const(config).Json();
+    for (const char* key : { "autoswitch_exceptions", "autoswitch_force", "autoswitch_fix", "autoswitch_undo",
+                             "two_caps_exceptions", "two_caps_undo", "learned", "settings_window" })
+        json.erase(key);
+    if (json.contains("run_programs") && json["run_programs"].is_array())
+        for (auto& command : json["run_programs"])
+            if (command.is_object())
+                for (const char* key : { "cmd", "args" })
+                    if (command.contains(key))
+                        command[key] = "...";
+    wchar_t profile[MAX_PATH] = {};
+    std::wstring home = GetEnvironmentVariableW(L"USERPROFILE", profile, MAX_PATH) ? std::wstring(profile) : std::wstring();
+    CharLowerBuffW(home.data(), (DWORD)home.size());
+    std::function<void(nlohmann::json&)> hide = [&](nlohmann::json& j) {
+        if (j.is_string() && !home.empty())
+        {
+            std::wstring s = wxString::FromUTF8(j.get<std::string>()).ToStdWstring(), lower = s;
+            CharLowerBuffW(lower.data(), (DWORD)lower.size());
+            for (size_t at = lower.find(home); at != std::wstring::npos; at = lower.find(home))
+            {
+                s.replace(at, home.size(), L"%USERPROFILE%");
+                lower.replace(at, home.size(), L"%userprofile%");
+            }
+            j = std::string(wxString(s).utf8_str());
+        }
+        else if (j.is_array() || j.is_object())
+            for (auto& item : j)
+                hide(item);
+    };
+    hide(json);
+    return wxString::FromUTF8(json.dump(1));
+}
+
+// The report: what, where, the settings and the engine's recording (only its end if it is huge).
+wxString DeveloperReport(const wxString& folder, const wxString& configPath)
+{
+    wxString log;
+    {
+        wxLogNull quiet;
+        wxFFile file(folder + "\\log\\FluentSwitcher-report.log", "rb");
+        if (file.IsOpened())
+        {
+            std::string bytes((size_t)std::max<wxFileOffset>(file.Length(), 0), '\0');
+            bytes.resize(file.Read(bytes.data(), bytes.size()));
+            const size_t kMax = 8 * 1024 * 1024;
+            if (bytes.size() > kMax)
+            {
+                bytes.erase(0, bytes.size() - kMax);
+                bytes.erase(0, bytes.find('\n') + 1); // from a whole line
+            }
+            if (bytes.starts_with("\xEF\xBB\xBF"))
+                bytes.erase(0, 3);
+            log = FromUtf8Lenient(bytes);
+        }
+    }
+    if (log.Strip(wxString::both).empty())
+        return wxString();
+    wxString text = wxString::Format(T("Отправьте этот файл на %s"), kReportMail) + "\n\n";
+    text += wxString::Format("FluentSwitcher %s – %s, %s\n", kVersion, T("отчёт для разработчика"),
+                             wxDateTime::Now().Format("%d.%m.%Y %H:%M"));
+    text += "Windows: " + WindowsVersion() + ", " + T("учётная запись: ") +
+            (CanElevateSelf() ? T("администратор") : T("обычная")) + "\n";
+    text += T("Раскладки: ") + LayoutList() + "\n";
+    text += T("Сочетания Windows для смены: ") + WindowsSwitchHotkeys() + "\n";
+    text += T("Программы, которые тоже работают с клавиатурой: ") + KeyboardPrograms() + "\n";
+    text += "\n--- " + T("Настройки (без списков слов и текстов команд)") + " ---\n" + SettingsForReport(configPath) + "\n";
+    text += "\n--- " + T("Запись (без набранного текста: вместо букв – их число)") + " ---\n" + log;
+    return text;
+}
+
+// The report as a file on the desktop, shown in Explorer. Its path; empty - not saved.
+wxString SaveOnDesktop(const wxString& text)
+{
+    PWSTR desktop = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr, &desktop)))
+        return wxString();
+    const wxString path = wxString(desktop) + "\\" + wxDateTime::Now().Format("FluentSwitcher-report-%Y-%m-%d-%H%M.txt");
+    CoTaskMemFree(desktop);
+    {
+        wxLogNull quiet;
+        wxFFile file(path, "wb");
+        if (!file.IsOpened())
+            return wxString();
+        const wxScopedCharBuffer utf8 = text.utf8_str();
+        file.Write("\xEF\xBB\xBF", 3); // UTF-8 for Notepad and mail
+        file.Write(utf8.data(), utf8.length());
+    }
+    if (PIDLIST_ABSOLUTE item = ILCreateFromPathW(path.wc_str()))
+    {
+        SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
+        ILFree(item);
+    }
+    return path;
+}
+
+// A new letter to the developer in the mail app (mailto): the subject and what to tell; the file is attached by hand -
+// mailto cannot attach.
+bool OpenLetter(const wxString& fileName)
+{
+    auto encode = [](const wxString& s) {
+        std::wstring out;
+        for (unsigned char c : std::string(s.utf8_str()))
+            out += isalnum(c) || strchr("-_.~", c) ? std::wstring(1, (wchar_t)c) : std::format(L"%{:02X}", c);
+        return out;
+    };
+    const wxString subject = wxString::Format(T("FluentSwitcher %s – отчёт"), kVersion);
+    const wxString body = T("Что делали:") + "\r\n\r\n" + T("Что ожидали:") + "\r\n\r\n" + T("Что получилось:") +
+                          "\r\n\r\n" + wxString::Format(T("Отчёт – файл %s на рабочем столе, приложите его к письму."),
+                                                        fileName) + "\r\n";
+    return OpenAsUser(std::wstring(L"mailto:") + kReportMail + L"?subject=" + encode(subject) + L"&body=" + encode(body));
 }
 
 // The report in a window of its own: it can be edited; "Копировать" puts it into the clipboard as a spoiler for the
@@ -715,10 +894,27 @@ void SettingsFrame::BuildGeneral()
         m_autostart = m_autostartSwitch->IsOn();
         Changed();
     };
-    Toggle(T("Работать в приложениях, запущенных от имени администратора"),
-           T("FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один раз, дальше "
-             "он запускается через планировщик заданий без вопросов"),
-           "isMonitorAdmin", false);
+    // Under a standard account "as administrator" is as another user, with that user's password each time and that
+    // user's task (forum, WinnyS, 10.10.2026): it cannot be turned on there, only off if it is on (the engine takes it
+    // as off anyway, Settings.h MonitorAdmin).
+    const bool canElevate = CanElevateSelf();
+    ToggleSwitch* admin = static_cast<ToggleSwitch*>(
+        Toggle(T("Работать в приложениях, запущенных от имени администратора"),
+               canElevate ? T("FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один "
+                              "раз, дальше он запускается через планировщик заданий без вопросов")
+                          : T("Нужна учётная запись администратора. Под обычной Windows запустила бы FluentSwitcher от "
+                              "имени другого пользователя и спрашивала бы его пароль при каждом запуске"),
+               "isMonitorAdmin", false));
+    if (!canElevate)
+        admin->onChange = [this, admin] {
+            if (admin->IsOn())
+            {
+                admin->SetOn(false);
+                return SetStatus(T("Под обычной учётной записью Windows этот режим не работает"), true);
+            }
+            m_edit.SetBool("isMonitorAdmin", false);
+            Changed();
+        };
 
     // Each language by its own name, in any language of the window; in the order of Language.
     const wxArrayString langValues = { "Russian", "English", "Ukrainian" };
@@ -1416,6 +1612,55 @@ void SettingsFrame::BuildAdvanced()
         }
     };
 
+    // The report to the developer (above, DeveloperReport): the engine records with no typed text; at once, not by
+    // Apply - it is not a setting.
+    AddSettingsCard(m_page, m_column, T("Отчёт для разработчика"),
+                    T("Если что-то работает не так: начните запись, повторите ошибку и сохраните отчёт. В записи нет "
+                      "набранного текста – вместо букв только их число, пароли в неё не попадают. Отчёт появится на "
+                      "рабочем столе – его можно прочитать, – и откроется письмо разработчику, приложите отчёт к нему"),
+                    [this](wxWindow* card) {
+                        wxPanel* box = new wxPanel(card);
+                        box->SetBackgroundColour(card->GetBackgroundColour());
+                        m_reportStart = new FluentButton(box, wxID_ANY, T("Остановить запись"));
+                        m_reportStart->SetText(T("Начать запись")); // as wide as the longer of the two
+                        FluentButton* save = new FluentButton(box, wxID_ANY, T("Сохранить отчёт"), true);
+                        m_reportStart->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                            RefreshEngine();
+                            if (!m_state)
+                                return SetStatus(T("FluentSwitcher не запущен: записывать некому"), true);
+                            const bool recording = (m_state & Engine::StateReport) != 0;
+                            if (!Engine::SetReport(m_engine, !recording))
+                                return SetStatus(T("FluentSwitcher не ответил"), true);
+                            RefreshEngine();
+                            SetStatus(recording ? T("Запись остановлена: сохраните отчёт")
+                                                : T("Идёт запись. Повторите ошибку и нажмите «Сохранить отчёт». Через "
+                                                    "час запись остановится сама"),
+                                      false);
+                        });
+                        save->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                            RefreshEngine();
+                            if (m_state & Engine::StateReport)
+                                Engine::SetReport(m_engine, false); // the end of the recording is in the file then
+                            RefreshEngine();
+                            const wxString report = DeveloperReport(m_folder, m_saved.Path());
+                            if (report.empty())
+                                return SetStatus(T("Записи ещё нет: нажмите «Начать запись» и повторите ошибку"), true);
+                            const wxString path = SaveOnDesktop(report);
+                            if (path.empty())
+                                return SetStatus(T("Не удалось сохранить отчёт на рабочем столе"), true);
+                            const wxString name = wxFileName(path).GetFullName();
+                            OpenLetter(name);
+                            SetStatus(wxString::Format(T("Отчёт на рабочем столе: %s. Приложите его к письму на %s"), name,
+                                                       kReportMail),
+                                      false);
+                        });
+                        wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+                        row->Add(m_reportStart, 0, wxALIGN_CENTER_VERTICAL);
+                        row->Add(save, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, box->FromDIP(8));
+                        box->SetSizer(row);
+                        return box;
+                    });
+
     // Not a setting that is saved: the engine keeps it until it quits. Switched by Apply, as "FluentSwitcher
     // включён" (Дмитрий 06.10: switched at once, it left Apply grey, as if the switch had not taken).
     AddSettingsCard(m_page, m_column, T("Журнал отладки"),
@@ -1602,6 +1847,8 @@ void SettingsFrame::RefreshEngine()
         m_logging = (state & Engine::StateLogging) != 0;
     if (m_loggingSwitch)
         m_loggingSwitch->SetOn(m_logging);
+    if (m_reportStart)
+        m_reportStart->SetText((state & Engine::StateReport) ? T("Остановить запись") : T("Начать запись"));
     if (m_enabledSwitch)
     {
         // Not running: on/off and autostart are the engine's to tell and to do, so their cards go.
@@ -1679,7 +1926,8 @@ bool SettingsFrame::Apply()
     Engine::ReloadConfig(m_engine);
     wxString problem;
     const long state = Engine::GetState(m_engine);
-    if (m_edit.GetBool("isMonitorAdmin", false) && state && !(state & Engine::StateElevated) && !m_enginePid)
+    if (m_edit.GetBool("isMonitorAdmin", false) && CanElevateSelf() && state && !(state & Engine::StateElevated) &&
+        !m_enginePid)
         return RestartElevated();
     if (m_autostart != ((state & Engine::StateAutostart) != 0) && !Engine::SetAutostart(m_engine, m_autostart))
         problem = T("Автозапуск не изменился: в режиме «от имени администратора» для этого нужны права администратора. ");

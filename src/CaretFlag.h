@@ -54,6 +54,7 @@ public:
 		bool browser = false;  // сначала проверить, что в фокусе поле ввода
 		bool system = false;   // у браузера есть системная каретка (Firefox) - вот она:
 		RECT systemRc{};
+		bool uiaOnly = false;  // только UI Automation: MSAA там врёт так же, как системная каретка (UiaOnly)
 	};
 	struct Result {
 		uint64_t seq = 0;
@@ -130,7 +131,7 @@ private:
 				else if (uia && Uia(uia, req.pid, rc)) {
 					res = { req.seq, true, rc, "uia" };
 				}
-				else if (req.uiaFirst && Msaa(req.focus, rc)) {
+				else if (req.uiaFirst && !req.uiaOnly && Msaa(req.focus, rc)) {
 					res = { req.seq, true, rc, "msaa" };
 				}
 				{
@@ -748,7 +749,7 @@ private:
 	void Report(const std::string& key, const std::string& detail = {}) {
 		if (key == m_report) return;
 		m_report = key;
-		LOG_ANY("caret flag: {}{}", key, detail);
+		LOG_ANY("caret flag: {}{}", LogPlain(key), LogPlain(detail)); // программы, классы окон, координаты, причины
 	}
 	// Программа и класс окна впереди - для журнала.
 	std::string Where(HWND fg) {
@@ -894,11 +895,17 @@ private:
 			(c.starts_with(L"Chrome_") && c.find(L"WidgetWin") != std::wstring_view::npos);
 	}
 
+	// PowerPoint: системная каретка у него есть всегда, и MSAA говорит о ней же - и когда текст не редактируют (выделен
+	// блок целиком, щёлкнули мимо, листают слайды), на месте, где каретка была. Флажок висел там (форум, Maz, 10.10.2026;
+	// tools/caret-watch, Дмитрий 11.10: UI Automation в эти минуты каретки не видит, при наборе - видит). Только UI
+	// Automation: нет каретки у неё - флажка нет.
+	static bool UiaOnly(HWND fg) { return IsClass(fg, { L"PPTFrameClass" }); }
+
 	// Программы, где системная каретка есть, но не там (или её нет вовсе): сразу UI Automation. Блокнот (RichEditD2DPT) - не
 	// из них: его системная каретка верна, а UI Automation на пустой строке говорит о следующей (Дмитрий 08.10.2026:
 	// флажок на строку ниже каретки).
 	static bool UiaFirst(HWND fg, HWND focus) {
-		return IsClass(fg, { L"ApplicationFrameWindow" }) ||
+		return UiaOnly(fg) || IsClass(fg, { L"ApplicationFrameWindow" }) ||
 			IsClass(focus, { L"Windows.UI.Core.CoreWindow", L"Microsoft.UI.Content.DesktopChildSiteBridge",
 				L"Windows.UI.Input.InputSite.WindowClass" });
 	}
@@ -998,7 +1005,7 @@ private:
 		m_askedFg = fg;
 		m_askedFocus = focus;
 		m_askedBrowser = browser;
-		m_probe.Ask({ ++m_seq, focus, pid, uiaFirst, browser, system, caret });
+		m_probe.Ask({ ++m_seq, focus, pid, uiaFirst, browser, system, caret, UiaOnly(fg) });
 	}
 
 	void OnProbe() {
@@ -1006,7 +1013,7 @@ private:
 		if (res.seq != m_seq || GetForegroundWindow() != m_askedFg) return; // устарел
 		m_noCaretFocus = res.ok || m_askedBrowser ? nullptr : m_askedFocus;
 		if (m_askedBrowser && res.detail != m_lastDetail) {
-			LOG_ANY("caret flag: {}", res.detail);
+			LOG_ANY("caret flag: {}", LogPlain(res.detail));
 			m_lastDetail = res.detail;
 		}
 		if (!res.ok) {

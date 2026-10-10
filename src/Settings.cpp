@@ -141,6 +141,7 @@ namespace nlohmann {
 			retype_keys,
 			work_in_remote,
 			settings_window,
+			enabled,
 			retype_delay_ms,
 			caret_flag,
 			caret_flag_size,
@@ -232,14 +233,14 @@ namespace cfg_details {
 			json full = json::parse(ss.str());
 			for (const auto& [key, value] : full.items()) {
 				if (!file.contains(key)) {
-					LOG_ANY("config misses {}", key);
+					LOG_ANY("config misses {}", LogPlain(key));
 					return true;
 				}
 			}
 			const auto& hk = file["hotkeys"];
 			for (const auto& [key, value] : full["hotkeys"].items()) {
 				if (!hk.is_object() || !hk.contains(key)) {
-					LOG_ANY("config misses hotkeys.{}", key);
+					LOG_ANY("config misses hotkeys.{}", LogPlain(key));
 					return true;
 				}
 			}

@@ -370,7 +370,10 @@ private:
 		if (!s_rt) {
 			RECT rc{};
 			GetClientRect(wnd, &rc);
-			const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(),
+			// Рисует процессор, не видеокарта: на видеокарте первое же меню стоило движку 37 МБ (драйвер), и половина их
+			// оставалась до выхода - "не освобождает память, поднимет раза в четыре" (форум, gutasiho, 10.10.2026). Так -
+			// 4 МБ; меню маленькое, разницы в скорости не видно.
+			const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1::PixelFormat(),
 			                                                (float)s_dpi, (float)s_dpi);
 			s_d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(wnd, D2D1::SizeU(rc.right, rc.bottom)),
 			                              s_rt.ReleaseAndGetAddressOf());

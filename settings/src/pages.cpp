@@ -318,7 +318,9 @@ wxString SettingsForReport(const wxString& path)
                 hide(item);
     };
     hide(json);
-    return wxString::FromUTF8(json.dump(1));
+    // Letters of other alphabets as \u codes: a mail app may resave the attachment in its code page (Maz's report came in
+    // Western, Cyrillic as "?") - the settings stay readable.
+    return wxString::FromUTF8(json.dump(1, ' ', true));
 }
 
 // The report: what, where, the settings and the engine's recording (only its end if it is huge).
@@ -346,7 +348,8 @@ wxString DeveloperReport(const wxString& folder, const wxString& configPath)
     if (log.Strip(wxString::both).empty())
         return wxString();
     wxString text = wxString::Format(T("Отправьте этот файл на %s"), kReportMail) + "\n\n";
-    text += wxString::Format("FluentSwitcher %s – %s, %s\n", kVersion, T("отчёт для разработчика"),
+    // Wide: a narrow literal goes through the code page of Windows here, and the dash came out as "вЂ“" (Maz's report).
+    text += wxString::Format(L"FluentSwitcher %s – %s, %s\n", kVersion, T("отчёт для разработчика"),
                              wxDateTime::Now().Format("%d.%m.%Y %H:%M"));
     text += "Windows: " + WindowsVersion() + ", " + T("учётная запись: ") +
             (CanElevateSelf() ? T("администратор") : T("обычная")) + "\n";

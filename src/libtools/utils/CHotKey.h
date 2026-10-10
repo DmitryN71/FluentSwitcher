@@ -317,13 +317,13 @@ inline bool IsControlKey(TKeyCode vk) {
 		vk == 0xE5 || vk == 0xE8 || vk >= 0xF6;
 }
 
-// Клавиша - в безопасный журнал (Logger.h, LogSafe): управления - по имени, текста - "‹key›".
+// Клавиша - в безопасный журнал (Logger.h, LogSafe): управления - по имени, текста - "<key>".
 inline LogPlainA LogKey(TKeyCode vk) {
-	return LogPlain(LogSafe() && !IsControlKey(vk) ? std::string("\xE2\x80\xB9key\xE2\x80\xBA") : CHotKey::ToString(vk));
+	return LogPlain(LogSafe() && !IsControlKey(vk) ? std::string("<key>") : CHotKey::ToString(vk));
 }
 
 // Сочетание - в безопасный журнал: клавиша текста с Ctrl, Win или Alt - сочетание (Ctrl + C), видна; одна, с Shift, с
-// Ctrl + Alt или правым Alt (AltGr: так печатают буквы в польской, немецкой раскладках) - "‹key›".
+// Ctrl + Alt или правым Alt (AltGr: так печатают буквы в польской, немецкой раскладках) - "<key>".
 inline LogPlainA LogHotKey(const CHotKey& hk) {
 	if (!LogSafe()) return LogPlain(hk.ToString());
 	bool ctrl = false, alt = false, win = false, altGr = false;
@@ -338,7 +338,7 @@ inline LogPlainA LogHotKey(const CHotKey& hk) {
 	std::string s;
 	for (TKeyCode k : hk) {
 		if (!s.empty()) s += " + ";
-		s += shortcut || IsControlKey(k) ? CHotKey::ToString(k) : std::string("\xE2\x80\xB9key\xE2\x80\xBA");
+		s += shortcut || IsControlKey(k) ? CHotKey::ToString(k) : std::string("<key>");
 	}
 	if (hk.GetKeyup()) s += " #up";
 	if (hk.IsDouble()) s += " #double";

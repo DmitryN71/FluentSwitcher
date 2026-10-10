@@ -818,6 +818,7 @@ private:
 		switch (event) {
 		case EVENT_SYSTEM_FOREGROUND:
 		case EVENT_OBJECT_FOCUS:
+			if (event == EVENT_SYSTEM_FOREGROUND) CaretMark(); // где каретка нового окна сейчас (CaretMoved)
 			self->Brief();
 			self->EventPoke(event == EVENT_SYSTEM_FOREGROUND ? 80 : 40);
 			return;
@@ -897,9 +898,18 @@ private:
 
 	// PowerPoint: системная каретка у него есть всегда, и MSAA говорит о ней же - и когда текст не редактируют (выделен
 	// блок целиком, щёлкнули мимо, листают слайды), на месте, где каретка была. Флажок висел там (форум, Maz, 10.10.2026;
-	// tools/caret-watch, Дмитрий 11.10: UI Automation в эти минуты каретки не видит, при наборе - видит). Только UI
-	// Automation: нет каретки у неё - флажка нет.
+	// tools/caret-watch, Дмитрий 11.10: UI Automation в эти минуты каретки не видит, при наборе - видит). Системной
+	// каретке там верим, только если она сдвинулась после последнего щелчка или смены окна (CaretMoved: набирают текст,
+	// щёлкнули в него); не сдвинулась - решает UI Automation, без MSAA. Одной UI Automation мало: у Maz (форум, 11.10,
+	// отчёт на 1.5.2) она каретку PowerPoint не видит и при наборе - флажок пропал совсем.
 	static bool UiaOnly(HWND fg) { return IsClass(fg, { L"PPTFrameClass" }); }
+
+	// Системная каретка сдвинулась с последнего нажатия кнопки мыши или смены окна (CaretMark, CaretFlagPoke.h).
+	static bool CaretMoved(const GUITHREADINFO& gti) {
+		std::lock_guard lock(CaretFlagDetails::g_markMtx);
+		const auto& m = CaretFlagDetails::g_mark;
+		return m.wnd != gti.hwndCaret || !EqualRect(&m.rc, &gti.rcCaret);
+	}
 
 	// Программы, где системная каретка есть, но не там (или её нет вовсе): сразу UI Automation. Блокнот (RichEditD2DPT) - не
 	// из них: его системная каретка верна, а UI Automation на пустой строке говорит о следующей (Дмитрий 08.10.2026:
@@ -997,6 +1007,10 @@ private:
 		if (system && !browser) {
 			++m_seq; // ответ потока, если он ещё идёт, уже не нужен
 			return Place(fg, caret, "caret");
+		}
+		if (UiaOnly(fg) && CaretMoved(gti) && SystemCaret(gti, caret)) {
+			++m_seq;
+			return Place(fg, caret, "caret, moved after the click");
 		}
 		// Остальное - в потоке CaretProbe; пока ждём, флажок остаётся, только если окно то же.
 		HWND focus = gti.hwndFocus ? gti.hwndFocus : fg;

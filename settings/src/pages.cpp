@@ -25,6 +25,8 @@
 #pragma comment(lib, "shlwapi.lib")
 #include <shlobj.h>           // the report to the developer: the desktop, Explorer
 #include <tlhelp32.h>         // ... the running programs
+#include <mapi.h>             // ... the letter with the file (Simple MAPI)
+#include <thread>
 
 namespace
 {
@@ -356,7 +358,7 @@ wxString DeveloperReport(const wxString& folder, const wxString& configPath)
     return text;
 }
 
-// The report as a file on the desktop, shown in Explorer. Its path; empty - not saved.
+// The report as a file on the desktop. Its path; empty - not saved.
 wxString SaveOnDesktop(const wxString& text)
 {
     PWSTR desktop = nullptr;
@@ -364,38 +366,101 @@ wxString SaveOnDesktop(const wxString& text)
         return wxString();
     const wxString path = wxString(desktop) + "\\" + wxDateTime::Now().Format("FluentSwitcher-report-%Y-%m-%d-%H%M.txt");
     CoTaskMemFree(desktop);
-    {
-        wxLogNull quiet;
-        wxFFile file(path, "wb");
-        if (!file.IsOpened())
-            return wxString();
-        const wxScopedCharBuffer utf8 = text.utf8_str();
-        file.Write("\xEF\xBB\xBF", 3); // UTF-8 for Notepad and mail
-        file.Write(utf8.data(), utf8.length());
-    }
-    if (PIDLIST_ABSOLUTE item = ILCreateFromPathW(path.wc_str()))
-    {
-        SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
-        ILFree(item);
-    }
+    wxLogNull quiet;
+    wxFFile file(path, "wb");
+    if (!file.IsOpened())
+        return wxString();
+    const wxScopedCharBuffer utf8 = text.utf8_str();
+    file.Write("\xEF\xBB\xBF", 3); // UTF-8 for Notepad and mail
+    file.Write(utf8.data(), utf8.length());
     return path;
 }
 
-// A new letter to the developer in the mail app (mailto): the subject and what to tell; the file is attached by hand -
-// mailto cannot attach.
-bool OpenLetter(const wxString& fileName)
+// The mail app takes a letter with a file (Simple MAPI: Outlook, Thunderbird, eM Client - the one Windows has as the
+// mail program, HKCU\Software\Clients\Mail, else HKLM). Not Mail of Windows ("PackagedMail": no Simple MAPI, Windows
+// would tell an error). Not from a window run as administrator: the mail app would start so too.
+bool MailAppTakesFiles()
 {
-    auto encode = [](const wxString& s) {
-        std::wstring out;
-        for (unsigned char c : std::string(s.utf8_str()))
-            out += isalnum(c) || strchr("-_.~", c) ? std::wstring(1, (wchar_t)c) : std::format(L"%{:02X}", c);
-        return out;
+    if (OpenAsUserDetails::IsElevated())
+        return false;
+    auto client = [](HKEY root) {
+        wchar_t name[128] = {};
+        DWORD size = sizeof(name);
+        return RegGetValueW(root, L"Software\\Clients\\Mail", nullptr, RRF_RT_REG_SZ, nullptr, name, &size) ==
+                       ERROR_SUCCESS
+                   ? std::wstring(name)
+                   : std::wstring();
     };
-    const wxString subject = wxString::Format(T("FluentSwitcher %s – отчёт"), kVersion);
-    const wxString body = T("Что делали:") + "\r\n\r\n" + T("Что ожидали:") + "\r\n\r\n" + T("Что получилось:") +
-                          "\r\n\r\n" + wxString::Format(T("Отчёт – файл %s на рабочем столе, приложите его к письму."),
-                                                        fileName) + "\r\n";
-    return OpenAsUser(std::wstring(L"mailto:") + kReportMail + L"?subject=" + encode(subject) + L"&body=" + encode(body));
+    std::wstring name = client(HKEY_CURRENT_USER);
+    if (name.empty())
+        name = client(HKEY_LOCAL_MACHINE);
+    return !name.empty() && _wcsicmp(name.c_str(), L"PackagedMail") != 0;
+}
+
+// A new letter to the developer: the subject, what to tell, the report attached (Dmitry, 11.10.2026: "файл
+// автоматически не вставляется" - mailto cannot attach). Through Simple MAPI, in a thread of its own (the mail app may
+// hold it until the letter is sent or closed); the app does not take it - mailto, and the file shown in Explorer to
+// attach by hand. True - the letter goes with the file (as far as the mail app can).
+bool OpenLetter(const wxString& path)
+{
+    const wxString name = wxFileName(path).GetFullName();
+    const std::wstring subject = wxString::Format(T("FluentSwitcher %s – отчёт"), kVersion).ToStdWstring();
+    const std::wstring ask = (T("Что делали:") + "\r\n\r\n" + T("Что ожидали:") + "\r\n\r\n" + T("Что получилось:") +
+                              "\r\n\r\n").ToStdWstring();
+    const std::wstring attachByHand =
+        ask + wxString::Format(T("Отчёт – файл %s на рабочем столе, приложите его к письму."), name).ToStdWstring() + L"\r\n";
+    const bool mapi = MailAppTakesFiles();
+    std::thread([subject, ask, attachByHand, mapi, file = path.ToStdWstring(), fileName = name.ToStdWstring()] {
+        if (mapi)
+        {
+            CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+            ULONG result = MAPI_E_FAILURE;
+            if (HMODULE lib = LoadLibraryW(L"mapi32.dll"))
+            {
+                if (auto send = (LPMAPISENDMAILW)GetProcAddress(lib, "MAPISendMailW"))
+                {
+                    const std::wstring address = std::wstring(L"SMTP:") + kReportMail;
+                    MapiRecipDescW to{};
+                    to.ulRecipClass = MAPI_TO;
+                    to.lpszName = (PWSTR)kReportMail;
+                    to.lpszAddress = (PWSTR)address.c_str();
+                    MapiFileDescW attached{};
+                    attached.nPosition = (ULONG)-1;
+                    attached.lpszPathName = (PWSTR)file.c_str();
+                    attached.lpszFileName = (PWSTR)fileName.c_str();
+                    MapiMessageW letter{};
+                    letter.lpszSubject = (PWSTR)subject.c_str();
+                    letter.lpszNoteText = (PWSTR)ask.c_str();
+                    letter.nRecipCount = 1;
+                    letter.lpRecips = &to;
+                    letter.nFileCount = 1;
+                    letter.lpFiles = &attached;
+                    // Not waiting for the letter where the app can; the others - as they can.
+                    result = send(0, 0, &letter, MAPI_LOGON_UI | MAPI_DIALOG_MODELESS, 0);
+                    if (result == MAPI_E_NOT_SUPPORTED)
+                        result = send(0, 0, &letter, MAPI_LOGON_UI | MAPI_DIALOG, 0);
+                }
+                FreeLibrary(lib);
+            }
+            CoUninitialize();
+            if (result == SUCCESS_SUCCESS || result == MAPI_E_USER_ABORT)
+                return;
+        }
+        auto encode = [](const std::wstring& s) {
+            std::wstring out;
+            for (unsigned char c : std::string(wxString(s).utf8_str()))
+                out += isalnum(c) || strchr("-_.~", c) ? std::wstring(1, (wchar_t)c) : std::format(L"%{:02X}", c);
+            return out;
+        };
+        if (PIDLIST_ABSOLUTE item = ILCreateFromPathW(file.c_str()))
+        {
+            SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
+            ILFree(item);
+        }
+        OpenAsUser(std::wstring(L"mailto:") + kReportMail + L"?subject=" + encode(subject) + L"&body=" +
+                   encode(attachByHand));
+    }).detach();
+    return mapi;
 }
 
 // The report in a window of its own: it can be edited; "Копировать" puts it into the clipboard as a spoiler for the
@@ -1649,9 +1714,12 @@ void SettingsFrame::BuildAdvanced()
                             if (path.empty())
                                 return SetStatus(T("Не удалось сохранить отчёт на рабочем столе"), true);
                             const wxString name = wxFileName(path).GetFullName();
-                            OpenLetter(name);
-                            SetStatus(wxString::Format(T("Отчёт на рабочем столе: %s. Приложите его к письму на %s"), name,
-                                                       kReportMail),
+                            SetStatus(OpenLetter(path)
+                                          ? wxString::Format(T("Отчёт на рабочем столе: %s. Открывается письмо на %s с ним; "
+                                                               "если файла в письме нет – приложите его сами"),
+                                                             name, kReportMail)
+                                          : wxString::Format(T("Отчёт на рабочем столе: %s. Приложите его к письму на %s"),
+                                                             name, kReportMail),
                                       false);
                         });
                         wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);

@@ -528,6 +528,9 @@ const std::unordered_map<std::string, const char*>& English()
         { "Не удалось сохранить отчёт на рабочем столе", "Could not save the report on the desktop" },
         { "Отчёт на рабочем столе: %s. Приложите его к письму на %s",
           "The report is on the desktop: %s. Attach it to a letter to %s" },
+        { "Отчёт на рабочем столе: %s. Открывается письмо на %s с ним; если файла в письме нет – приложите его сами",
+          "The report is on the desktop: %s. A letter to %s opens with it; if the file is not in the letter, attach it "
+          "yourself" },
         { "Отправьте этот файл на %s", "Send this file to %s" },
         { "отчёт для разработчика", "report to the developer" },
         { "учётная запись: ", "account: " },

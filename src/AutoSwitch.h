@@ -89,12 +89,17 @@ inline bool ShortParts(const std::wstring& core) {
 	return true;
 }
 
-// Слово через дефис в другой раскладке, и дефисы - те же клавиши ("Dj-gthds[" - "Во-первых,"): одно слово.
-inline bool SameHyphens(const std::wstring& typed, const std::wstring& there, const Part& a) {
-	if (!OnlyHyphens(a.core) || !LongParts(a.core)) return false;
-	for (size_t i = a.begin; i < a.end && i < typed.size(); i++)
+// Знаки внутри слова там - только дефисы, и это те же клавиши, что в набранном ("у-Куышвутсн" - "e-Residency").
+inline bool HyphensKept(const std::wstring& typed, const std::wstring& there, const Part& a) {
+	if (!OnlyHyphens(a.core) || typed.size() != there.size()) return false;
+	for (size_t i = a.begin; i < a.end; i++)
 		if (there[i] == L'-' && typed[i] != L'-') return false;
 	return true;
+}
+
+// Слово через дефис в другой раскладке, и дефисы - те же клавиши ("Dj-gthds[" - "Во-первых,"): одно слово для словаря.
+inline bool SameHyphens(const std::wstring& typed, const std::wstring& there, const Part& a) {
+	return LongParts(a.core) && HyphensKept(typed, there, a);
 }
 
 inline std::wstring Lower(std::wstring s) {
@@ -163,10 +168,11 @@ inline bool Excepted(const std::wstring& typed, const std::wstring& there, const
 }
 
 // Слово из списка "Переключать всегда" (в том виде, какой нужен: the, a): там - оно, а набрано не оно (набранное
-// правильно не трогаем).
+// правильно не трогаем). Через дефис - тоже, и с частью в одну букву ("e-Residency", "ВСХВ-ВДНХ-ВВЦ"): словарь его
+// не проверяет (Дмитрий и Maz на форуме, 10.10).
 inline bool Forced(const std::wstring& typed, const std::wstring& there, const std::vector<std::wstring>& forced) {
 	const Part t = Letters(typed), a = Letters(there);
-	if (a.core.empty() || a.inner) return false;
+	if (a.core.empty() || (a.inner && !HyphensKept(typed, there, a))) return false;
 	const auto tl = Lower(t.core), al = Lower(a.core);
 	for (const auto& f : forced) {
 		if (Signed(f)) {

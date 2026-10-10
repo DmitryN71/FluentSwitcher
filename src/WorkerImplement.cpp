@@ -780,9 +780,10 @@ std::optional<WorkerImplement::HandFix> WorkerImplement::TakeHandFix() {
 
 // Слово, которое автопереключение не тронуло, исправили вручную: в счёт "Переключать всегда" (на третий раз - туда,
 // gui2/main.cpp) - в нужном виде, строчными. Не в счёт:
-//   - одна буква, знак внутри или цифры (адрес, код);
+//   - одна буква, знак внутри (кроме дефисов на тех же клавишах: "у-Куышвутсн" - e-Residency) или цифры (адрес, код);
 //   - набранное - слово своего языка (или словаря нет): "Переключать всегда" обходит словарь, и выученное "ты" (из
-//     "ns") переключало бы каждое английское ns;
+//     "ns") переключало бы каждое английское ns; набранное ПРОПИСНЫМИ словарь проверяет строчными и с заглавной
+//     ("DC{D-DLY{-DDW" - ВСХВ-ВДНХ-ВВЦ, Maz на форуме, 10.10: как набрано, он пропускает любые прописные);
 //   - поздняя отмена автопереключения (больше 10 с после него): возвращают то, что оно переключило ("лог" - "kju"),
 //     и выученное "kju" ломало бы правильно набранное "лог";
 //   - слово из "Не переключать" и слово, которое и так в "Переключать всегда".
@@ -791,9 +792,10 @@ std::wstring WorkerImplement::LearnableFix(const HandFix& fix) {
     const auto part = AutoSwitch::Letters(fix.fixed);
     const std::wstring word = AutoSwitch::Lower(part.core);
     const std::wstring typedCore = AutoSwitch::Letters(fix.typed).core, typed = AutoSwitch::Lower(typedCore);
-    if (word.size() < 2 || part.inner || std::ranges::any_of(fix.typed, [](wchar_t c) { return iswdigit(c) != 0; }))
+    if (word.size() < 2 || (part.inner && !AutoSwitch::HyphensKept(fix.typed, fix.fixed, part)) ||
+        std::ranges::any_of(fix.typed, [](wchar_t c) { return iswdigit(c) != 0; }))
         return {};
-    if (SpellCheck::CheckAnyCase(typedCore, fix.lang) != SpellCheck::Result::NotWord) return {};
+    if (SpellCheck::CheckAnyCaseEvenCaps(typedCore, fix.lang) != SpellCheck::Result::NotWord) return {};
     for (const auto& [was, became] : m_recentSwitches)
         if (!became.empty() && typed.starts_with(became) && word.starts_with(was)) return {};
     if (AutoSwitch::Excepted(fix.typed, fix.fixed, AutoSwitchExceptions()) ||

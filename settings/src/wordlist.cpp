@@ -120,22 +120,45 @@ bool IsLatin(const wxString& text)
     return false;
 }
 
+// Letters with nothing but hyphens and apostrophes between them (signs at the edges aside: "C#"): "ВСХВ-ВДНХ-ВВЦ",
+// "don't" - not "DC{D-DLY{-DDW", the same keys in English.
+bool LettersOnly(const wxString& text)
+{
+    const std::wstring w = text.ToStdWstring();
+    size_t b = 0, e = w.size();
+    while (b < e && !IsCharAlphaW(w[b]))
+        b++;
+    while (e > b && !IsCharAlphaW(w[e - 1]))
+        e--;
+    for (size_t i = b; i < e; i++)
+        if (!IsCharAlphaW(w[i]) && !(wcschr(L"-'’", w[i]) && IsCharAlphaW(w[i - 1]) && IsCharAlphaW(w[i + 1])))
+            return false;
+    return b < e;
+}
+
 // "Переключать всегда" keeps the word as it should be; one may type into the field either of the two - what is typed by
 // mistake (ЬЩАшш, Дмитрий 07.10) or what it should become (MOFii). The one to keep: the one that is a word or the
-// beginning of a word of its language (by the lists of the engine, WordStart: щас - not ofc, ок - not jr); when both or
-// neither are - the Latin one (http, MOFii, the: the names and abbreviations a Russian keyboard mistypes); when both are
-// Latin or neither - as typed. A wrong guess is one click on ⇄ of its row.
+// beginning of a word of its language (by the lists of the engine, WordStart: щас - not ofc, ок - not jr); else the one
+// of letters only when the other has a sign inside (ВСХВ-ВДНХ-ВВЦ, not DC{D-DLY{-DDW: Maz on the forum, 10.10); when
+// both or neither are - the Latin one (http, MOFii, the: the names and abbreviations a Russian keyboard mistypes); when
+// both are Latin or neither - as typed. A wrong guess is one click on ⇄ of its row.
 wxString TargetOf(const wxString& word, const std::vector<HKL>& layouts)
 {
     const std::vector<Form> forms = FormsOf(word, layouts);
     if (forms.size() < 2)
         return word;
-    std::vector<const Form*> known;
+    std::vector<const Form*> known, letters;
     for (const Form& f : forms)
+    {
         if (WordStart::Known(f.text.ToStdWstring(), f.language) == WordStart::Result::Yes)
             known.push_back(&f);
+        if (LettersOnly(f.text))
+            letters.push_back(&f);
+    }
     if (known.size() == 1)
         return known[0]->text;
+    if (letters.size() == 1)
+        return letters[0]->text;
     for (const Form& f : forms)
         if (IsLatin(f.text) && !IsLatin(word))
             return f.text;

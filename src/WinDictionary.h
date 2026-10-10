@@ -77,6 +77,21 @@ inline Result CheckAnyCase(const std::wstring& word, const std::wstring& languag
 	return lower ? asTyped : Check(word, language);
 }
 
+// То же, но и для набранного ПРОПИСНЫМИ: как набрано словарь его пропускает (аббревиатура - не ошибка, "GHBDTN" для
+// него слово) - такое спросить строчными и с заглавной.
+inline Result CheckAnyCaseEvenCaps(const std::wstring& word, const std::wstring& language) {
+	bool caps = false;
+	for (wchar_t c : word) {
+		if (IsCharLowerW(c)) return CheckAnyCase(word, language);
+		caps = caps || IsCharUpperW(c);
+	}
+	if (!caps) return CheckAnyCase(word, language);
+	std::wstring title = word;
+	CharLowerBuffW(title.data() + 1, (DWORD)title.size() - 1);
+	const Result lower = Check(word, language), titled = Check(title, language, true);
+	return titled == Result::Word ? Result::Word : lower;
+}
+
 // Слово набрано не в той раскладке: `typed` - не слово языка `language`, а `other` (те же клавиши в другой раскладке) -
 // слово языка `otherLanguage`. Знаки по краям ("«Ыещз»", "Ghbdtn?") не в счёт. Нет словаря - false.
 inline bool WrongLayout(const std::wstring& typed, const std::wstring& language, const std::wstring& other,

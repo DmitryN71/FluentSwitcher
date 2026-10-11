@@ -124,5 +124,5 @@ private:
     wxTimer m_savedTimer;
     bool m_savedShown = false;
     int m_section = 0;         // shown now
-    bool m_restarted = false;  // Apply started the window again (a new language): this one closes
+    bool m_restarted = false;  // Apply started the window again (a new language, theme): the new one closes this one
 };

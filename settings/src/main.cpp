@@ -5,7 +5,8 @@
 //   --config=<FluentSwitcher.json>             another copy's settings (the engine looked for is in that folder)
 //   --engine-pid=<pid>                         that engine process exactly (tests)
 //   --section=<n>                              open on that section (0 = the first)
-//   --wait-pid=<pid>                           first wait for that process to end (the window restarting itself)
+//   --replace-pid=<pid>                        the window restarting itself (a new language or theme): that process's
+//                                              window stays until this one is on the screen, then this one closes it
 //
 // One window at a time: a second start brings the first one forward.
 #include "pages.h"
@@ -52,6 +53,18 @@ HWND OpenWindow()
     }, reinterpret_cast<LPARAM>(&search));
     return search.found;
 }
+
+// Closes the windows of process `pid` (the settings window this one replaces).
+void CloseWindowsOf(unsigned long pid)
+{
+    EnumWindows([](HWND window, LPARAM param) -> BOOL {
+        DWORD owner = 0;
+        GetWindowThreadProcessId(window, &owner);
+        if (owner == (DWORD)param && IsWindowVisible(window))
+            PostMessageW(window, WM_CLOSE, 0, 0);
+        return TRUE;
+    }, (LPARAM)pid);
+}
 }
 
 class App : public wxApp
@@ -59,7 +72,7 @@ class App : public wxApp
 public:
     bool OnInit() override
     {
-        wxString configPath, enginePid, section, waitPid;
+        wxString configPath, enginePid, section, replacePid;
         for (int i = 1; i < argc; i++)
         {
             wxString value;
@@ -69,23 +82,17 @@ public:
                 enginePid = value;
             else if (argv[i].StartsWith("--section=", &value))
                 section = value;
-            else if (argv[i].StartsWith("--wait-pid=", &value))
-                waitPid = value;
+            else if (argv[i].StartsWith("--replace-pid=", &value))
+                replacePid = value;
         }
+        // The window restarting itself (a new language or theme): the old one is still on the screen and holds the
+        // mutex - this one is built meanwhile and closes it when it is there itself.
         unsigned long previous = 0;
-        if (waitPid.ToULong(&previous) && previous)
-        {
-            // The window restarting itself (a new language): the old one is closing and still holds the mutex.
-            if (HANDLE old = OpenProcess(SYNCHRONIZE, FALSE, previous))
-            {
-                WaitForSingleObject(old, 5000);
-                CloseHandle(old);
-            }
-        }
+        replacePid.ToULong(&previous);
         if (configPath.empty())
         {
             m_instance = CreateMutexW(nullptr, FALSE, L"Local\\FluentSwitcher.Settings");
-            if (GetLastError() == ERROR_ALREADY_EXISTS)
+            if (GetLastError() == ERROR_ALREADY_EXISTS && !previous)
             {
                 if (HWND open = OpenWindow())
                 {
@@ -138,10 +145,15 @@ public:
         frame->Show();
         frame->Raise();
         SetForegroundWindow(hwnd); // the engine allowed it (AllowSetForegroundWindow) when it started us
-        CallAfter([hwnd] {
+        CallAfter([hwnd, previous] {
             RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
             BOOL uncloak = FALSE;
             DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &uncloak, sizeof(uncloak));
+            if (previous)
+            {
+                SetForegroundWindow(hwnd); // over the old one, in its place
+                CloseWindowsOf(previous);
+            }
         });
         return true;
     }

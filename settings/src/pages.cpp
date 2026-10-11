@@ -735,8 +735,8 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     }, wxID_APPLY);
     m_apply->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         if (Apply() && m_restarted)
-            Close();
-        else if (!m_restarted && !HasChanges())
+            return; // the new window closes this one once it is on the screen (main.cpp, --replace-pid)
+        if (!m_restarted && !HasChanges())
         {
             m_savedShown = true;
             m_apply->SetText(T("Сохранено"));
@@ -1974,14 +1974,18 @@ bool SettingsFrame::Apply()
             m_edit.GetString("ui_theme", wxString()) != oldTheme)
         {
             // The texts and colours are read when the window is built: a new window in the new language or
-            // theme, on this section.
+            // theme, on this section. This one stays on the screen until the new one is there and closes it
+            // (main.cpp, --replace-pid): before, this one closed first, and for half a second to a second there was
+            // no window at all (Dmitry, 11.10.2026: "так долго перерисовывается"). Its place now, for the new one.
+            SavePlacement();
             wxString command = wxString(GetCommandLineW());
-            command += wxString::Format(" --section=%d --wait-pid=%lu", m_section, GetCurrentProcessId());
+            command += wxString::Format(" --section=%d --replace-pid=%lu", m_section, GetCurrentProcessId());
             STARTUPINFOW si = { sizeof(si) };
             PROCESS_INFORMATION pi = {};
             std::wstring line = command.ToStdWstring();
             if (CreateProcessW(nullptr, line.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
             {
+                AllowSetForegroundWindow(pi.dwProcessId); // the new window comes up over this one
                 CloseHandle(pi.hThread);
                 CloseHandle(pi.hProcess);
                 m_restarted = true;

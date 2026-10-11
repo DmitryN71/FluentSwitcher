@@ -16,7 +16,7 @@ free and open source under GPL-3.0.
   space, Enter (Shift+Enter, Ctrl+Enter too) or Tab, and at once when its last key is a sign after a word in the other
   layout ("ПшеРгию" - "GitHub.", "b xnj&" - "и что?") - by the Windows dictionaries, as in LangBar++, and a long one already from the fourth letter
   ("njkm" - "толь"): the beginnings of words come from built-in lists of frequent words (Russian, English and Ukrainian). Short words go by their
-  neighbours: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
+  neighbors: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
   too: "нфдлштп" - "yalking". Words with digits, abbreviations, a word typed again after the layout was switched by
   hand right after a fix, a word after Backspace, passwords, the console (but for the console apps listed, such as far.exe) and the apps of "No automatic switch in apps" are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word
@@ -24,12 +24,17 @@ free and open source under GPL-3.0.
   of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the
   reason; its mistakes make a report for the forum topic - you see and can edit the text, the app sends nothing.
   It is turned on and off with a hotkey of its own and with a check item in the tray icon's menu too.
+- **A number with dots in the Russian layout**: "1ю5ю3", typed with the ю and б keys instead of the dot and the comma,
+  becomes "1.5.3" at once ("1б5" - "1,5"), the layout is not switched. "1/5/3" in the English layout is left alone: a
+  date or a fraction. By hand ("Fix the last word") a number with signs is fixed whole: "1/2/3" - "1.2.3".
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, punctuation, Enter or Tab (three letters too: "THe" - "The" for frequent English words, "НЕт" - "Нет"). PCs, IDs, GHz, eM, iPhone, and Latin names like ILogger in code editors and apps without the automatic switch, are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives
   "Попытка" at once. Turned on in Typing.
 - **i → I**: the English "i" on its own becomes "I" (i'm - I'm), except in consoles and code editors, where i
   is a variable. On from the start, turned off in Typing.
+- **Turn CapsLock off** (Typing): pressing CapsLock does not turn CAPITALS on, with no registry edit; hotkeys with it
+  (Shift + CapsLock, Ctrl + CapsLock) work, CAPITALS come with a hotkey of your own for "Press CapsLock".
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case and inverted case for the selection.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after

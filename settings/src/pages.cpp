@@ -995,7 +995,7 @@ void SettingsFrame::BuildGeneral()
     const wxArrayString themeValues = { wxString(), wxString("Light"), wxString("Dark") };
     const wxArrayString themeNames = { T("Как в Windows"), T("Светлая"), T("Тёмная") };
     const int theme = themeValues.Index(m_edit.GetString("ui_theme", wxString()));
-    Choice(T("Тема"), T("Этого окна. Оно откроется в новой теме после сохранения"), themeNames,
+    Choice(T("Тема"), T("Этого окна и меню у значка у часов. Окно откроется в новой теме после сохранения"), themeNames,
            theme == wxNOT_FOUND ? 0 : theme, [this, themeValues](int i) { m_edit.SetString("ui_theme", themeValues[i]); });
     FinishPage();
 }

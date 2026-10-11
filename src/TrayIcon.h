@@ -93,6 +93,10 @@ public:
 		});
 		tray.OnCreateMenu([this]() {
 			std::vector<WinTray::TrayItem> res;
+			// Тема меню - выбранная в настройках ("Тема": светлая, тёмная), "как в Windows" - как у панели задач.
+			const auto& uiTheme = conf_get_unsafe()->ui_theme;
+			FluentMenu::theme = uiTheme == "Light" ? FluentMenu::Theme::Light
+				: uiTheme == "Dark" ? FluentMenu::Theme::Dark : FluentMenu::Theme::Taskbar;
 
 			// "Напоминалки" SimpleSwitcher (ShowReminderInTrayMenu) в FluentSwitcher нет.
 			// Раскладок в меню нет (ShowLangsInTrayMenu не используется): пока меню открыто, активно оно само,

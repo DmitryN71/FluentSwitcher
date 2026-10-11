@@ -197,6 +197,11 @@ public:
 		}
 	};
 
+	// Тема меню: как у панели задач (меню у значков - часть её, как у Windows) или тема, выбранная в настройках приложения
+	// (форум, Radanius, 11.10.2026: "при выборе светлой темы меню в трее по ПКМ остается темным"). Ставит TrayIcon.
+	enum class Theme { Taskbar, Light, Dark };
+	static inline Theme theme = Theme::Taskbar;
+
 	// Открыть у точки pt (точки экрана): низ меню у курсора, как TrackPopupMenu с TPM_BOTTOMALIGN; не влезает -
 	// внутрь рабочей области монитора. false - не вышло, нужно обычное меню.
 	static bool Show(std::wstring title, std::vector<Item> items, POINT pt) {
@@ -205,7 +210,7 @@ public:
 		s_view = View{};
 		s_view.title = std::move(title);
 		s_view.items = std::move(items);
-		s_view.dark = TaskbarDark();
+		s_view.dark = theme == Theme::Taskbar ? TaskbarDark() : theme == Theme::Dark;
 		s_view.win11 = Build() >= 22000;
 		s_view.accent = Accent(s_view.dark, s_view.win11);
 

@@ -422,6 +422,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Сочетание, которым раскладка переключается в Windows", "The combination that switches the layout in Windows" },
         { "FluentSwitcher нажимает его сам при втором способе. Обычно Alt + Shift или Win + Пробел",
           "FluentSwitcher presses it itself with the second way. Usually Alt + Shift or Win + Space" },
+        { "Windows этим сочетанием раскладку не переключает", "Windows does not switch the layout with this" },
+        { "Windows переключает раскладку только Alt + Shift, Ctrl + Shift, Win + Пробел или Ё. Свою клавишу, "
+          "например правый Ctrl, задайте в разделе «Сочетания клавиш» – «Следующая раскладка»",
+          "Windows switches the layout only with Alt + Shift, Ctrl + Shift, Win + Space or `. Set a key of your own, "
+          "such as the right Ctrl, in Hotkeys – Next layout" },
 
         // Hotkeys, layouts
         { "Сочетания клавиш", "Hotkeys" },
@@ -576,13 +581,14 @@ const std::unordered_map<std::string, const char*>& English()
           "without prompts and other fixes" },
         { "Открыть на GitHub", "Open on GitHub" },
         { "Проверять обновления", "Check for updates" },
-        { "Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
-          "Скачивать и ставить новую – решаете вы",
-          "Once a day the app asks GitHub for the number of the latest version and sends nothing else. "
-          "Whether to download and install it is up to you" },
+        { "Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. Новую "
+          "версию оно скачает и поставит только по вашему щелчку – по уведомлению или кнопке «Обновить»",
+          "Once a day the app asks GitHub for the number of the latest version and sends nothing else. It downloads "
+          "and installs a new version only when you click – the notification or the “Update” button" },
         { "Обновления", "Updates" },
         { "Проверить сейчас", "Check now" },
         { "Скачать", "Download" },
+        { "Обновить", "Update" },
         { "Открыть страницу загрузки", "Open the download page" },
         { "Проверяю…", "Checking…" },
         { "Ещё не проверялось", "Not checked yet" },

@@ -100,6 +100,11 @@ bool UpdateChecked(HWND engine)
     return Command(engine, L"SimpleSwitcher.UpdateChecked");
 }
 
+bool StartUpdate(HWND engine)
+{
+    return Command(engine, L"SimpleSwitcher.Update");
+}
+
 bool Start(const wxString& folder, const wxString& args, bool elevated)
 {
     const wxString exe = wxFileName(folder, "FluentSwitcher.exe").GetFullPath();

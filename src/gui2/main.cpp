@@ -6,6 +6,7 @@
 #include "LayoutSound.h"
 #include "SettingsIpc.h"
 #include "Update.h"
+#include "UpdateInstall.h"
 #include "ConfigLock.h"
 #include "utils/WinTimer.h"
 
@@ -147,7 +148,20 @@ void StartGui() {
 		long long nextLook = 0; // раньше этого update.json даже не читаем
 		long long lastTry = 0;
 		bool busy = false;
+		bool installing = false; // идёт обновление по щелчку (UpdateInstall.h)
 	} updates;
+	// Обновление по щелчку оставляет установщик или архив во временной папке, портативная - FluentSwitcher.exe.old:
+	// удалить при запуске и потом раз в минуту (установщик ещё мог работать, прежняя копия - выходить).
+	Update::CleanUp(folder);
+	timer.CycleTimer([&] {
+		if (!updates.installing) Update::CleanUp(folder);
+	}, 60 * 1000);
+	if (g_updatedStart) {
+		const std::string version = FS_VERSION;
+		trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("FluentSwitcher is updated to {}"), std::make_format_args(version))),
+		                L"", nullptr);
+		LOG_ANY("update: started after the update to {}", LogPlain(version));
+	}
 	timer.CycleTimer([&] {
 		if (!conf_get_unsafe()->check_updates || updates.busy) return;
 		const long long now = Update::NowMs();
@@ -173,8 +187,12 @@ void StartGui() {
 		if (Update::NewerKnown(state)) {
 			if (!manual && state.notified == state.latest) return;
 			const auto title = StrUtils::Convert(std::vformat(LOC("FluentSwitcher {} is out"), std::make_format_args(state.latest)));
-			const auto text = StrUtils::Convert(std::string(LOC("Click to open the download page")));
-			const bool shown = trayIcon.Notify(title, text, [page = state.page] { OpenAsUser(page); });
+			// Щелчок - обновить (UpdateInstall.h); выпуск без нужного файла или его суммы - страница выпуска, как раньше.
+			const bool installable = !(Update::Installed(folder) ? state.setup.url : state.zip.url).empty();
+			const auto text = StrUtils::Convert(std::string(installable ? LOC("Click to update") : LOC("Click to open the download page")));
+			const bool shown = installable
+				? trayIcon.Notify(title, text, [] { PostMessageW(g_guiHandle, WM_UpdateStart, 0, 0); })
+				: trayIcon.Notify(title, text, [page = state.page] { OpenAsUser(page); });
 			LOG_ANY("update: note about {} shown {}", LogPlain(state.latest), shown);
 			if (shown)
 				state.notified = state.latest;
@@ -225,6 +243,40 @@ void StartGui() {
 				Update::Apply(state, *result, false);
 				notifyUpdate(state, false);
 				Update::Save(folder, state);
+				return 0;
+			}
+
+			if (msg == WM_UpdateStart) {
+				// Обновить сейчас (щелчок по уведомлению, "Обновить" в окне настроек): скачать и поставить в своём потоке.
+				if (updates.installing) return 0;
+				const auto state = Update::Load(folder);
+				if (!Update::NewerKnown(state)) return 0;
+				updates.installing = true;
+				LOG_ANY("update: installing {}, {}", LogPlain(state.latest), Update::Installed(folder) ? "the installer" : "the zip");
+				trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("Updating FluentSwitcher to {}"), std::make_format_args(state.latest))),
+				                L"", nullptr);
+				std::thread([hwnd = g_guiHandle, state, folder] {
+					auto* result = new Update::Installing(Update::Install(state, folder));
+					if (!PostMessageW(hwnd, WM_UpdateDone, 0, (LPARAM)result)) delete result;
+				}).detach();
+				return 0;
+			}
+
+			if (msg == WM_UpdateDone) {
+				std::unique_ptr<Update::Installing> result(reinterpret_cast<Update::Installing*>(lParam));
+				updates.installing = false;
+				if (!result->ok) {
+					// Не вышло: сказать и предложить страницу выпуска - там можно скачать самому.
+					LOG_WARN("update: failed - {}", LogPlain(result->error));
+					const auto state = Update::Load(folder);
+					trayIcon.Notify(StrUtils::Convert(std::string(LOC("Could not update FluentSwitcher"))),
+					                StrUtils::Convert(std::string(LOC("Click to open the download page"))),
+					                [page = state.page.empty() ? std::wstring(Update::kReleasesPage) : state.page] { OpenAsUser(page); });
+					return 0;
+				}
+				// Установщик закроет эту копию сам (--quit); новая портативная уже запущена - выйти.
+				LOG_ANY("update: {}", result->quit ? "the new copy is running, quitting" : "the installer is running");
+				if (result->quit) PostQuitMessage(0);
 				return 0;
 			}
 

@@ -24,10 +24,17 @@ inline const wchar_t kReleasesPage[] = L"https://github.com/DmitryN71/FluentSwit
 inline const wchar_t kLatestApi[] = L"https://api.github.com/repos/DmitryN71/FluentSwitcher/releases/latest";
 inline const long long kDayMs = 24LL * 60 * 60 * 1000;
 
+// Файл выпуска на GitHub: откуда скачать и его SHA-256 (GitHub пишет его сам, "digest").
+struct Asset {
+	std::string url;    // https://github.com/.../releases/download/v1.5.5/FluentSwitcher-1.5.5-setup.exe
+	std::string sha256; // строчными
+};
+
 struct Result {
 	bool ok = false;
 	std::string latest; // "1.2.0"
 	std::wstring page;  // страница этого выпуска
+	Asset setup, zip;   // установщик и архив (обновление по щелчку - Install)
 	std::string error;  // для журнала, когда не ok
 };
 
@@ -106,6 +113,18 @@ inline Result Check() {
 	}
 	r.latest = !tag.empty() && (tag[0] == 'v' || tag[0] == 'V') ? tag.substr(1) : tag;
 	r.page = std::wstring(kReleasesPage) + L"/tag/" + std::wstring(tag.begin(), tag.end()); // метки - ASCII
+	// Установщик и архив этого выпуска - с их суммами; без суммы файл не годится для обновления по щелчку.
+	if (json.is_object() && json.contains("assets") && json["assets"].is_array())
+		for (const auto& a : json["assets"]) {
+			if (!a.is_object()) continue;
+			const std::string name = a.value("name", std::string()), url = a.value("browser_download_url", std::string());
+			std::string digest = a.value("digest", std::string());
+			if (url.empty() || !digest.starts_with("sha256:")) continue;
+			digest = digest.substr(7);
+			for (auto& c : digest) c = (char)tolower((unsigned char)c);
+			if (name.ends_with("-setup.exe")) r.setup = { url, digest };
+			else if (name.ends_with(".zip")) r.zip = { url, digest };
+		}
 	r.ok = !r.latest.empty();
 	if (!r.ok)
 		r.error = "no tag_name in the answer";
@@ -124,6 +143,7 @@ struct State {
 	std::wstring page;       // её страница
 	bool failed = false;     // "Проверить сейчас" не дозвалась GitHub
 	std::string notified;    // о какой версии уже было уведомление у часов
+	Asset setup, zip;        // её установщик и архив
 };
 
 inline std::wstring StatePath(const std::wstring& folder) { return folder + L"\\update.json"; }
@@ -143,6 +163,8 @@ inline State Load(const std::wstring& folder) {
 		s.page.assign(page.begin(), page.end()); // адрес - ASCII
 		s.failed = json.value("failed", false);
 		s.notified = json.value("notified", std::string());
+		s.setup = { json.value("setup_url", std::string()), json.value("setup_sha256", std::string()) };
+		s.zip = { json.value("zip_url", std::string()), json.value("zip_sha256", std::string()) };
 	}
 	catch (const std::exception&) {
 		return State{};
@@ -159,6 +181,10 @@ inline bool Save(const std::wstring& folder, const State& s) {
 		{ "page", page },
 		{ "failed", s.failed },
 		{ "notified", s.notified },
+		{ "setup_url", s.setup.url },
+		{ "setup_sha256", s.setup.sha256 },
+		{ "zip_url", s.zip.url },
+		{ "zip_sha256", s.zip.sha256 },
 	};
 	std::ofstream f(StatePath(folder), std::ios::binary | std::ios::trunc);
 	if (!f)
@@ -175,6 +201,8 @@ inline void Apply(State& s, const Result& r, bool manual) {
 		s.latest = r.latest;
 		s.page = r.page;
 		s.failed = false;
+		s.setup = r.setup;
+		s.zip = r.zip;
 	}
 	else if (manual) {
 		s.failed = true;

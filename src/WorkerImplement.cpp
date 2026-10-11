@@ -396,7 +396,7 @@ bool WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     return true;
 }
 
-// Число с точками и запятыми, набранными клавишами-буквами ("1ю5ю3", AutoSwitch::NumberSigns): напечатать знаками
+// Число с точками и запятыми, набранными клавишами-буквами ("1ю5ю3", AutoSwitch::NumberFix): напечатать знаками
 // раскладки as, раскладку не трогать - пишут на своём языке, промахнулись только точкой (форум, Maz, 11.10.2026).
 bool WorkerImplement::FixNumberSigns(size_t begin, HKL as) {
     TKeyRevert list = m_cycleList.KeysFrom(begin);
@@ -490,16 +490,17 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         // Те же буквы и там (русская и украинская раскладки - почти одни клавиши): переключить значило бы сменить только
         // раскладку посреди текста.
         if (AutoSwitch::Lower(there) == AutoSwitch::Lower(typed)) continue;
-        // Число с точками и запятыми на клавишах-буквах ("1ю5ю3" - 1.5.3): знаки - той раскладки, раскладка остаётся.
-        if (AutoSwitch::NumberSigns(typed, there)) {
+        // Число с точками и запятыми на клавишах-буквах ("1ю5ю3" - 1.5.3, "м1ю5ю4" - v1.5.4): знаки - той раскладки,
+        // раскладка остаётся; русское сокращение впереди ("пю1ю2" - п.1.2) - как набрано (AutoSwitch::NumberFix).
+        if (const int keep = AutoSwitch::NumberFix(typed, there); keep >= 0) {
             if (IsPasswordUia()) return no("a password field", false);
             if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
             KeyHold::Claimed claimed{ m_holdId };
-            LOG_ANY(L"autoswitch: {} -> {}: a number, its signs only, the layout stays", typed, there);
+            LOG_ANY(L"autoswitch: {} -> {}: a number, its signs only (keeping {}), the layout stays", typed, there, keep);
             m_autoNo = {};
             const size_t wordBegin = tail.empty() ? m_cycleList.Size() - keys.size() - (afterSpace ? 1 : 0) : tail[0].begin;
-            if (FixNumberSigns(wordBegin, other))
-                Journal("switched", typed, there, "a number: its signs only, the layout stays");
+            if (FixNumberSigns(wordBegin + keep, other))
+                Journal("switched", typed, typed.substr(0, keep) + there.substr(keep), "a number: its signs only, the layout stays");
             return true;
         }
         // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a.
@@ -1670,7 +1671,7 @@ HKL WorkerImplement::getNextLang() {
     return lay;
 };
 
-void WorkerImplement::SwitchLangByEmulate(HKL lay) {
+bool WorkerImplement::SwitchLangByEmulate(HKL lay) {
     GETCONF;
 
     CHotKey altshift = cfg->win_hotkey_cycle_lang;
@@ -1683,7 +1684,7 @@ void WorkerImplement::SwitchLangByEmulate(HKL lay) {
         } else {
             if (topWndInfo2.lay == lay) {  // на верх пока не выносим проверку, так как нет 100% гарантии в корректности
                                            // определения тек. раскладки, пока тестим.
-                return;
+                return true;
             }
             if (cfg->layouts_info.info.size() != 2)
                 switch_until = true;
@@ -1692,31 +1693,38 @@ void WorkerImplement::SwitchLangByEmulate(HKL lay) {
 
     if (altshift.IsEmpty()) {
         LOG_WARN(L"hot key not setup. skip switch");
-        return;
+        return false;
     }
 
     LOG_ANY("Emulate with {}", LogHotKey(altshift));
 
+    const HKL before = GetKeyboardLayout(topWndInfo2.threadid_default);
     InputSender::SendHotKey(altshift);
 
-    if (switch_until) {
-        auto cur = topWndInfo2.lay;
-        for (int i = 0; i < std::ssize(cfg->layouts_info.info) - 2; i++) {
-            auto next = WaitOtherLay(cur, 0);
-            if (next == 0) {
-                LOG_WARN(L"cant't wait in emulate");
-                return;
-            }
-            if (next == lay) {
-                LOG_ANY("ok. found lay");
-                return;
-            }
-            LOG_ANY("skip lay={}", (void*)next);
-            cur = next;
-            InputSender::SendHotKey(altshift);
-        }
-        LOG_WARN("not found needed lay!");
+    // Сменилась ли: Windows переключает не всяким сочетанием (правый Ctrl - нет), тогда SetNewLay ставит обычным способом.
+    // Ждём с запасом: сочетание, дошедшее до медленного приложения уже после того способа, увело бы раскладку дальше.
+    const ULONGLONG noSwitchMs = 150;
+    if (!switch_until) {
+        return before == 0 || (size_t)lay == HKL_NEXT || WaitOtherLay(before, 0, noSwitchMs) != 0;
     }
+    auto cur = topWndInfo2.lay;
+    for (int i = 0; i < std::ssize(cfg->layouts_info.info) - 1; i++) {
+        if (i > 0)
+            InputSender::SendHotKey(altshift);
+        auto next = WaitOtherLay(cur, 0, i == 0 ? noSwitchMs : 40);
+        if (next == 0) {
+            LOG_WARN(L"cant't wait in emulate");
+            return i > 0;  // сочетание переключает, это приложение медлит
+        }
+        if (next == lay) {
+            LOG_ANY("ok. found lay");
+            return true;
+        }
+        LOG_ANY("skip lay={}", (void*)next);
+        cur = next;
+    }
+    LOG_WARN("not found needed lay!");
+    return false;
 }
 
 TStatus WorkerImplement::AnalizeTopWnd() {

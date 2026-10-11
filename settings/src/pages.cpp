@@ -19,6 +19,7 @@
 #include <wx/utils.h>
 
 #include "../../src/Update.h" // after wxWidgets: Windows headers of its own
+#include "../../src/UpdateInstall.h"
 #include "../../src/CanElevate.h"
 #include "../../src/ConfigLock.h"
 #include <shlwapi.h>          // SHLoadIndirectString: the names of keyboards
@@ -402,8 +403,9 @@ bool MailAppTakesFiles()
 
 // A new letter to the developer: the subject, what to tell, the report attached (Dmitry, 11.10.2026: "файл
 // автоматически не вставляется" - mailto cannot attach). Through Simple MAPI, in a thread of its own (the mail app may
-// hold it until the letter is sent or closed); the app does not take it - mailto, and the file shown in Explorer to
-// attach by hand. True - the letter goes with the file (as far as the mail app can).
+// hold it until the letter is sent or closed); the app does not take it - mailto, to attach the file by hand. The file
+// is shown in Explorer either way (forum, 11.10.2026: a mail app said nothing, the letter had gone to spam - the report
+// was there to send again). True - the letter goes with the file (as far as the mail app can).
 bool OpenLetter(const wxString& path)
 {
     const wxString name = wxFileName(path).GetFullName();
@@ -414,9 +416,14 @@ bool OpenLetter(const wxString& path)
         ask + wxString::Format(T("Отчёт – файл %s на рабочем столе, приложите его к письму."), name).ToStdWstring() + L"\r\n";
     const bool mapi = MailAppTakesFiles();
     std::thread([subject, ask, attachByHand, mapi, file = path.ToStdWstring(), fileName = name.ToStdWstring()] {
+        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        if (PIDLIST_ABSOLUTE item = ILCreateFromPathW(file.c_str()))
+        {
+            SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
+            ILFree(item);
+        }
         if (mapi)
         {
-            CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
             ULONG result = MAPI_E_FAILURE;
             if (HMODULE lib = LoadLibraryW(L"mapi32.dll"))
             {
@@ -445,9 +452,11 @@ bool OpenLetter(const wxString& path)
                 }
                 FreeLibrary(lib);
             }
-            CoUninitialize();
             if (result == SUCCESS_SUCCESS || result == MAPI_E_USER_ABORT)
+            {
+                CoUninitialize();
                 return;
+            }
         }
         auto encode = [](const std::wstring& s) {
             std::wstring out;
@@ -455,15 +464,43 @@ bool OpenLetter(const wxString& path)
                 out += isalnum(c) || strchr("-_.~", c) ? std::wstring(1, (wchar_t)c) : std::format(L"%{:02X}", c);
             return out;
         };
-        if (PIDLIST_ABSOLUTE item = ILCreateFromPathW(file.c_str()))
-        {
-            SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
-            ILFree(item);
-        }
         OpenAsUser(std::wstring(L"mailto:") + kReportMail + L"?subject=" + encode(subject) + L"&body=" +
                    encode(attachByHand));
+        CoUninitialize();
     }).detach();
     return mapi;
+}
+
+// Windows switches the layout only with these (Settings - Time & language - Typing - Advanced keyboard settings - Input
+// language hot keys; Win + Space always). The second way of switching presses the one set here, and a key Windows has no
+// use for changed nothing (forum, 11.10.2026: the right Ctrl - the engine now switches the usual way then).
+bool WindowsSwitches(const wxString& hotkey)
+{
+    if (hotkey.empty())
+        return true;
+    bool alt = false, ctrl = false, shift = false, win = false;
+    wxString key;
+    for (wxString part : wxSplit(hotkey, '+'))
+    {
+        part.Trim(true).Trim(false);
+        if (part == "Alt" || part == "LAlt" || part == "RAlt")
+            alt = true;
+        else if (part == "Ctrl" || part == "LCtrl" || part == "RCtrl")
+            ctrl = true;
+        else if (part == "Shift" || part == "LShift" || part == "RShift")
+            shift = true;
+        else if (part == "Win" || part == "LWin" || part == "RWin")
+            win = true;
+        else if (key.empty())
+            key = part;
+        else
+            return false;
+    }
+    if (key.empty())
+        return shift && alt != ctrl && !win; // Alt + Shift, Ctrl + Shift
+    if (key == "Space")
+        return win && !alt && !ctrl;         // Win + Space, Win + Shift + Space
+    return key == "OEM_3" && !alt && !ctrl && !shift && !win; // ` (Ё)
 }
 
 // The report in a window of its own: it can be edited; "Копировать" puts it into the clipboard as a spoiler for the
@@ -1399,9 +1436,18 @@ void SettingsFrame::BuildLayouts()
                         return windows = new HotkeyEditor(card, m_edit.GetString("win_hotkey_cycle_lang", "LAlt + Shift"),
                                                           1, true, true);
                     }, true);
-    windows->onChange = [this, windows] {
+    const wxString notWindows = T("Windows этим сочетанием раскладку не переключает");
+    if (!WindowsSwitches(windows->Value()))
+        windows->SetNote(notWindows, false);
+    windows->onChange = [this, windows, notWindows] {
         m_edit.SetString("win_hotkey_cycle_lang", windows->Value());
         Changed();
+        if (WindowsSwitches(windows->Value()))
+            return;
+        windows->SetNote(notWindows, false);
+        SetStatus(T("Windows переключает раскладку только Alt + Shift, Ctrl + Shift, Win + Пробел или Ё. Свою клавишу, "
+                    "например правый Ctrl, задайте в разделе «Сочетания клавиш» – «Следующая раскладка»"),
+                  true);
     };
 
     // The flag of English in the tray and at the text cursor (the engine's IconManager.h): the US or the British one.
@@ -1785,18 +1831,18 @@ void SettingsFrame::BuildAbout()
                         return open;
                     });
     Toggle(T("Проверять обновления"),
-           T("Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. "
-             "Скачивать и ставить новую – решаете вы"),
+           T("Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. Новую "
+             "версию оно скачает и поставит только по вашему щелчку – по уведомлению или кнопке «Обновить»"),
            "check_updates", true);
-    // "Проверить сейчас"; once a newer version is known, "Скачать" opens its page; when GitHub could not be
+    // "Проверить сейчас"; once a newer version is known, "Обновить" has the engine install it (UpdateInstall.h) or,
+    // when it cannot (no engine, a release without the file), "Скачать" opens its page; when GitHub could not be
     // reached, "Открыть страницу загрузки" leaves it to the browser.
     m_updateLabel = AddSettingsCard(m_page, m_column, T("Обновления"), UpdateText(Update::Load(m_folder.ToStdWstring())),
                                     [this](wxWindow* card) {
                                         FluentButton* button = new FluentButton(card, wxID_ANY, T("Проверить сейчас"));
                                         button->Bind(wxEVT_BUTTON, [this, button](wxCommandEvent&) { CheckUpdateNow(button); });
                                         if (!m_updatePage.empty())
-                                            button->SetText(m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")
-                                                                                                : T("Скачать"));
+                                            button->SetText(UpdateButtonText());
                                         return button;
                                     });
     AddSettingsCard(m_page, m_column, T("Основан на SimpleSwitcher"),
@@ -1828,9 +1874,18 @@ void SettingsFrame::BuildAbout()
     FinishPage();
 }
 
+wxString SettingsFrame::UpdateButtonText() const
+{
+    return m_updatePage.empty()                    ? T("Проверить сейчас")
+         : m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")
+         : m_updateInstall                       ? T("Обновить")
+                                                 : T("Скачать");
+}
+
 wxString SettingsFrame::UpdateText(const Update::State& state)
 {
     m_updatePage.clear();
+    m_updateInstall = false;
     if (state.failed)
     {
         m_updatePage = Update::kReleasesPage;
@@ -1844,6 +1899,7 @@ wxString SettingsFrame::UpdateText(const Update::State& state)
     if (Update::NewerKnown(state))
     {
         m_updatePage = state.page.empty() ? wxString(Update::kReleasesPage) : wxString(state.page);
+        m_updateInstall = !(Update::Installed(m_folder.ToStdWstring()) ? state.setup.url : state.zip.url).empty();
         return wxString::Format(T("Вышла версия %s"), wxString::FromUTF8(state.latest)) + dot + when;
     }
     return T("У вас последняя версия") + dot + when;
@@ -1853,6 +1909,19 @@ void SettingsFrame::CheckUpdateNow(FluentButton* button)
 {
     if (!m_updatePage.empty())
     {
+        // "Обновить": the engine downloads, checks and installs the new version (UpdateInstall.h) and tells how it
+        // goes by the clock; this window closes (the installer would close it anyway) - what was changed here is
+        // saved first.
+        if (m_updateInstall && (m_engine = Engine::Find(m_folder, m_enginePid)) != nullptr)
+        {
+            if (HasChanges() && !Apply())
+                return;
+            if (Engine::StartUpdate(m_engine))
+            {
+                Close();
+                return;
+            }
+        }
         OpenAsUser(m_updatePage.ToStdWstring());
         return;
     }
@@ -1873,9 +1942,7 @@ void SettingsFrame::CheckUpdateNow(FluentButton* button)
     if (HWND engine = Engine::Find(m_folder, m_enginePid))
         Engine::UpdateChecked(engine);
     SetCardDescription(m_updateLabel, UpdateText(state));
-    button->SetText(m_updatePage.empty()                   ? T("Проверить сейчас")
-                    : m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")
-                                                            : T("Скачать"));
+    button->SetText(UpdateButtonText());
     button->Enable(true);
     // The card may have grown: its page lays out again (m_page is the page being built, not this one).
     for (wxWindow* w = m_updateLabel; w; w = w->GetParent())

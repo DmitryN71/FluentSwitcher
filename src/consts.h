@@ -21,6 +21,8 @@ static const UINT WM_ToggleAutoswitch = 0xBFFF - 18; // автопереключ
                                                      // 0 - из меню у значка (там видна галочка); gui2/main.cpp
 static const UINT WM_AutoSwitchUnlearnForce = 0xBFFF - 19; // lParam - std::wstring*: ... и тут же исправили обратно - снять
 static const UINT WM_EnabledChanged = 0xBFFF - 17; // FluentSwitcher включили или выключили: в файл (enabled), gui2/main.cpp
+static const UINT WM_UpdateStart = 0xBFFF - 16; // обновить сейчас (щелчок по уведомлению, окно настроек): UpdateInstall.h
+static const UINT WM_UpdateDone = 0xBFFF - 15;  // lParam - Update::Installing* от потока обновления
 
 static const UINT c_timerKeyloggerDefence = 12;
 static const TChar c_sArgAutostart[] = L"/autostart";

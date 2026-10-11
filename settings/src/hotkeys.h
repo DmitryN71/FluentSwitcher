@@ -44,6 +44,8 @@ public:
     ~HotkeyEditor() override;
     wxString Value() const;
     void SetSides(bool sides) { m_sides = sides; }
+    // The line under the fields: advice (hint) or a warning; empty clears it.
+    void SetNote(const wxString& text, bool hint) { SetNoteLine(m_note, text, hint); }
 
     // Ends any recording (the window is left, for one).
     static void CancelRecording();

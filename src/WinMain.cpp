@@ -121,6 +121,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (args.contains(L"--cleanup")) {
 		return CleanupAutostart();
 	}
+	// Запущен обновлением (UpdateInstall.h: установщик или прежняя портативная копия): сказать "обновлено" (gui2/main.cpp).
+	g_updatedStart = args.contains(L"--updated");
 
 	setlocale(LC_ALL, "en_US.utf8");
 

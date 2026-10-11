@@ -33,5 +33,9 @@
   "Auto switch": "Автоперемикання",
   "Auto switch is on": "Автоперемикання увімкнено",
   "Auto switch is off": "Автоперемикання вимкнено",
-  "Enable/Disable auto switch": "Увімк./вимк. автоперемикання"
+  "Enable/Disable auto switch": "Увімк./вимк. автоперемикання",
+  "Click to update": "Натисніть, щоб оновити",
+  "Updating FluentSwitcher to {}": "Оновлюю FluentSwitcher до {}",
+  "Could not update FluentSwitcher": "Не вдалося оновити FluentSwitcher",
+  "FluentSwitcher is updated to {}": "FluentSwitcher оновлено до {}"
 }

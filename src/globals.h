@@ -10,6 +10,8 @@ inline HWND g_guiHandle = nullptr;
 //inline bool OpenClipboard2(CAutoClipBoard& clip) { auto res = OpenClipboard(clip); IFS_LOG(res); return res == SW_ERR_SUCCESS; }
 
 inline EnableHodler g_enabled{};
+// Эту копию запустило обновление (--updated, UpdateInstall.h).
+inline bool g_updatedStart = false;
 // Пользователь сам включал или выключал программу: повторные попытки включиться при запуске (WinMain) его не перебивают.
 inline std::atomic<bool> g_enableTouched = false;
 // inline std::atomic_bool hk_edit_now = false; // пока не нужно.

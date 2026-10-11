@@ -189,22 +189,45 @@ inline bool Forced(const std::wstring& typed, const std::wstring& there, const s
 // "1,5", и в конце предложения "1ю5ю3ю" - "1.5.3." (форум, Maz, 11.10.2026: точку нажали по-английски, а пишут
 // по-русски). Знак между цифрами - хотя бы один; не два подряд. Только так: "1/5/3" в английской раскладке (там -
 // "1.5.3") - дата или дробь, его не трогаем.
-inline bool NumberSigns(const std::wstring& typed, const std::wstring& there) {
-	if (typed.size() != there.size() || there.size() < 3 || !iswdigit(there[0])) return false;
-	bool between = false;
-	for (size_t i = 0; i < there.size(); i++) {
-		const wchar_t a = there[i];
-		if (iswdigit(a)) {
-			if (typed[i] != a) return false;
-			continue;
+// Буквы перед числом (форум, gutasiho, 11.10.2026: "м1ю5ю4" Caramba исправляет): номер версии ("м1ю5ю4" - "v1.5.4",
+// "мю1ю5ю4" - "v.1.5.4", rc, ver) - исправить и их; русское сокращение ("пю1ю2" - "п.1.2", "рисю3" - "рис.3") - оставить,
+// исправить знаки; другие буквы - не трогать ("g.1.2" из "п.1.2" было бы порчей). Тогда хватает и одного знака.
+// Сколько первых символов оставить как набрано (0 - исправить всё); -1 - не такое число.
+inline int NumberFix(const std::wstring& typed, const std::wstring& there) {
+	if (typed.size() != there.size() || there.size() < 2) return -1;
+	// Число после p букв: цифры, знаки между ними, знак сразу после букв; хотя бы один знак (без букв - между цифрами).
+	auto number = [&](size_t p) {
+		size_t signs = 0, between = 0;
+		bool digits = false;
+		for (size_t i = p; i < there.size(); i++) {
+			const wchar_t a = there[i];
+			if (iswdigit(a)) {
+				if (typed[i] != a) return false;
+				digits = true;
+				continue;
+			}
+			if ((a != L'.' && a != L',') || !TwoCaps::IsLetter(typed[i])) return false;
+			if (i == p ? p == 0 : !iswdigit(there[i - 1])) return false; // не начинается знаком; два знака подряд - нет
+			signs++;
+			if (i > p && i + 1 < there.size() && iswdigit(there[i + 1])) between++;
 		}
-		if ((a != L'.' && a != L',') || !iswdigit(there[i - 1]) || !TwoCaps::IsLetter(typed[i])) return false;
-		if (i + 1 < there.size()) {
-			if (!iswdigit(there[i + 1])) return false;
-			between = true;
-		}
+		return digits && (p == 0 ? between > 0 : signs > 0);
+	};
+	size_t letters = 0; // буквы впереди (здесь; там это и знак: "б" в "табл" - запятая)
+	while (letters < there.size() && letters < 5 && TwoCaps::IsLetter(typed[letters]) && !iswdigit(there[letters])) letters++;
+	if (letters == 0) return number(0) ? 0 : -1;
+	// Сколько из них - слово впереди: сначала длиннее ("пю1" - "п" и знак, а не "пю").
+	static const wchar_t* const kVersion[] = { L"v", L"ver", L"rc" };
+	static const wchar_t* const kRussian[] = { L"п", L"пп", L"ст", L"рис", L"табл", L"гл", L"ч", L"разд", L"стр",
+	                                           L"прил", L"т" };
+	for (size_t p = std::min<size_t>(letters, 4); p > 0; p--) {
+		const std::wstring t = Lower(typed.substr(0, p)), a = Lower(there.substr(0, p));
+		const bool version = std::ranges::all_of(a, [](wchar_t c) { return iswalpha(c) != 0; }) &&
+			std::ranges::any_of(kVersion, [&](const wchar_t* v) { return a == v; });
+		const bool russian = std::ranges::any_of(kRussian, [&](const wchar_t* r) { return t == r; });
+		if ((version || russian) && number(p)) return version ? 0 : (int)p;
 	}
-	return between;
+	return -1;
 }
 
 // Почему слово не трогаем; nullptr - можно спрашивать словари. typed - как набрано, there - те же клавиши в другой

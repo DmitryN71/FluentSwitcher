@@ -48,7 +48,8 @@ class WorkerImplement {
         IFS_LOG(ProcessRevert({ .lay = getNextLang(), .flags = SW_CLIENT_SetLang }));
     }
     TStatus AnalizeTopWnd();
-    void SwitchLangByEmulate(HKL lay);
+    // false - раскладка не сменилась (сочетание не задано или Windows им не переключает).
+    bool SwitchLangByEmulate(HKL lay);
     void CliboardChanged();
     TStatus GetClipStringCallback();
     void ClipboardClearFormat2() { IFS_LOG(m_clipWorker.ClipboardClearFormat()); }
@@ -261,7 +262,8 @@ class WorkerImplement {
     // кончилось: отметка "исправлено", дальше - новое слово.
     // false - нечего или бросили посреди (щелчок): не переключено.
     bool SwitchTail(size_t begin, HKL to, bool wordEnded);
-    // Число с . и , на клавишах-буквах ("1ю5ю3"): с begin - знаками раскладки as, своя раскладка остаётся.
+    // Число с . и , на клавишах-буквах ("1ю5ю3", AutoSwitch::NumberFix): с begin - знаками раскладки as, своя раскладка
+    // остаётся.
     bool FixNumberSigns(size_t begin, HKL as);
     void TwoCapsInKeys(TKeyRevert& keys, HKL to);
     // Перепечатать набранное с клавиши begin: до middle - в раскладке first, дальше - в rest; раскладку не менять.
@@ -345,7 +347,11 @@ class WorkerImplement {
         m_ourSwitchRoot = topWndInfo2.hwnd_top ? GetAncestor(topWndInfo2.hwnd_top, GA_ROOT) : nullptr;
 
         if (conf_get_unsafe()->AlternativeLayoutChange) {
-            SwitchLangByEmulate(lay);
+            if (!SwitchLangByEmulate(lay)) {
+                // Сочетание не переключило (в Windows такого нет - форум, 10.10.2026: правый Ctrl): обычным способом.
+                LOG_WARN(L"emulate did not switch the layout, post the request");
+                Utils::SetLayPost(topWndInfo2.hwnd_default, lay);
+            }
         } else {
             Utils::SetLayPost(topWndInfo2.hwnd_default, lay);
         }

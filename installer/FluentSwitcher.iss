@@ -77,6 +77,9 @@ Name: "{autoprograms}\FluentSwitcher"; Filename: "{app}\FluentSwitcher.exe"
 
 [Run]
 Filename: "{app}\FluentSwitcher.exe"; Description: "{cm:LaunchProgram,FluentSwitcher}"; Flags: nowait postinstall skipifsilent
+; An update by a click (the program runs this installer with /VERYSILENT, src\UpdateInstall.h): start the new version,
+; it says "updated" and deletes this installer from the temporary folder.
+Filename: "{app}\FluentSwitcher.exe"; Parameters: "--updated"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
 ; Close it, then remove its autostart (the Run value or the scheduled task - that one asks for administrator rights).

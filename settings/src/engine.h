@@ -39,6 +39,9 @@ bool SetLogging(HWND engine, bool on);
 bool SetReport(HWND engine, bool on);
 // The window checked for updates (update.json): the engine tells the answer with a note by the flag.
 bool UpdateChecked(HWND engine);
+// Update now to the version update.json knows (the engine downloads it, checks its checksum and installs it; the
+// installer closes this window too).
+bool StartUpdate(HWND engine);
 
 // Starts FluentSwitcher.exe from `folder` with `args`; `elevated`: as administrator (Windows asks).
 // False if it is not there or does not start (also when the user says No to Windows).

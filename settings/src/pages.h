@@ -62,7 +62,9 @@ private:
     void BuildAbout();
     // What the last update check found (update.json, Update.h); m_updatePage: a newer version's page, the
     // page of all versions when GitHub could not be reached (the browser may still get there), or empty.
+    // m_updateInstall: the newer version can be installed by a click (its file and checksum known, UpdateInstall.h).
     wxString UpdateText(const Update::State& state);
+    wxString UpdateButtonText() const;
     void CheckUpdateNow(FluentButton* button);
 
     void ShowSection(int section);
@@ -116,6 +118,7 @@ private:
     };
     std::vector<WordListOnPage> m_wordLists;
     wxString m_updatePage;
+    bool m_updateInstall = false;
 
     wxScrolledWindow* m_commandsPage = nullptr;
     wxBoxSizer* m_commandsColumn = nullptr;

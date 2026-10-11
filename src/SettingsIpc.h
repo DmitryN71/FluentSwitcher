@@ -18,6 +18,7 @@
 //                                           report.log, без набранного текста, сама выключается через час); 0 - выключить,
 //                                           ответ - когда файл записан
 //   SimpleSwitcher.UpdateChecked         -> 1; окно проверило обновления (update.json): уведомление у флага с ответом
+//   SimpleSwitcher.Update                -> 1; обновить до версии из update.json сейчас (UpdateInstall.h)
 //
 // Движок, запущенный от администратора, пропускает эти сообщения из обычной программы (ChangeWindowMessageFilterEx).
 
@@ -80,9 +81,11 @@ namespace SettingsIpc {
 	inline const UINT msgRunCommand = RegisterWindowMessageW(L"SimpleSwitcher.RunCommand");
 	inline const UINT msgSetLogging = RegisterWindowMessageW(L"SimpleSwitcher.SetLogging");
 	inline const UINT msgUpdateChecked = RegisterWindowMessageW(L"SimpleSwitcher.UpdateChecked");
+	inline const UINT msgUpdate = RegisterWindowMessageW(L"SimpleSwitcher.Update");
 
 	inline void AllowFromNormalPrograms(HWND hwnd) {
-		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart, msgQuit, msgRunCommand, msgSetLogging, msgUpdateChecked }) {
+		for (UINT msg : { msgReloadConfig, msgGetState, msgSetEnabled, msgSetAutostart, msgQuit, msgRunCommand, msgSetLogging,
+		                  msgUpdateChecked, msgUpdate }) {
 			IFW_LOG(ChangeWindowMessageFilterEx(hwnd, msg, MSGFLT_ALLOW, nullptr));
 		}
 	}
@@ -156,6 +159,11 @@ namespace SettingsIpc {
 		}
 		if (msg == msgUpdateChecked) {
 			PostMessageW(g_guiHandle, WM_UpdateChecked, 0, 0); // уведомление показывает значок (gui2/main.cpp)
+			return 1;
+		}
+		if (msg == msgUpdate) {
+			LOG_ANY("ipc: update");
+			PostMessageW(g_guiHandle, WM_UpdateStart, 0, 0);
 			return 1;
 		}
 		if (msg == msgQuit) {

@@ -25,8 +25,10 @@ free and open source under GPL-3.0.
   reason; its mistakes make a report for the forum topic - you see and can edit the text, the app sends nothing.
   It is turned on and off with a hotkey of its own and with a check item in the tray icon's menu too.
 - **A number with dots in the Russian layout**: "1ю5ю3", typed with the ю and б keys instead of the dot and the comma,
-  becomes "1.5.3" at once ("1б5" - "1,5"), the layout is not switched. "1/5/3" in the English layout is left alone: a
-  date or a fraction. By hand ("Fix the last word") a number with signs is fixed whole: "1/2/3" - "1.2.3".
+  becomes "1.5.3" at once ("1б5" - "1,5"), the layout is not switched. With letters before it too: "м1ю5ю4" -
+  "v1.5.4", "мю1ю5ю4" - "v.1.5.4", while Russian abbreviations stay Russian: "пю1ю2" - "п.1.2", "рисю3" - "рис.3",
+  "таблю2ю1" - "табл.2.1". "1/5/3" in the English layout is left alone: a date or a fraction. By hand ("Fix the last
+  word") a number with signs is fixed whole: "1/2/3" - "1.2.3".
 - **TWo INitial CApitals**: "THis" becomes "This" after a space, punctuation, Enter or Tab (three letters too: "THe" - "The" for frequent English words, "НЕт" - "Нет"). PCs, IDs, GHz, eM, iPhone, and Latin names like ILogger in code editors and apps without the automatic switch, are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives
@@ -65,9 +67,11 @@ free and open source under GPL-3.0.
   the word.
 - The settings window and the flag's menu are in English, Russian and Ukrainian, the theme as in Windows, light or dark.
   The settings window opens where and as large as it was closed.
-- **Update check**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
-  it tells about a new version with a notification by the clock, whether to download and install it is up to
-  you. Turned off in "About", where "Check now" is too.
+- **One-click update**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
+  it tells about a new version with a notification by the clock. A click on it (or "Update" in "About") downloads
+  the new version from GitHub, checks its SHA-256 checksum and installs it without questions - with the installer
+  or, for the version without installation (zip), by replacing the files in its folder; FluentSwitcher restarts by itself, and the
+  downloaded file is deleted. The check is turned off in "About", where "Check now" is too.
 - **Report to the developer** (Advanced): if something works wrong – "Start recording", repeat the error, "Save
   the report". The recording has no typed text: only the number of letters instead of them, passwords never get
   into it. The report is a text file on the desktop that you can read; a letter to the developer opens, and the file

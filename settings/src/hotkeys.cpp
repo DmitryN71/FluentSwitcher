@@ -147,6 +147,42 @@ const int kMaxRecordMs = 10000; // no keys for this long: the recording gives up
 // releases must too, and their auto-repeats are no new press (HookProc).
 bool g_heldBefore[256] = {};
 
+// Combinations Windows keeps for itself: taken for an action, they would stop doing their own job - Alt+Tab would no
+// longer switch windows (Dmitry, 11.10.2026: "мы легко принимаем в качестве сочетаний клавиш Alt+Tab!").
+bool WindowsOwn(const wxString& hotkey)
+{
+    wxString keys = hotkey;
+    keys.Replace(" #up", "");
+    keys.Replace(" #double", "");
+    bool ctrl = false, alt = false, shift = false, win = false;
+    wxString key;
+    for (wxString part : wxSplit(keys, '+'))
+    {
+        part.Trim(true).Trim(false);
+        if (part == "Ctrl" || part == "LCtrl" || part == "RCtrl")
+            ctrl = true;
+        else if (part == "Alt" || part == "LAlt" || part == "RAlt")
+            alt = true;
+        else if (part == "Shift" || part == "LShift" || part == "RShift")
+            shift = true;
+        else if (part == "Win" || part == "LWin" || part == "RWin")
+            win = true;
+        else
+            key = part;
+    }
+    if (key == "Tab")
+        return (alt && !win) || (win && !ctrl && !alt); // Alt+Tab, Alt+Shift+Tab, Ctrl+Alt+Tab, Win+Tab
+    if (key == "Esc")
+        return (alt || ctrl) && !win;                   // Alt+Esc, Ctrl+Esc, Ctrl+Shift+Esc
+    if (key == "F4")
+        return alt && !ctrl && !win;                    // Alt+F4
+    if (key == "L")
+        return win && !ctrl && !alt && !shift;          // Win+L
+    if (key == "Delete")
+        return ctrl && alt;                             // Ctrl+Alt+Delete
+    return false;
+}
+
 wxString Placeholder(int slot)
 {
     return slot == 0 ? T("Не назначено") : T("Ещё одно сочетание");
@@ -164,6 +200,7 @@ HotkeyEditor::HotkeyEditor(wxWindow* parent, const wxString& stored, int slots, 
     // The longest notes it shows, for the width of the line.
     notes.Add(T("Нажмите сочетание или дважды одну клавишу. Esc – отмена"));
     notes.Add(T("Так же назначено: «") + T("Исправить текст с начала строки") + T("»"));
+    notes.Add(T("Это сочетание занято Windows – выберите другое"));
     int noteWidth = 0;
     m_note = NoteLine(this, notes, &noteWidth);
 
@@ -188,8 +225,9 @@ HotkeyEditor::HotkeyEditor(wxWindow* parent, const wxString& stored, int slots, 
             e.Skip();
         });
         // From the keyboard too (review 11.10.2026: only the mouse could): Enter or Space records, Delete or Backspace
-        // clears. The kit leaves the keys to the user of the field (fluent_controls.h).
-        view->Bind(wxEVT_KEY_DOWN, [this, slot, view](wxKeyEvent& e) {
+        // clears. The kit leaves the keys to the user of the field (fluent_controls.h). wxEVT_CHAR_HOOK - it comes before
+        // Windows' dialog navigation, which took Enter away from a plain key event (Dmitry on test5: Enter did nothing).
+        view->Bind(wxEVT_CHAR_HOOK, [this, slot, view](wxKeyEvent& e) {
             const int key = e.GetKeyCode();
             if (m_recordingSlot < 0 && (key == WXK_RETURN || key == WXK_NUMPAD_ENTER || key == WXK_SPACE))
                 return Record(slot);
@@ -304,6 +342,11 @@ void HotkeyEditor::Finish(const std::string& result)
     {
         one.Replace(" #up", "");
         one.Replace(" #double", "");
+    }
+    else if (WindowsOwn(one))
+    {
+        SetNoteLine(m_note, T("Это сочетание занято Windows – выберите другое"), false);
+        return;
     }
     m_values[slot] = one;
     ShowSlot(slot);

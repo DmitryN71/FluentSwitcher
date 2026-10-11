@@ -795,13 +795,22 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
         }
     });
     save->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        if (!m_canSave || !HasChanges() || Apply())
+        // Сохранить closes: no new window in a new language (Dmitry, 11.10.2026: "окно настроек не закрывается").
+        if (!m_canSave || !HasChanges() || Apply(false))
             Close();
     });
     cancel->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
     Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent& e) {
         if (e.GetKeyCode() == WXK_ESCAPE && e.GetModifiers() == wxMOD_NONE)
             return (void)Close();
+        // Tab from the list of sections - into the page shown: the list takes the keys itself (Up, Down) and kept the
+        // focus (Dmitry, 11.10.2026: "по нажатии таба фокус никуда не перескакивает").
+        if (e.GetKeyCode() == WXK_TAB && !e.ControlDown() && !e.AltDown() && m_section >= 0 &&
+            m_section < (int)m_pages.size())
+            for (wxWindow* w = wxWindow::FindFocus(); w; w = w->GetParent())
+                if (w == m_nav)
+                    return (void)m_pages[m_section]->NavigateIn(e.ShiftDown() ? wxNavigationKeyEvent::IsBackward
+                                                                              : wxNavigationKeyEvent::IsForward);
         e.Skip();
     });
     // Back from another window: the engine may have been switched on or off from the tray meanwhile, and have learned
@@ -829,8 +838,16 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     if (!loadError.empty())
         SetStatus(T("Не удалось прочитать FluentSwitcher.json: ") + loadError, true);
     ShowSection(section);
-    SetSize(FromDIP(wxSize(860, 660)));
-    SetMinSize(FromDIP(wxSize(720, 560))); // the eleven sections and "Закрыть FluentSwitcher" under them
+    // Not narrower than the widest page: the pages scroll only up and down, and a card cut at the right edge hid its
+    // switch or button (Dmitry, 11.10.2026). The height - for the eleven sections and "Закрыть FluentSwitcher" under them.
+    int widest = 0;
+    for (wxWindow* page : m_pages)
+        if (page->GetSizer())
+            widest = std::max(widest, page->GetSizer()->CalcMin().x);
+    const int client = m_nav->GetBestSize().x + FromDIP(8 + 20) + widest + wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, this);
+    const wxSize least(std::max(FromDIP(720), ClientToWindowSize(wxSize(client, 1)).x), FromDIP(560));
+    SetSize(wxSize(std::max(FromDIP(860), least.x), FromDIP(660)));
+    SetMinSize(least);
     if (!RestorePlacement())
         CentreOnScreen();
     Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& e) {
@@ -1455,7 +1472,7 @@ void SettingsFrame::BuildLayouts()
     Choice(T("Как переключать раскладку"),
            T("Если в каком-то приложении раскладка после исправления не переключается, выберите второй способ: "
              "FluentSwitcher нажмёт то сочетание, которым раскладка переключается в Windows"),
-           { T("Обычный"), T("Нажимать сочетание Windows") }, alternative ? 1 : 0,
+           { T("Обычный"), T("Сочетанием Windows") }, alternative ? 1 : 0,
            [this](int i) { m_edit.SetBool("AlternativeLayoutChange", i == 1); });
 
     HotkeyEditor* windows = nullptr;
@@ -1639,7 +1656,7 @@ void SettingsFrame::FillCommands()
             {
                 FluentButton* run = new FluentButton(panel, wxID_ANY, T("Выполнить сейчас"));
                 run->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
-                    if (HasChanges() && !Apply()) // the engine runs what is saved
+                    if (HasChanges() && !Apply(false)) // the engine runs what is saved
                         return;
                     if (!m_engine || !Engine::RunCommand(m_engine, (int)i))
                         SetStatus(T("FluentSwitcher не запущен: команду выполнить некому"), true);
@@ -1813,7 +1830,7 @@ void SettingsFrame::BuildAdvanced()
                         row->Add(save, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, box->FromDIP(8));
                         box->SetSizer(row);
                         return box;
-                    });
+                    }, true); // the two buttons under the text: beside it the card was the widest of all (window minimum)
 
     // Not a setting that is saved: the engine keeps it until it quits. Switched by Apply, as "FluentSwitcher
     // включён" (Дмитрий 06.10: switched at once, it left Apply grey, as if the switch had not taken).
@@ -1944,7 +1961,7 @@ void SettingsFrame::CheckUpdateNow(FluentButton* button)
         // saved first.
         if (m_updateInstall && (m_engine = Engine::Find(m_folder, m_enginePid)) != nullptr)
         {
-            if (HasChanges() && !Apply())
+            if (HasChanges() && !Apply(false))
                 return;
             if (Engine::StartUpdate(m_engine))
             {
@@ -2051,7 +2068,7 @@ void SettingsFrame::Changed()
     SetStatus(wxString(), false);
 }
 
-bool SettingsFrame::Apply()
+bool SettingsFrame::Apply(bool reopen)
 {
     if (!m_canSave)
         return false;
@@ -2088,8 +2105,8 @@ bool SettingsFrame::Apply()
             return false;
         }
         m_saved = m_edit;
-        if (m_edit.GetString("gui_lang", wxString()) != oldLanguage ||
-            m_edit.GetString("ui_theme", wxString()) != oldTheme)
+        if (reopen && (m_edit.GetString("gui_lang", wxString()) != oldLanguage ||
+                       m_edit.GetString("ui_theme", wxString()) != oldTheme))
         {
             newWindow.run = [this] {
                 // The texts and colours are read when the window is built: a new window in the new language or

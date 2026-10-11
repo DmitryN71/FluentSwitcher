@@ -78,7 +78,9 @@ private:
     // The window's place and size from the last time ("settings_window"); false - none or off the screens now.
     bool RestorePlacement();
     void SavePlacement();
-    bool Apply();
+    // reopen: a new language or theme opens the window again in it (Apply); false - the window is closing (Сохранить)
+    // or busy otherwise, the new look comes with the next opening.
+    bool Apply(bool reopen = true);
     // "Work in programs run as administrator" is on, the engine has no rights: offers to restart it as
     // administrator (Windows asks once) and does. False: not restarted.
     bool RestartElevated();

@@ -61,6 +61,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Не назначено", "Not set" },
         { "Ещё одно сочетание", "Another hotkey" },
         { "Нажмите сочетание или дважды одну клавишу. Esc – отмена", "Press a combination, or one key twice. Esc cancels" },
+        { "Это сочетание занято Windows – выберите другое", "Windows uses this combination – choose another" },
         { "Так же назначено: «", "Also set for “" },
         { "»", "”" },
         { "Нажмите сочетание…", "Press a combination…" },
@@ -416,7 +417,7 @@ const std::unordered_map<std::string, const char*>& English()
           "If the layout does not switch after a fix in some app, choose the second way: FluentSwitcher presses the "
           "combination that switches the layout in Windows" },
         { "Обычный", "Usual" },
-        { "Нажимать сочетание Windows", "Press the Windows combination" },
+        { "Сочетанием Windows", "Windows combination" },
         { "Сочетание, которым раскладка переключается в Windows", "The combination that switches the layout in Windows" },
         { "FluentSwitcher нажимает его сам при втором способе. Обычно Alt + Shift или Win + Пробел",
           "FluentSwitcher presses it itself with the second way. Usually Alt + Shift or Win + Space" },

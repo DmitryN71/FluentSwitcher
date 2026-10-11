@@ -110,5 +110,7 @@
   "Click to update": "Нажмите, чтобы обновить",
   "Updating FluentSwitcher to {}": "Обновляю FluentSwitcher до {}",
   "Could not update FluentSwitcher": "Не удалось обновить FluentSwitcher",
-  "FluentSwitcher is updated to {}": "FluentSwitcher обновлён до {}"
+  "FluentSwitcher is updated to {}": "FluentSwitcher обновлён до {}",
+  "FluentSwitcher will restart by itself": "FluentSwitcher перезапустится сам",
+  "Click to see what is new": "Нажмите, чтобы посмотреть, что нового"
 }

@@ -156,11 +156,15 @@ void StartGui() {
 	timer.CycleTimer([&] {
 		if (!updates.installing) Update::CleanUp(folder);
 	}, 60 * 1000);
+	// Уведомления - с текстом: без него Windows уведомление не показывает, а убирает (1.5.5-test1: ни одного не было).
 	if (g_updatedStart) {
 		const std::string version = FS_VERSION;
-		trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("FluentSwitcher is updated to {}"), std::make_format_args(version))),
-		                L"", nullptr);
-		LOG_ANY("update: started after the update to {}", LogPlain(version));
+		const auto state = Update::Load(folder);
+		const bool shown = trayIcon.Notify(
+			StrUtils::Convert(std::vformat(LOC("FluentSwitcher is updated to {}"), std::make_format_args(version))),
+			StrUtils::Convert(std::string(LOC("Click to see what is new"))),
+			[page = state.page.empty() ? std::wstring(Update::kReleasesPage) : state.page] { OpenAsUser(page); });
+		LOG_ANY("update: started after the update to {}, note shown {}", LogPlain(version), shown);
 	}
 	timer.CycleTimer([&] {
 		if (!conf_get_unsafe()->check_updates || updates.busy) return;
@@ -254,7 +258,7 @@ void StartGui() {
 				updates.installing = true;
 				LOG_ANY("update: installing {}, {}", LogPlain(state.latest), Update::Installed(folder) ? "the installer" : "the zip");
 				trayIcon.Notify(StrUtils::Convert(std::vformat(LOC("Updating FluentSwitcher to {}"), std::make_format_args(state.latest))),
-				                L"", nullptr);
+				                StrUtils::Convert(std::string(LOC("FluentSwitcher will restart by itself"))), nullptr);
 				std::thread([hwnd = g_guiHandle, state, folder] {
 					auto* result = new Update::Installing(Update::Install(state, folder));
 					if (!PostMessageW(hwnd, WM_UpdateDone, 0, (LPARAM)result)) delete result;

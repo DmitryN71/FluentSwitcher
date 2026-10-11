@@ -1876,9 +1876,10 @@ void SettingsFrame::BuildAbout()
 
 wxString SettingsFrame::UpdateButtonText() const
 {
+    // "Обновить" first: the click installs then whatever the page (CheckUpdateNow).
     return m_updatePage.empty()                    ? T("Проверить сейчас")
-         : m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")
          : m_updateInstall                       ? T("Обновить")
+         : m_updatePage == Update::kReleasesPage ? T("Открыть страницу загрузки")
                                                  : T("Скачать");
 }
 
@@ -2141,7 +2142,13 @@ bool SettingsFrame::RestartElevated()
 void SettingsFrame::SetStatus(const wxString& text, bool warning)
 {
     m_status->SetForegroundColour(warning ? WarningColour() : g.text2);
+    // Wrapped to the width the footer leaves it, not to its own: SetLabel sizes the line to the text in one row, and a
+    // long message was cut at the buttons (11.10.2026: "Windows switches the layout only with Alt + Shift, Ctrl").
+    m_status->SetMinSize(wxSize(1, -1));
     m_status->SetLabel(text);
-    m_status->Wrap(m_status->GetSize().x > 0 ? m_status->GetSize().x : FromDIP(360));
+    Layout();
+    const int width = m_status->GetSize().x;
+    m_status->Wrap(width > 1 ? width : FromDIP(360));
+    m_status->SetMinSize(wxSize(1, m_status->GetBestSize().y)); // all its rows: the footer grows
     Layout();
 }

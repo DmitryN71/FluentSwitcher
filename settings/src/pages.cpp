@@ -800,27 +800,49 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
             Close();
     });
     cancel->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
-    Bind(wxEVT_CHAR_HOOK, [this, cancel](wxKeyEvent& e) {
+    Bind(wxEVT_CHAR_HOOK, [this, save, cancel](wxKeyEvent& e) {
         if (e.GetKeyCode() == WXK_ESCAPE && e.GetModifiers() == wxMOD_NONE)
             return (void)Close();
-        // Tab goes round the whole window, as in Windows' own Settings: from the last button ("Отмена") to the list of
-        // sections, and Shift+Tab back (Dmitry, 11.10.2026: "Tab ... не перескакивает влево, на разделы").
-        if (e.GetKeyCode() == WXK_TAB && !e.ControlDown() && !e.AltDown())
-        {
-            wxWindow* focus = wxWindow::FindFocus();
-            if (!e.ShiftDown() && focus == cancel)
-                return (void)m_nav->SetFocus();
-            if (e.ShiftDown() && focus == m_nav)
-                return (void)cancel->SetFocus();
-        }
-        // Tab from the list of sections - into the page shown: the list takes the keys itself (Up, Down) and kept the
-        // focus (Dmitry, 11.10.2026: "по нажатии таба фокус никуда не перескакивает").
+        // Tab goes round the whole window, as in Windows' own Settings: the controls of the page shown, the buttons at the
+        // bottom, the list of sections, the page again; Shift+Tab the other way. Our own ring: Windows' navigation went
+        // round the page only - the buttons and the list do not take the focus from the keyboard themselves (Dmitry,
+        // 11.10.2026: "Tab ... в левую часть окна ... не переходит никогда").
         if (e.GetKeyCode() == WXK_TAB && !e.ControlDown() && !e.AltDown() && m_section >= 0 &&
             m_section < (int)m_pages.size())
-            for (wxWindow* w = wxWindow::FindFocus(); w; w = w->GetParent())
-                if (w == m_nav)
-                    return (void)m_pages[m_section]->NavigateIn(e.ShiftDown() ? wxNavigationKeyEvent::IsBackward
-                                                                              : wxNavigationKeyEvent::IsForward);
+        {
+            std::vector<wxWindow*> ring;
+            // A control that takes the focus and has none inside that would (a field, not the card it is on).
+            std::function<bool(wxWindow*)> collect = [&](wxWindow* parent) {
+                bool any = false;
+                for (wxWindow* child : parent->GetChildren())
+                {
+                    if (!child->IsShownOnScreen() || !child->IsEnabled() || child->IsTopLevel())
+                        continue;
+                    if (collect(child))
+                        any = true;
+                    else if (child->AcceptsFocus())
+                    {
+                        ring.push_back(child);
+                        any = true;
+                    }
+                }
+                return any;
+            };
+            collect(m_pages[m_section]);
+            for (wxWindow* button : { (wxWindow*)save, (wxWindow*)m_apply, (wxWindow*)cancel })
+                if (button->IsEnabled() && button->IsShownOnScreen())
+                    ring.push_back(button);
+            ring.push_back(m_nav);
+            int at = -1;
+            for (wxWindow* w = wxWindow::FindFocus(); w && at < 0; w = w->GetParent())
+                for (int i = 0; i < (int)ring.size(); i++)
+                    if (ring[i] == w)
+                        at = i;
+            const int n = (int)ring.size();
+            const int next = at < 0 ? (e.ShiftDown() ? n - 1 : 0) : (at + (e.ShiftDown() ? n - 1 : 1)) % n;
+            ring[next]->SetFocus();
+            return;
+        }
         e.Skip();
     });
     // Back from another window: the engine may have been switched on or off from the tray meanwhile, and have learned

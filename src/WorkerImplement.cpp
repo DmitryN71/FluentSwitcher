@@ -432,7 +432,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return no("a password, a console or an excluded program", false);
     if (m_autoWord.backspace) return no("the word was edited with Backspace");
-    if (m_autoWord.undone) return no("switched back by hand in this word");
+    if (m_autoWord.undone) return no("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
     // С CapsLock - как на экране, ПРОПИСНЫМИ: такое слово - от пяти букв (AutoSwitch::CapsWord), короче - аббревиатура.
@@ -624,7 +624,7 @@ void WorkerImplement::AutoSwitchEarly() {
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return never("a password, a console or an excluded program");
     if (m_autoWord.backspace) return never("the word was edited with Backspace");
-    if (m_autoWord.undone) return never("switched back by hand in this word");
+    if (m_autoWord.undone) return never("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
     auto keys = m_cycleList.TrailingWordKeys();
@@ -1539,12 +1539,19 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
             IFS_RET(SW_ERR_UNKNOWN, L"Unknown typerevert {}", (int)hk);
         }
 
+        // Слово исправили вручную, а оно не кончено (после него ни пробела, ни Enter): автопереключение его больше не
+        // трогает - иначе Enter вернул бы прежнее (форум, 11.10.2026: в поиске Google "гас" - Shift дважды - "ufc", Enter -
+        // снова "гас": "ufc" английский словарь не знает, а "гас" русский знает).
+        auto byHand = [this] {
+            if (!m_cycleList.TrailingWordKeys().empty()) m_autoWord.undone = true;
+        };
         if (hk == hk_RevertLastWord) {
             AutoUndo undo;
             if (!CountAutoSwitchUndo(&undo)) {
                 // Исправление вручную: что исправляют - до перепечатки, счёт и журнал - после неё.
                 const auto fix = TakeHandFix();
                 RevertText(hk);
+                byHand();
                 if (fix) HandFixDone(*fix);
                 RETURN_SUCCESS;
             }
@@ -1571,6 +1578,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
             }
         }
         RevertText(hk);
+        byHand();
 
         RETURN_SUCCESS;
     };

@@ -440,10 +440,13 @@ const std::unordered_map<std::string, const char*>& English()
         { "Раскладок пока нет", "No layouts yet" },
         { "FluentSwitcher заполнит список раскладками Windows при запуске",
           "FluentSwitcher fills the list with the Windows layouts when it starts" },
-        { "Участвует в переключении и исправлении. Своё сочетание включает сразу эту раскладку, например левый "
-          "Ctrl – английскую, правый – русскую",
-          "Takes part in switching and fixing. Its own hotkey switches straight to this layout: the left Ctrl to "
-          "English and the right one to Russian, for example" },
+        { "Своё сочетание раскладки включает сразу её: например, левый Ctrl – английскую, правый – русскую",
+          "A layout's own hotkey switches straight to it: the left Ctrl to English and the right one to Russian, for "
+          "example" },
+        { "Переключатель – участвует ли раскладка в переключении и исправлении: выключите ту, что нужна редко",
+          "The switch: whether the layout takes part in switching and fixing – turn off the one you rarely need" },
+        { "Включёнными должны остаться хотя бы две раскладки: иначе исправлять не на что",
+          "At least two layouts must stay on: otherwise there is nothing to fix into" },
 
         // Commands
         { "Команды", "Commands" },

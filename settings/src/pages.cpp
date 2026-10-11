@@ -1435,6 +1435,23 @@ void SettingsFrame::BuildLayouts()
         AddSettingsCard(m_page, m_column, T("Раскладок пока нет"),
                         T("FluentSwitcher заполнит список раскладками Windows при запуске"),
                         [](wxWindow*) { return nullptr; });
+    // The switch "takes part in switching and fixing" - only with three layouts or more (Dmitry, 11.10.2026: with two,
+    // turning one off left nothing to fix into), or when one is off already (then it must be seen to be turned on). The
+    // text about the cards - once, above them, not under each.
+    bool anyOff = false;
+    for (size_t i = 0; layouts.is_array() && i < layouts.size(); i++)
+        anyOff = anyOff || (layouts[i].is_object() && !layouts[i].value("enabled", true));
+    const bool switches = layouts.is_array() && (layouts.size() >= 3 || anyOff);
+    if (layouts.is_array() && !layouts.empty())
+    {
+        wxString about = T("Своё сочетание раскладки включает сразу её: например, левый Ctrl – английскую, правый – русскую");
+        if (switches)
+            about += ". " + T("Переключатель – участвует ли раскладка в переключении и исправлении: выключите ту, что "
+                              "нужна редко");
+        wxStaticText* intro = FluentText(m_page, about, 9, g.text2);
+        intro->Wrap(FromDIP(560));
+        m_column->Add(intro, 0, wxLEFT | wxBOTTOM, FromDIP(4));
+    }
     for (size_t i = 0; layouts.is_array() && i < layouts.size(); i++)
     {
         const auto& layout = layouts[i];
@@ -1442,26 +1459,41 @@ void SettingsFrame::BuildLayouts()
         const wxString own = layout.contains("hotkey") ? FromUtf8(layout["hotkey"].get<std::string>()) : wxString();
         ToggleSwitch* toggle = nullptr;
         HotkeyEditor* editor = nullptr;
-        // The switch "takes part" on the right of the title; the layout's own hotkeys below.
-        AddSettingsCard(m_page, m_column, LayoutName(hkl),
-                        T("Участвует в переключении и исправлении. Своё сочетание включает сразу эту раскладку, "
-                          "например левый Ctrl – английскую, правый – русскую"),
+        // The layout's own hotkeys; the switch on the right of them. No text under the name (it is above the list): its
+        // empty line is hidden.
+        wxStaticText* noText = AddSettingsCard(m_page, m_column, LayoutName(hkl), wxString(),
                         [&](wxWindow* card) {
                             wxPanel* panel = new wxPanel(card);
                             panel->SetBackgroundColour(card->GetBackgroundColour());
                             editor = new HotkeyEditor(panel, own, 2, true);
-                            toggle = new ToggleSwitch(panel, layout.value("enabled", true));
                             wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
                             row->Add(editor, 0, wxALIGN_TOP);
-                            row->AddStretchSpacer();
-                            row->Add(toggle, 0, wxALIGN_TOP | wxTOP, card->FromDIP(4));
+                            if (switches)
+                            {
+                                toggle = new ToggleSwitch(panel, layout.value("enabled", true));
+                                row->AddStretchSpacer();
+                                row->Add(toggle, 0, wxALIGN_TOP | wxTOP, card->FromDIP(4));
+                            }
                             panel->SetSizer(row);
                             return panel;
                         }, true);
-        toggle->onChange = [this, toggle, i] {
-            m_edit.Json()["layouts_info"][i]["enabled"] = toggle->IsOn();
-            Changed();
-        };
+        noText->Hide();
+        if (toggle)
+            toggle->onChange = [this, toggle, i] {
+                // At least two stay on: one alone, there is nothing to switch to and nothing to fix into.
+                auto& all = m_edit.Json()["layouts_info"];
+                int on = 0;
+                for (size_t k = 0; all.is_array() && k < all.size(); k++)
+                    on += k == i ? toggle->IsOn() : (all[k].is_object() && all[k].value("enabled", true));
+                if (!toggle->IsOn() && on < 2)
+                {
+                    toggle->SetOn(true);
+                    SetStatus(T("Включёнными должны остаться хотя бы две раскладки: иначе исправлять не на что"), true);
+                    return;
+                }
+                all[i]["enabled"] = toggle->IsOn();
+                Changed();
+            };
         editor->onChange = [this, editor, i] {
             m_edit.Json()["layouts_info"][i]["hotkey"] = ToUtf8(editor->Value());
             Changed();

@@ -403,7 +403,7 @@ void StartGui() {
 				trayIcon.Update((HKL)wParam);
 				caretFlag.OnLayout((HKL)wParam);
 				if (wParam)
-					layoutSound.OnLayout((HKL)wParam, lParam != 0);
+					layoutSound.OnLayout((HKL)wParam, lParam != 0, conf_get_unsafe()->IsSkipProgramTop());
 				else
 					layoutSound.Reset(); // настройки перечитаны или FluentSwitcher включили / выключили
 				return 0;

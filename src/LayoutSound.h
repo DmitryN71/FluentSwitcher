@@ -95,16 +95,19 @@ class LayoutSound {
 
 public:
 	// Раскладка у окна впереди сменилась (WM_LayNotif). Первая известная - без звука; otherWindow - перешли в окно
-	// со своей раскладкой, это не переключение; сразу после начала исправления - звук был свой.
-	void OnLayout(HKL lay, bool otherWindow) {
+	// со своей раскладкой, это не переключение; сразу после начала исправления - звук был свой. excluded - окно программы,
+	// где FluentSwitcher не работает ("Не работать в приложениях", окно удалённого доступа без work_in_remote): молчать
+	// и там (Дмитрий, 11.10.2026: по RDP домашний FluentSwitcher щёлкал на каждое переключение в удалённом окне).
+	void OnLayout(HKL lay, bool otherWindow, bool excluded = false) {
 		if (!lay) return;
 		if (!m_last || lay == m_last) {
 			m_last = lay;
 			return;
 		}
 		m_last = lay;
-		if (otherWindow || GetTickCount64() - m_fixAt < 1500) {
-			LOG_ANY("sound: no switch sound - {}", otherWindow ? "another window" : "the fix has its own");
+		if (otherWindow || excluded || GetTickCount64() - m_fixAt < 1500) {
+			LOG_ANY("sound: no switch sound - {}", otherWindow ? "another window" : excluded ? "an excluded program"
+			                                                                                 : "the fix has its own");
 			return;
 		}
 		const int volume = conf_get_unsafe()->sound_switch;

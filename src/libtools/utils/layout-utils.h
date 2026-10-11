@@ -128,6 +128,9 @@ namespace Utils
 			return res;
 
 		res.hwnd_default = ImmGetDefaultIMEWnd(res.hwnd_top);
+		// Окна ввода нет: поток самого окна. Иначе нулевой поток - GetKeyboardLayout(0) дала бы раскладку того потока
+		// FluentSwitcher, что спрашивает, а SetLayPost(nullptr) - запрос в его же очередь (ревью 11.10.2026).
+		if (!res.hwnd_default) res.hwnd_default = res.hwnd_top;
 
 		res.threadid_default = GetWindowThreadProcessId(res.hwnd_default, &res.pid_default);
 		IFW_LOG(res.threadid_default != 0);

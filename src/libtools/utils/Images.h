@@ -122,12 +122,6 @@ namespace Images {
 	}
 
 
-	inline Image ResizeBicubic(Image img, int newWidth, int newHeight) {
-		int channels = img->channels;
-		Image res = MAKE_SHARED(res);
-		return res;
-	}
-
 	inline ImageIcon ImageToIconConsume(Image image) {
 		ImageIcon res = MAKE_SHARED(res);
 		res->img = *image;

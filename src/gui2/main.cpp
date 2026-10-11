@@ -38,7 +38,13 @@ void StartGui() {
 	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const char* name,
 	                       const std::wstring& word, const char* title, const char* text) {
 		const std::string utf8 = StrUtils::Convert(word);
-		if (++counts[utf8] < 3) return false;
+		if (++counts[utf8] < 3) {
+			// Не больше 300 слов в счёте: слова, вернутые или исправленные раз-другой, иначе копились бы в файле настроек
+			// навсегда (ревью 11.10.2026; было только у исправлений вручную). Это слово остаётся.
+			if (counts.size() > 300)
+				std::erase_if(counts, [&](const auto& c) { return c.second < 2 && c.first != utf8; });
+			return false;
+		}
 		counts.erase(utf8);
 		lastLearned[name] = { utf8, GetTickCount64() };
 		if (std::ranges::find(list, utf8) == list.end()) list.push_back(utf8);
@@ -329,7 +335,6 @@ void StartGui() {
 				const bool learned = countToList(counts, conf_gui()->autoswitch_force, "autoswitch_force", *word,
 				                                 "\"{}\" will always be switched",
 				                                 "It is in \"Always switch\" of the layout auto switch: Settings, Auto switch");
-				if (counts.size() > 300) std::erase_if(counts, [](const auto& c) { return c.second < 2; });
 				if (learned)
 					saveWord("autoswitch_force", *word);
 				else

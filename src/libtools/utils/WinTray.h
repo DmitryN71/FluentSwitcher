@@ -38,13 +38,7 @@ private:
 	// uxtheme (порядковые номера 135 SetPreferredAppMode и 136 FlushMenuThemes, Windows 10 1903+),
 	// как делают Проводник, wxWidgets, Notepad++. Проверяется при каждом открытии: тема могла смениться.
 	static void MenuThemeLikeTaskbar() {
-		static DWORD build = [] {
-			using RtlGetVersion_t = LONG(WINAPI*)(OSVERSIONINFOW*);
-			auto fn = (RtlGetVersion_t)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
-			OSVERSIONINFOW v{ sizeof(v) };
-			return fn && fn(&v) == 0 ? v.dwBuildNumber : 0;
-		}();
-		if (build < 18362) return;
+		if (FluentMenu::Build() < 18362) return;
 		static HMODULE uxtheme = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
 		if (!uxtheme) return;
 		using SetPreferredAppMode_t = int(WINAPI*)(int);
@@ -52,10 +46,7 @@ private:
 		static auto setMode = (SetPreferredAppMode_t)GetProcAddress(uxtheme, MAKEINTRESOURCEA(135));
 		static auto flush = (FlushMenuThemes_t)GetProcAddress(uxtheme, MAKEINTRESOURCEA(136));
 		if (!setMode || !flush) return;
-		DWORD light = 1, size = sizeof(light);
-		RegGetValueW(HKEY_CURRENT_USER, LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)",
-			L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
-		setMode(light ? 3 : 2); // ForceLight : ForceDark
+		setMode(FluentMenu::TaskbarDark() ? 2 : 3); // ForceDark : ForceLight
 		flush();
 	}
 

@@ -800,9 +800,19 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
             Close();
     });
     cancel->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
-    Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent& e) {
+    Bind(wxEVT_CHAR_HOOK, [this, cancel](wxKeyEvent& e) {
         if (e.GetKeyCode() == WXK_ESCAPE && e.GetModifiers() == wxMOD_NONE)
             return (void)Close();
+        // Tab goes round the whole window, as in Windows' own Settings: from the last button ("Отмена") to the list of
+        // sections, and Shift+Tab back (Dmitry, 11.10.2026: "Tab ... не перескакивает влево, на разделы").
+        if (e.GetKeyCode() == WXK_TAB && !e.ControlDown() && !e.AltDown())
+        {
+            wxWindow* focus = wxWindow::FindFocus();
+            if (!e.ShiftDown() && focus == cancel)
+                return (void)m_nav->SetFocus();
+            if (e.ShiftDown() && focus == m_nav)
+                return (void)cancel->SetFocus();
+        }
         // Tab from the list of sections - into the page shown: the list takes the keys itself (Up, Down) and kept the
         // focus (Dmitry, 11.10.2026: "по нажатии таба фокус никуда не перескакивает").
         if (e.GetKeyCode() == WXK_TAB && !e.ControlDown() && !e.AltDown() && m_section >= 0 &&
@@ -912,6 +922,28 @@ void SettingsFrame::Section(const char* icon, const wxString& title)
     m_page = NewSettingsPage(this, &m_column);
     m_pagesSizer->Add(m_page, 1, wxEXPAND);
     m_pages.push_back(m_page);
+    // The control that got the focus (Tab, a click) - scrolled into sight (Dmitry, 11.10.2026: Tab went to a field out
+    // of sight, and the page stayed where it was).
+    wxScrolledWindow* page = m_page;
+    page->Bind(wxEVT_CHILD_FOCUS, [page](wxChildFocusEvent& e) {
+        e.Skip(); // the page still remembers its last focused control
+        wxWindow* focused = wxWindow::FindFocus();
+        int unitX = 0, unitY = 0, viewX = 0, viewY = 0;
+        page->GetScrollPixelsPerUnit(&unitX, &unitY);
+        if (!focused || unitY <= 0)
+            return;
+        page->GetViewStart(&viewX, &viewY);
+        const wxRect r = focused->GetScreenRect();
+        const int top = page->ScreenToClient(r.GetTopLeft()).y, height = page->GetClientSize().y;
+        const int margin = page->FromDIP(12);
+        int y = viewY;
+        if (top < margin)
+            y = viewY + (top - margin) / unitY - 1;
+        else if (top + r.height > height - margin)
+            y = viewY + (top + r.height - height + margin + unitY - 1) / unitY;
+        if (y != viewY)
+            page->Scroll(-1, std::max(0, y));
+    });
     m_titles.Add(title);
     m_nav->AddSection(icon, title);
 }

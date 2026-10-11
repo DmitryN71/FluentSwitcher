@@ -72,9 +72,10 @@ inline TKeyType AnalizeTyped(const CHotKey& key, UINT vk, const TScanCode_Ext& s
 		isBadMapping = false;
 	}
 	else {
+		// Все остальные раскладки, а не первая из них (ревью 11.10.2026: с тремя раскладками вторая не проверялась).
 		for (auto l2 : cfg->layouts_info.EnabledLayouts()) {
-			if (l2 != lay) {
-				if (scan.to_vk_or_def(l2) == vk) isBadMapping = false;
+			if (l2 != lay && scan.to_vk_or_def(l2) == vk) {
+				isBadMapping = false;
 				break;
 			}
 		}

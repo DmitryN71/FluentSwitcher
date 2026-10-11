@@ -53,55 +53,6 @@ class WorkerImplement {
     void CliboardChanged();
     TStatus GetClipStringCallback();
     void ClipboardClearFormat2() { IFS_LOG(m_clipWorker.ClipboardClearFormat()); }
-    void ClipboardToSendData(const std::wstring& clipdata) {
-        m_cycleList.Clear();
-
-        HKL layouts[10];
-        int count = GetKeyboardLayoutList(std::ssize(layouts), layouts);
-        if (count == 0) {
-            IFW_LOG(false);
-            return;
-        }
-
-        for (auto c : clipdata) {
-            if (c == L'\r')
-                continue;
-            auto lay = CurLay();
-            SHORT res = VkKeyScanEx(c, lay);
-            if (res == -1) {
-                for (int i = 0; i < count; ++i) {
-                    if (layouts[i] != lay)
-                        res = VkKeyScanEx(c, layouts[i]);
-                    if (res != -1)
-                        break;
-                }
-            }
-            if (res == -1) {
-                IFS_LOG(SW_ERR_UNKNOWN, L"Cant scan char %c", c);
-                continue;
-            }
-            BYTE mods = HIBYTE(res);
-            BYTE vk_code = LOBYTE(res);
-
-            TKeyType type = KEYTYPE_LETTER;
-            // Пока сделаем супер-простое разделение
-            if (StrUtils::IsSpace(c))
-                type = KEYTYPE_SPACE;
-
-            TKeyBaseInfo key{.vk_code = vk_code,
-                             .scan_code = {},
-                             .is_shift = TestFlag(mods, 0x1),
-                             .is_caps = m_is_last_caps,
-                             .type = type};
-            m_cycleList.AddKeyToList(key);
-        }
-
-        RevertText(hk_RevertAllRecentText, true, true);
-        if (m_clear_alfter_selected) {
-            m_cycleList.Clear();
-        }
-    }
-
     void RevertText(HotKeyType typeRevert, bool no_backs = false, bool always_full_text = false) {
         auto nextLng = getNextLang();
         auto to_revert = m_cycleList.FillKeyToRevert(typeRevert, always_full_text);
@@ -453,6 +404,5 @@ class WorkerImplement {
     HotKeyType m_lastRevertRequest = hk_NULL;
     // std::wstring m_sSelfExeName;
     CycleRevertList m_cycleList;
-    bool m_clear_alfter_selected = false;
     bool m_is_last_caps = false;
 };

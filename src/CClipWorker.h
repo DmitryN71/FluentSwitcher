@@ -189,10 +189,9 @@ private:
 		TCHAR* sTextSrc = (TCHAR*)lockSrc;
 		data = sTextSrc;
 
-		BOOL res = GlobalUnlock(lockSrc);
-		DWORD dwerr = GetLastError();
-
-		LOG_ANY(L"unlock res={}, err={}", res, dwerr);
+		// Снимается блокировка памяти по её описателю, не по указателю (ревью 11.10.2026: с указателем снятие не удавалось,
+		// и блокировка оставалась).
+		GlobalUnlock(hData);
 		LOG_ANY_4(L"getted data. text='{}'", data);
 
 		RETURN_SUCCESS;
@@ -225,11 +224,9 @@ private:
 		memcpy(sTextDst, data.c_str(), data.length() * sizeof(TCHAR));
 		sTextDst[data.length()] = 0;
 
-		BOOL res = GlobalUnlock(lock);
-		DWORD dwerr = GetLastError();
-
-		LOG_ANY(L"unlock PUT res={}, err={}", res, dwerr);
-		LOG_ANY_4(L"putted text data='{}'",sTextDst);
+		// По описателю (как выше): Windows получает память уже без блокировки.
+		GlobalUnlock(hglbCopy);
+		LOG_ANY_4(L"putted text data='{}'", data);
 
 		//m_clipboardOurPut = true;
 		//LOG_ANY(L"put to buf: %s, size: %u", data.c_str(), data.length());

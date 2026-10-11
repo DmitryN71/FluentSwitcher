@@ -1,4 +1,4 @@
-﻿#include "WorkerImplement.h"
+#include "WorkerImplement.h"
 #include "ParseSnippet.h"
 #include "LayoutConvert.h"
 #include "AutoSwitch.h"
@@ -8,6 +8,13 @@
 #include <atlbase.h>
 #include <UIAutomation.h>
 #include <fstream>
+
+// Слово окну движка (gui2/main.cpp - его счёт, списки): не дошло (окно уже закрыто - выход) - удалить здесь, как строку
+// журнала (Journal), а не потерять (ревью 11.10.2026).
+static void PostWord(UINT msg, const std::wstring& word) {
+    auto* copy = new std::wstring(word);
+    if (!PostMessageW(g_guiHandle, msg, 0, (LPARAM)copy)) delete copy;
+}
 
 void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     // Придержанный Enter / Tab ещё не дошёл до программы - ждать после него нечего (SettleBeforeErase).
@@ -841,7 +848,7 @@ std::wstring WorkerImplement::LearnableFix(const HandFix& fix) {
 
 void WorkerImplement::HandFixDone(const HandFix& fix) {
     GETCONF;
-    if (!fix.undoneAgain.empty()) PostMessageW(g_guiHandle, WM_AutoSwitchUnlearn, 0, (LPARAM)new std::wstring(fix.undoneAgain));
+    if (!fix.undoneAgain.empty()) PostWord(WM_AutoSwitchUnlearn, fix.undoneAgain);
     // Исправили обратно то, что только что исправили вручную (случайное нажатие - и ещё одно, назад): оба - не слова для
     // "Переключать всегда"; ушедшее в счёт - снять.
     const auto prev = std::exchange(m_lastHandFix, {});
@@ -849,7 +856,7 @@ void WorkerImplement::HandFixDone(const HandFix& fix) {
         AutoSwitch::Lower(AutoSwitch::Letters(fix.fixed).core) == prev.typed &&
         AutoSwitch::Lower(AutoSwitch::Letters(fix.typed).core) == prev.fixed;
     if (back && prev.counted)
-        PostMessageW(g_guiHandle, WM_AutoSwitchUnlearnForce, 0, (LPARAM)new std::wstring(prev.fixed));
+        PostWord(WM_AutoSwitchUnlearnForce, prev.fixed);
     const std::wstring learn = back ? std::wstring() : LearnableFix(fix);
     // Пароль - ни в счёт, ни в журнал. Спрашиваем поле (UI Automation) только когда есть что записать; исправление уже
     // напечатано - вопрос его не задерживает.
@@ -859,7 +866,7 @@ void WorkerImplement::HandFixDone(const HandFix& fix) {
         return;
     }
     if (IsPasswordFocus() || IsPasswordUia()) return;
-    if (!learn.empty()) PostMessageW(g_guiHandle, WM_AutoSwitchLearnForce, 0, (LPARAM)new std::wstring(learn));
+    if (!learn.empty()) PostWord(WM_AutoSwitchLearnForce, learn);
     if (!back) m_lastHandFix = { AutoSwitch::Lower(AutoSwitch::Letters(fix.fixed).core),
                                  AutoSwitch::Lower(AutoSwitch::Letters(fix.typed).core), !learn.empty(), GetTickCount64() };
     if (!cfg->autoswitch_journal) return;
@@ -906,7 +913,7 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
     }
     LOG_ANY(L"autoswitch: {} switched back", last.word);
     Journal("switched back", last.there, last.typed);
-    PostMessageW(g_guiHandle, WM_AutoSwitchLearn, 0, (LPARAM)new std::wstring(last.word));
+    PostWord(WM_AutoSwitchLearn, last.word);
     m_lastUndo = { .word = last.word, .at = GetTickCount64() };
     if (undo && span) *undo = { .tail = keys, .retro = 0, .all = true, .from = last.from, .to = last.to };
     return true;
@@ -1103,7 +1110,7 @@ bool WorkerImplement::UndoTwoCaps() {
     last.key->is_shift = !last.upper;
     // Исправляли на знаке, слово ещё не кончилось: пробел или Enter после него не должны исправить его снова.
     if (last.space.empty()) m_autoWord.twoCapsUndone = true;
-    PostMessageW(g_guiHandle, WM_TwoCapsLearn, 0, (LPARAM)new std::wstring(last.word));
+    PostWord(WM_TwoCapsLearn, last.word);
     return true;
 }
 
@@ -1201,8 +1208,11 @@ TStatus WorkerImplement::GetClipStringCallback() {
 void WorkerImplement::CliboardChanged() {
     LOG_ANY(L"ClipboardChangedInt");
 
+    // Выключен - не выход (ревью 11.10.2026 предлагало): запрос к буферу сделан сочетанием, пока FluentSwitcher был
+    // включён, и его надо довести - иначе в буфере останется выделенный текст, а прежнее содержимое не вернётся
+    // (Restore - в GetClipStringCallback).
     if (!g_enabled.IsEnabled()) {
-        LOG_ANY(L"skip because disabled");
+        LOG_ANY(L"disabled meanwhile: the request to the clipboard is finished anyway");
     }
 
     auto dwTime = GetTickCount64() - m_dwLastCtrlCReqvest;
@@ -1362,8 +1372,6 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
     m_lastHotKeyTime = GetTickCount64();
 
     GETCONF;
-
-    m_clear_alfter_selected = hk == hk_RevertSelelected;
 
     if (IsNeedSavedWords(hk) && !m_cycleList.HasAnySymbol()) {
         bool found = false;
@@ -1562,7 +1570,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
                     if (!SwitchTail(begin, undo.from, true) && !m_lastUndo.word.empty()) {
                         // Перепечатку бросили (щелчок, другое окно): отмена не случилась - и не в счёт.
                         LOG_ANY(L"autoswitch: switching {} back was stopped, not counted", m_lastUndo.word);
-                        PostMessageW(g_guiHandle, WM_AutoSwitchUnlearn, 0, (LPARAM)new std::wstring(m_lastUndo.word));
+                        PostWord(WM_AutoSwitchUnlearn, m_lastUndo.word);
                         m_lastUndo = {};
                     }
                 }

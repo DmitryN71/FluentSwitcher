@@ -373,12 +373,16 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					else if (key != vkCode && (key != end.lastLetter || end.size < 2)) otherKey = true;
 				}
 				const bool modEnter = vkCode == VK_RETURN && mods == 1 && (curk.HasMod(VK_SHIFT) || curk.HasMod(VK_CONTROL));
+				// Пробел с ещё нажатым Shift - слово ПРОПИСНЫМИ набирали с Shift и отпустили его чуть позже пробела (Дмитрий,
+				// 11.10.2026, "ЗИМА DJPVTPLBZ": само переключилось один раз из многих - когда Shift отпустил раньше). Shift
+				// движок не отпускает: Shift+Backspace стирает как Backspace, а слово печатается готовыми символами.
+				const bool shiftSpace = vkCode == VK_SPACE && mods == 1 && curk.HasMod(VK_SHIFT);
 				// Слово до четырёх клавиш с I в начале, в английской раскладке, - может быть i, i'm, i've (fix_lone_i): решает
 				// движок. В других раскладках и другие короткие слова не держим: движок i там не исправляет, а держать
 				// после каждого короткого слова - лишние отправленные заново нажатия.
 				const bool twoCaps = end.twoCaps && cfg->two_caps;
 				const bool loneI = end.loneI && cfg->fix_lone_i && KeyHold::EnglishLayout();
-				const bool check = KeyHold::CanStart() && !otherKey && (mods == 0 || modEnter) && g_enabled.IsEnabled() &&
+				const bool check = KeyHold::CanStart() && !otherKey && (mods == 0 || modEnter || shiftSpace) && g_enabled.IsEnabled() &&
 					(twoCaps || loneI || ((end.letters || end.number) && cfg->autoswitch)) && canHold() &&
 					(autoswitchHere() || (twoCaps && !KeyHold::LatinLayout()));
 				if (check && vkCode != VK_SPACE) {

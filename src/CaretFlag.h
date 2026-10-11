@@ -308,6 +308,11 @@ private:
 		const bool hasValue = SUCCEEDED(el->GetCurrentPatternAs(UIA_ValuePatternId, IID_PPV_ARGS(&value))) && value &&
 			SUCCEEDED(value->get_CurrentIsReadOnly(&valueReadOnly));
 		if (readOnly || (hasValue && valueReadOnly && ct != UIA_DocumentControlTypeId)) return 0;
+		// Где не печатают, а значение не "только для чтения" и каретка в тексте есть: так Firefox описывает ползунки
+		// (полоса прокрутки видео и громкость на YouTube - флажок вставал у места клика: отчёт по почте, Zen, 11.10.2026)
+		// и ссылки (флажок у ссылки, открывшей новое окно: форум, WinnyS, Firefox, отчёт 11.10.2026 - в фокусе Hyperlink,
+		// каретка в нём).
+		if (NotText(ct)) return 0;
 		// Скрыт (поле закрыли) или не в фокусе на самом деле: браузер иногда ещё отдаёт прежний элемент.
 		BOOL keyboard = FALSE;
 		el->get_CurrentHasKeyboardFocus(&keyboard);
@@ -321,6 +326,20 @@ private:
 		CComPtr<IUIAutomationTextPattern> text;
 		return ct == UIA_GroupControlTypeId && stateKnown &&
 			SUCCEEDED(el->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&text))) && text ? 2 : 0;
+	}
+
+	// Элементы, в которых не печатают: кнопки, флажки, ссылки, ползунки, полосы прокрутки, картинки, пункты списков,
+	// вкладок и меню.
+	static bool NotText(CONTROLTYPEID ct) {
+		switch (ct) {
+		case UIA_ButtonControlTypeId: case UIA_SplitButtonControlTypeId: case UIA_CheckBoxControlTypeId:
+		case UIA_RadioButtonControlTypeId: case UIA_HyperlinkControlTypeId: case UIA_SliderControlTypeId:
+		case UIA_ScrollBarControlTypeId: case UIA_ProgressBarControlTypeId: case UIA_ThumbControlTypeId:
+		case UIA_ImageControlTypeId: case UIA_ListItemControlTypeId: case UIA_TreeItemControlTypeId:
+		case UIA_TabItemControlTypeId: case UIA_MenuItemControlTypeId:
+			return true;
+		}
+		return false;
 	}
 
 	// Найденный FocusInWindow элемент - только в потоке CaretProbe; отпускается до CoUninitialize (Run): после него

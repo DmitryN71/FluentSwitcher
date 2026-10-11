@@ -84,6 +84,23 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 		}
 	}
 
+	// Знак, разный в раскладках, между цифрами ("1/2/3" в английской вместо "1.2.3", "11.10.2026" в русской вместо
+	// английской даты): число со знаками - одно слово, исправляется целиком. Иначе каждый знак начинал своё слово, и
+	// исправлялось только "/5" - "1/2/3/4.5" (Дмитрий 11.10.2026). Знаки, одинаковые в раскладках (5-3, 2+2), - граница,
+	// как были; через уже исправленное (is_last_revert) - нет.
+	{
+		auto digitsAt = [&](int j) {
+			return zipped[j].type == KEYTYPE_LETTER_OR_SPACE && !zipped[j].p->key.space_on_extended;
+		};
+		std::vector<char> inNumber(zipped.size());
+		for (int j = 1; j + 1 < std::ssize(zipped); j++)
+			if (zipped[j].type == KEYTYPE_CUSTOM && digitsAt(j - 1) && digitsAt(j + 1) && !zipped[j].is_last_revert &&
+				!zipped[j + 1].is_last_revert)
+				inNumber[j - 1] = inNumber[j] = inNumber[j + 1] = 1;
+		for (int j = 0; j < std::ssize(zipped); j++)
+			if (inNumber[j]) zipped[j].type = KEYTYPE_LETTER;
+	}
+
 	// по сути, все уже готово, осталось лишь решить вопрос possible letter / letter.
 
 	std::vector<int> starts; // индексы в zipped, с которых начинаются слова.

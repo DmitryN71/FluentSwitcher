@@ -379,7 +379,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				const bool twoCaps = end.twoCaps && cfg->two_caps;
 				const bool loneI = end.loneI && cfg->fix_lone_i && KeyHold::EnglishLayout();
 				const bool check = KeyHold::CanStart() && !otherKey && (mods == 0 || modEnter) && g_enabled.IsEnabled() &&
-					(twoCaps || loneI || (end.letters && cfg->autoswitch)) && canHold() &&
+					(twoCaps || loneI || ((end.letters || end.number) && cfg->autoswitch)) && canHold() &&
 					(autoswitchHere() || (twoCaps && !KeyHold::LatinLayout()));
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
@@ -455,7 +455,16 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 	if (need_disable_event && (g_enabled.IsEnabled() || msg_hotkey.hk == hk_ToggleEnabled)){
 		// делаем вид, что клавиша не была нажата.
-		return 1; 
+		return 1;
+	}
+
+	// CapsLock выключен в настройках (capslock_off): нажатие руками до Windows не доходит, ПРОПИСНЫЕ не включаются; хук
+	// его уже учёл - сочетания с ним работают. Отправленное программами (наше "Нажать CapsLock", скрипты) - проходит, кроме
+	// нажатого руками и придержанного на время проверки слова (KeyHold: возвращается отправленным).
+	if (const auto* k = (KBDLLHOOKSTRUCT*)lParam; k->vkCode == VK_CAPITAL &&
+		(!TestFlag(k->flags, LLKHF_INJECTED) || k->dwExtraInfo == KeyHold::c_Replayed) && g_enabled.IsEnabled()) {
+		auto cfg = conf_get_unsafe();
+		if (cfg->capslock_off && !cfg->IsSkipProgramTop()) return 1;
 	}
 
 	return CallNextHookEx(0, nCode, wParam, lParam);

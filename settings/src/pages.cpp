@@ -1263,6 +1263,14 @@ void SettingsFrame::BuildTyping()
             T("Только в английской раскладке и не в консоли или редакторе кода (VS Code, Visual Studio, JetBrains, "
               "Notepad++): там i – переменная. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): "
               "вернётся «i», а на третий раз оно попадёт в исключения ДВух ЗАглавных"));
+    // CapsLock off (the engine's HookerKeyboard.cpp, capslock_off; Dmitry, 11.10.2026: without the registry).
+    CardTip(Toggle(WithTip(T("Выключить CapsLock")),
+                   T("Нажатие CapsLock не включает ПРОПИСНЫЕ – никаких «пРИВЕТ» от случайного нажатия. Сочетания с ним "
+                     "работают: Shift + CapsLock, Ctrl + CapsLock"),
+                   "capslock_off", false),
+            T("ПРОПИСНЫЕ можно включить своим сочетанием «Нажать CapsLock» (раздел «Сочетания клавиш», например "
+              "Alt + CapsLock). Пока FluentSwitcher выключен и в приложениях из «Не работать в приложениях», CapsLock "
+              "работает как обычно"));
     FinishPage();
 }
 

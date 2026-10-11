@@ -142,6 +142,7 @@ namespace nlohmann {
 			work_in_remote,
 			settings_window,
 			enabled,
+			capslock_off,
 			retype_delay_ms,
 			caret_flag,
 			caret_flag_size,

@@ -508,6 +508,16 @@ const std::unordered_map<std::string, const char*>& English()
           "app folder. Don't type passwords meanwhile; after the check, turn it off and delete the log" },
         { "Журнал отладки не переключился. ", "The debug log did not switch. " },
         { "FluentSwitcher не запущен: журнал вести некому", "FluentSwitcher is not running: nothing can keep the log" },
+        { "Выключить CapsLock", "Turn CapsLock off" },
+        { "Нажатие CapsLock не включает ПРОПИСНЫЕ – никаких «пРИВЕТ» от случайного нажатия. Сочетания с ним "
+          "работают: Shift + CapsLock, Ctrl + CapsLock",
+          "Pressing CapsLock does not turn CAPITALS on – no more “hELLO” from a stray press. Hotkeys with it work: "
+          "Shift + CapsLock, Ctrl + CapsLock" },
+        { "ПРОПИСНЫЕ можно включить своим сочетанием «Нажать CapsLock» (раздел «Сочетания клавиш», например "
+          "Alt + CapsLock). Пока FluentSwitcher выключен и в приложениях из «Не работать в приложениях», CapsLock "
+          "работает как обычно",
+          "CAPITALS can be turned on with a hotkey of your own for “Press CapsLock” (Hotkeys, for example Alt + CapsLock). While "
+          "FluentSwitcher is off and in the apps of “Don't work in apps”, CapsLock works as usual" },
         { "Отчёт для разработчика", "Report to the developer" },
         { "Если что-то работает не так: начните запись, повторите ошибку и сохраните отчёт. В записи нет "
           "набранного текста – вместо букв только их число, пароли в неё не попадают. Отчёт появится на "

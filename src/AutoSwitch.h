@@ -185,6 +185,28 @@ inline bool Forced(const std::wstring& typed, const std::wstring& there, const s
 	return false;
 }
 
+// Число с точками и запятыми, где они набраны клавишами, которые в этой раскладке буквы: "1ю5ю3" - "1.5.3", "1б5" -
+// "1,5", и в конце предложения "1ю5ю3ю" - "1.5.3." (форум, Maz, 11.10.2026: точку нажали по-английски, а пишут
+// по-русски). Знак между цифрами - хотя бы один; не два подряд. Только так: "1/5/3" в английской раскладке (там -
+// "1.5.3") - дата или дробь, его не трогаем.
+inline bool NumberSigns(const std::wstring& typed, const std::wstring& there) {
+	if (typed.size() != there.size() || there.size() < 3 || !iswdigit(there[0])) return false;
+	bool between = false;
+	for (size_t i = 0; i < there.size(); i++) {
+		const wchar_t a = there[i];
+		if (iswdigit(a)) {
+			if (typed[i] != a) return false;
+			continue;
+		}
+		if ((a != L'.' && a != L',') || !iswdigit(there[i - 1]) || !TwoCaps::IsLetter(typed[i])) return false;
+		if (i + 1 < there.size()) {
+			if (!iswdigit(there[i + 1])) return false;
+			between = true;
+		}
+	}
+	return between;
+}
+
 // Почему слово не трогаем; nullptr - можно спрашивать словари. typed - как набрано, there - те же клавиши в другой
 // раскладке; minLetters - 2, после щелчка или стрелок в том же окне 4 (перед словом в поле не буква - 2).
 inline const char* Skip(const std::wstring& typed, const std::wstring& there, size_t minLetters,

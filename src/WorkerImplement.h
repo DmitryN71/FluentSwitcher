@@ -261,6 +261,8 @@ class WorkerImplement {
     // кончилось: отметка "исправлено", дальше - новое слово.
     // false - нечего или бросили посреди (щелчок): не переключено.
     bool SwitchTail(size_t begin, HKL to, bool wordEnded);
+    // Число с . и , на клавишах-буквах ("1ю5ю3"): с begin - знаками раскладки as, своя раскладка остаётся.
+    bool FixNumberSigns(size_t begin, HKL as);
     void TwoCapsInKeys(TKeyRevert& keys, HKL to);
     // Перепечатать набранное с клавиши begin: до middle - в раскладке first, дальше - в rest; раскладку не менять.
     void RetypeTail(size_t begin, size_t middle, HKL first, HKL rest);

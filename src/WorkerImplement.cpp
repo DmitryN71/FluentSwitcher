@@ -396,6 +396,24 @@ bool WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     return true;
 }
 
+// Число с точками и запятыми, набранными клавишами-буквами ("1ю5ю3", AutoSwitch::NumberSigns): напечатать знаками
+// раскладки as, раскладку не трогать - пишут на своём языке, промахнулись только точкой (форум, Maz, 11.10.2026).
+bool WorkerImplement::FixNumberSigns(size_t begin, HKL as) {
+    TKeyRevert list = m_cycleList.KeysFrom(begin);
+    if (list.empty()) return false;
+    TextFixed();
+    LiftHeldMods();
+    IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = as, .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_BACKSPACE,
+                            .bufferBegin = begin }));
+    if (CaretStop()()) {
+        LOG_ANY("autoswitch: the retyping was stopped");
+        return false;
+    }
+    m_cycleList.SetLayFrom(begin, as); // на экране - знаки той раскладки: исправлять вручную - от них
+    m_cycleList.SetSeparateLast();
+    return true;
+}
+
 bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     GETCONF;
     if (!cfg->autoswitch || !KeyHold::Allowed(m_holdId)) return false;
@@ -472,6 +490,18 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         // Те же буквы и там (русская и украинская раскладки - почти одни клавиши): переключить значило бы сменить только
         // раскладку посреди текста.
         if (AutoSwitch::Lower(there) == AutoSwitch::Lower(typed)) continue;
+        // Число с точками и запятыми на клавишах-буквах ("1ю5ю3" - 1.5.3): знаки - той раскладки, раскладка остаётся.
+        if (AutoSwitch::NumberSigns(typed, there)) {
+            if (IsPasswordUia()) return no("a password field", false);
+            if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
+            KeyHold::Claimed claimed{ m_holdId };
+            LOG_ANY(L"autoswitch: {} -> {}: a number, its signs only, the layout stays", typed, there);
+            m_autoNo = {};
+            const size_t wordBegin = tail.empty() ? m_cycleList.Size() - keys.size() - (afterSpace ? 1 : 0) : tail[0].begin;
+            if (FixNumberSigns(wordBegin, other))
+                Journal("switched", typed, there, "a number: its signs only, the layout stays");
+            return true;
+        }
         // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a.
         const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
@@ -1547,8 +1577,10 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     
     bool fDels = false;
 
-    // Раскладка, в которой будет набран текст: новая, если её меняем, иначе текущая.
-    HKL target = CurLay();
+    // Раскладка, в которой будет набран текст: новая, если её меняем, иначе текущая - или данная (lay без SetLang):
+    // знаками той раскладки, а эта остаётся ("1ю5ю3" - 1.5.3, FixNumberSigns).
+    const bool textOnly = !TestFlag(ctxRevert.flags, SW_CLIENT_SetLang) && ctxRevert.lay;
+    HKL target = textOnly ? ctxRevert.lay : CurLay();
     if (TestFlag(ctxRevert.flags, SW_CLIENT_SetLang) && ctxRevert.lay) {
         auto prevLay = CurLay();
         const HKL want = ctxRevert.lay != (HKL)HKL_NEXT ? ctxRevert.lay
@@ -1591,7 +1623,7 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
         m_cycleList.SetShiftFrom(ctxRevert.bufferBegin, ctxRevert.keylist);
 
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT)) {
-        if (conf_get_unsafe()->retype_keys || target == 0) {
+        if ((conf_get_unsafe()->retype_keys && !textOnly) || target == 0) {
             InputSender::SendKeys(ctxRevert.keylist, m_is_last_caps);
         } else {
             InputSender::SendKeysAsText(ctxRevert.keylist, target, m_is_last_caps, delay, stop);

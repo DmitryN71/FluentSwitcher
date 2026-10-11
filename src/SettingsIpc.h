@@ -32,6 +32,20 @@ namespace SettingsIpc {
 		State_Report = 0x10,    // идёт запись для отчёта (безопасный журнал)
 	};
 
+	// CapsLock выключили в настройках (capslock_off), а он горит: погасить - одно нажатие с нашей меткой (хук его
+	// пропускает). Состояние CapsLock - как у окна впереди (поток без своего ввода видел бы старое).
+	inline void CapsLockOffNow() {
+		if (!conf_get_unsafe()->capslock_off || !g_enabled.IsEnabled()) return;
+		HWND fg = GetForegroundWindow();
+		const DWORD tid = fg ? GetWindowThreadProcessId(fg, nullptr) : 0, self = GetCurrentThreadId();
+		const bool attached = tid && tid != self && AttachThreadInput(self, tid, TRUE);
+		const bool on = (GetKeyState(VK_CAPITAL) & 1) != 0;
+		if (attached) AttachThreadInput(self, tid, FALSE);
+		if (!on) return;
+		LOG_ANY("capslock: on while it is off in the settings - turned off");
+		InputSender::SendHotKey(CHotKey(VK_CAPITAL));
+	}
+
 	inline ULONGLONG reportSince = 0; // запись для отчёта включили (выключается сама через kReportMs - gui2/main.cpp)
 	inline constexpr ULONGLONG kReportMs = 60 * 60 * 1000;
 
@@ -98,6 +112,7 @@ namespace SettingsIpc {
 			SyncLayouts(); // в файле могли остаться не все раскладки Windows
 			ApplyAcessebil();
 			ApplyLocalization(); // меню у значка и уведомления - на новом языке сразу (форум, gutasiho, 10.10.2026)
+			CapsLockOffNow();
 			if (!IsAdminOk()) {
 				g_enabled.TryEnable(false); // "работать в программах от администратора" без прав - как в старом окне
 			}
@@ -114,6 +129,7 @@ namespace SettingsIpc {
 			if (g_enabled.TryEnable(on)) {
 				new_layout_request();
 				enabled_changed();
+				CapsLockOffNow();
 			}
 			return g_enabled.IsEnabled() == on ? 1 : 0;
 		}

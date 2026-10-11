@@ -424,6 +424,11 @@ inline UINT firstKeys[2] = {}; // клавиши первых двух букв 
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, CapsLock, сочетание - не наш случай
 inline std::atomic<bool> earlyDone = false; // рабочий поток: посреди этого слова решать больше нечего
+// Слово - число с клавишами . и , между цифрами ("1ю5ю3" в русской раскладке - 1.5.3; AutoSwitch::NumberSigns): 0 - ещё
+// ничего, 1 - цифры, 2 - такая клавиша после цифр, -1 - не число. numberSign - клавиша была между цифрами.
+inline int number = 0;
+inline bool numberSign = false;
+inline UINT numberLast = 0; // последняя клавиша числа: ещё нажата, когда уже нажали пробел, - не помеха (WordEnd)
 
 inline bool IsLetterKey(UINT vk) {
 	return (vk >= 'A' && vk <= 'Z') || (vk >= VK_OEM_1 && vk <= VK_OEM_3) || (vk >= VK_OEM_4 && vk <= VK_OEM_8) ||
@@ -444,6 +449,8 @@ inline void ResetWord() {
 	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
 	earlyDone = false;
+	number = 0;
+	numberSign = false;
 }
 
 // Фокус перешёл (EVENT_OBJECT_FOCUS, Hooker::FocusProc): в другом поле слово начинается заново. Но не посреди набора:
@@ -477,6 +484,22 @@ inline bool LetterHere(UINT vk) {
 // с ними и придерживать пробел после них).
 inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = false) {
 	if (CHotKey::IsKnownMods(vk)) return false; // сам Shift (Ctrl...) - не буква и не помеха
+	// Число с . и , (number): цифра, такая клавиша только после цифры; остальное - не число (громкость, NumLock - ничего).
+	const bool media = (vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE) || vk == VK_NUMLOCK || vk == VK_SCROLL;
+	if (!media) {
+		const bool plain = !shift && !command && !caps && !repeat;
+		if (plain && vk >= '0' && vk <= '9' && number != -1) {
+			if (number == 2) numberSign = true;
+			number = 1;
+			numberLast = vk;
+		}
+		else if (plain && (vk == VK_OEM_PERIOD || vk == VK_OEM_COMMA) && number == 1) {
+			number = 2;
+			numberLast = vk;
+		}
+		else
+			number = -1;
+	}
 	if (command || caps) {
 		word.clear();
 		broken = true;
@@ -531,6 +554,7 @@ struct WordEnd {
 	bool letters = false; // буквы без цифр и команд - его проверит автопереключение (и одну: список "Переключать всегда")
 	bool loneI = false;   // может быть i, i'm, i've, i'll, i'd ('i - с кавычкой): до четырёх клавиш, первая буква -
 	                      // строчная i, за ней не буква (in, is, it, if - слова, их не держим)
+	bool number = false;  // число с . и , на клавишах, что в этой раскладке буквы ("1ю5ю3"): движок поправит знаки
 	size_t size = 0;      // букв
 	UINT lastLetter = 0;  // клавиша последней
 };
@@ -545,6 +569,8 @@ inline WordEnd EndWord() {
 		 (firstKeys[0] == VK_OEM_7 && firstKeys[1] == 'I' && word.size() >= 2 && !word[1]));
 	end.size = word.size();
 	end.lastLetter = lastLetter;
+	end.number = numberSign && number > 0 && LetterHere(VK_OEM_PERIOD) && LetterHere(VK_OEM_COMMA);
+	if (end.number) end.lastLetter = numberLast;
 	ResetWord();
 	return end;
 }

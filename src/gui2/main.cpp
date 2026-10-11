@@ -19,6 +19,7 @@ void StartGui() {
 
 	// Команды окна настроек (SettingsIpc.h).
 	SettingsIpc::AllowFromNormalPrograms(g_guiHandle);
+	SettingsIpc::CapsLockOffNow(); // CapsLock выключен в настройках, а горит с прошлого раза
 	timer.AnswerHandler([](UINT msg, WPARAM wParam, LPARAM) { return SettingsIpc::Handle(msg, wParam); });
 
 	TrayIcon trayIcon;

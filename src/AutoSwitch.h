@@ -98,8 +98,23 @@ inline bool HyphensKept(const std::wstring& typed, const std::wstring& there, co
 }
 
 // Слово через дефис в другой раскладке, и дефисы - те же клавиши ("Dj-gthds[" - "Во-первых,"): одно слово для словаря.
+// С частью в одну букву ("у-ьфшд" - "e-mail", "f-kz" - "а-ля", "d-nhtnmb[" - "в-третьих"; форум, WinnyS, 11.10.2026) -
+// если такая часть и набрана буквой (не знаком: "`-Verb" - "ё-Муки"), часть от двух букв и всего от трёх: словарь
+// проверяет такие слова по частям, и "a-b", "j-j", "т-ы" для него - слова.
 inline bool SameHyphens(const std::wstring& typed, const std::wstring& there, const Part& a) {
-	return LongParts(a.core) && HyphensKept(typed, there, a);
+	if (!HyphensKept(typed, there, a)) return false;
+	if (LongParts(a.core)) return true;
+	size_t run = 0, longest = 0, letters = 0;
+	for (size_t i = a.begin; i <= a.end; i++) {
+		if (i == a.end || there[i] == L'-') {
+			if (run == 1 && !TwoCaps::IsLetter(typed[i - 1])) return false;
+			run = 0;
+			continue;
+		}
+		letters++;
+		if (++run > longest) longest = run;
+	}
+	return longest >= 2 && letters >= 3;
 }
 
 inline std::wstring Lower(std::wstring s) {
@@ -112,6 +127,34 @@ inline bool AllUpper(const std::wstring& s) {
 	for (wchar_t c : s)
 		if (!TwoCaps::IsUpper(c)) return false;
 	return true;
+}
+
+// Слово ПРОПИСНЫМИ от пяти букв - не аббревиатура (форум, gutasiho, 11.10.2026: "ЗИМА DJPVTPLBZ" в имени файла не
+// переключалось - Skip считал аббревиатурой всё прописное): решать по нему, как по слову с заглавной (Titled, "Djpvtplbz" -
+// "Возмездия": так словарь знает и имена). Короче - аббревиатура (USB, ООН, ВДНХ), не трогаем.
+inline constexpr size_t kCapsWordMin = 5;
+inline bool CapsWord(const std::wstring& typed, const std::wstring& there) {
+	const Part t = Letters(typed), a = Letters(there);
+	auto caps = [](const std::wstring& core) {
+		size_t letters = 0;
+		for (wchar_t c : core) {
+			if (c == L'-') continue;
+			if (!TwoCaps::IsUpper(c)) return false;
+			letters++;
+		}
+		return letters >= kCapsWordMin;
+	};
+	return caps(t.core) && caps(a.core);
+}
+// Первая буква - заглавная, остальные - строчные; знаки как были.
+inline std::wstring Titled(std::wstring s) {
+	bool first = true;
+	for (auto& c : s) {
+		if (!TwoCaps::IsLetter(c)) continue;
+		if (!first) c = TwoCaps::ToLower(c);
+		first = false;
+	}
+	return s;
 }
 
 // Гласная (латиница - и буквы с диакритикой, кириллица - и украинские, белорусские). Другие алфавиты - не знаем: да.

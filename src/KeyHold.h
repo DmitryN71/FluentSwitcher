@@ -422,7 +422,10 @@ inline std::vector<bool> word; // true - заглавная
 inline UINT lastLetter = 0;    // клавиша последней буквы слова
 inline UINT firstKeys[2] = {}; // клавиши первых двух букв (i, 'i - fix_lone_i)
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
-inline bool broken = false;    // в слове цифра, CapsLock, сочетание - не наш случай
+inline bool broken = false;    // в слове цифра, сочетание - не наш случай
+// Набрано с CapsLock (ПРОПИСНЫМИ): слово проверит автопереключение (от пяти букв - AutoSwitch::CapsWord), а ДВе ЗАглавные
+// и i - нет: регистр там от CapsLock, а не от Shift (форум, gutasiho, 11.10.2026: "ЗИМА ВОЗМЕЗДИЯ").
+inline bool capsLock = false;
 inline std::atomic<bool> earlyDone = false; // рабочий поток: посреди этого слова решать больше нечего
 // Слово - число с клавишами . и , между цифрами ("1ю5ю3" в русской раскладке - 1.5.3; AutoSwitch::NumberFix), можно с
 // буквами впереди ("м1ю5ю4" - v1.5.4, "пю1ю2" - п.1.2; какие буквы годятся - решает движок): 0 - ещё ничего, 1 - цифры,
@@ -451,6 +454,7 @@ inline void ResetWord() {
 	lastLetter = 0;
 	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
+	capsLock = false;
 	earlyDone = false;
 	number = 0;
 	numberSign = false;
@@ -509,10 +513,14 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		else
 			number = -1;
 	}
-	if (command || caps) {
+	if (command) {
 		word.clear();
 		broken = true;
 		return false;
+	}
+	if (caps) {
+		capsLock = true;
+		earlyDone = true; // посреди слова движок с CapsLock не решает (AutoSwitchEarly) - не держать зря
 	}
 	if (vk == VK_BACK) {
 		if (!word.empty()) word.pop_back();
@@ -554,7 +562,7 @@ inline bool EarlyPoint() {
 // Первые n клавиш слова могут быть ДВумя ЗАглавными: две заглавные, потом строчная (от трёх; дальше не смотрим: знак с
 // Shift после слова - "ЧТо," в русской раскладке - хук видит как заглавную, и "ЧТо," не проверялось вовсе).
 inline bool TwoCapsShape(size_t n) {
-	return !broken && n >= 3 && n <= word.size() && word[0] && word[1] && !word[2];
+	return !broken && !capsLock && n >= 3 && n <= word.size() && word[0] && word[1] && !word[2];
 }
 
 // Конец слова (пробел, Enter, Tab): каким оно было. Слово на этом кончается.
@@ -573,7 +581,7 @@ inline WordEnd EndWord() {
 	end.twoCaps = TwoCapsShape(word.size());
 	end.letters = !broken && !word.empty();
 	auto alpha = [](UINT vk) { return vk >= 'A' && vk <= 'Z'; };
-	end.loneI = end.letters && word.size() <= 4 &&
+	end.loneI = end.letters && !capsLock && word.size() <= 4 &&
 		((firstKeys[0] == 'I' && !word[0] && !alpha(firstKeys[1])) ||
 		 (firstKeys[0] == VK_OEM_7 && firstKeys[1] == 'I' && word.size() >= 2 && !word[1]));
 	end.size = word.size();

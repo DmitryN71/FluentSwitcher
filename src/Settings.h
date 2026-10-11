@@ -68,6 +68,8 @@ public:
                 if (cur.empty()) continue;
                 StrUtils::ToLower(cur);
                 PathUtils::NormalizeDelims(cur);
+                // Имя без расширения, вписанное в файл руками ("cmd"), - с ".exe", как добавляет окно настроек (wordlist.cpp).
+                if (cur.find_first_of(L"\\.") == std::wstring::npos) cur += L".exe";
                 res.insert(std::move(cur)); // todo cast
             }
             *list = std::move(res);

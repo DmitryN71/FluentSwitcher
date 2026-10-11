@@ -424,7 +424,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         LOG_ANY("autoswitch: no, {}", why);
         if (record) {
             std::wstring text;
-            for (auto* key : keys) text += InputSender::KeyText(*key, CurLay(), false);
+            for (auto* key : keys) text += InputSender::KeyText(*key, CurLay(), key->is_caps);
             m_autoNo = { text, why };
         }
         return false;
@@ -435,10 +435,10 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (m_autoWord.undone) return no("switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
+    // С CapsLock - как на экране, ПРОПИСНЫМИ: такое слово - от пяти букв (AutoSwitch::CapsWord), короче - аббревиатура.
     std::wstring typed;
     for (auto* key : keys) {
-        if (key->is_caps) return no("CapsLock");
-        auto c = InputSender::KeyText(*key, lay, false);
+        auto c = InputSender::KeyText(*key, lay, key->is_caps);
         if (c.size() != 1) return no("a key that is not one letter");
         typed += c;
     }
@@ -479,7 +479,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         if (other == lay) continue;
         std::wstring there;
         for (auto* key : keys) {
-            auto c = InputSender::KeyText(*key, other, false);
+            auto c = InputSender::KeyText(*key, other, key->is_caps);
             if (c.size() != 1) {
                 there.clear();
                 break;
@@ -507,9 +507,13 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
         if (!force) {
-            const char* why = AutoSwitch::Skip(typed, there, minLetters(there), exceptions);
+            // ПРОПИСНЫМИ от пяти букв ("DJPVTPLBZ" - "ВОЗМЕЗДИЯ") - по слову с заглавной, не аббревиатура.
+            const bool caps = AutoSwitch::CapsWord(typed, there);
+            const std::wstring typedAs = caps ? AutoSwitch::Titled(typed) : typed;
+            const std::wstring thereAs = caps ? AutoSwitch::Titled(there) : there;
+            const char* why = AutoSwitch::Skip(typedAs, thereAs, minLetters(there), exceptions);
             if (!why)
-                why = AutoSwitch::DecideWhy(typed, there, dictionary(lay), dictionary(other), suggestions(lay),
+                why = AutoSwitch::DecideWhy(typedAs, thereAs, dictionary(lay), dictionary(other), suggestions(lay),
                                             suggestions(other), ShortWords::TrustDictionary(Utils::GetNameForHKL_simple(lay)));
             // Частое короткое слово своего языка ("шт", "руб", "ул", "gb") словарь может и не знать: "5 шт" - не "5 in".
             if (!why && AutoSwitch::FrequentAsTyped(typed, Utils::GetNameForHKL_simple(lay)))

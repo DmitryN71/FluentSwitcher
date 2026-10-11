@@ -47,6 +47,9 @@ private:
     // The counts of the lists' cards from m_edit again (after the window of a list, after Apply took the words the
     // engine learned meanwhile).
     void RefillWordLists();
+    // The words the engine learned while this window is open: into what it shows and into what it read (no change of
+    // its own). When the window comes to the front and before a list opens.
+    void TakeLearnedNow();
 
     void BuildGeneral();
     void BuildAutoSwitch();

@@ -790,10 +790,14 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
             return (void)Close();
         e.Skip();
     });
-    // Back from another window: the engine may have been switched on or off from the tray meanwhile.
+    // Back from another window: the engine may have been switched on or off from the tray meanwhile, and have learned
+    // words (the note about one opens this window).
     Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& e) {
         if (e.GetActive())
+        {
             RefreshEngine();
+            TakeLearnedNow();
+        }
         else
             HotkeyEditor::CancelRecording(); // the keyboard hook must not outlive the window's turn
         e.Skip();
@@ -1124,6 +1128,7 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
         [this, key, kind, title, help, defaults](wxWindow* card) {
             FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
             edit->Bind(wxEVT_BUTTON, [this, key, kind, title, help, defaults](wxCommandEvent&) {
+                TakeLearnedNow();
                 const nlohmann::json& file = std::as_const(m_edit).Json();
                 WordListWords list{ JsonWords(file, key, defaults), LearnedWords(file, key) };
                 if (!EditWordList(this, kind, title, help, SwitchLayouts(m_edit), &list))
@@ -1151,6 +1156,18 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
         });
     CardTip(label, tip);
     m_wordLists.push_back({ key, kind, defaults, about, label });
+}
+
+// Forum, WinnyS, 11.10.2026: a note said a word went into "Переключать всегда", and the open window did not show it - it
+// had read the lists before. Taken like Apply takes them (TakeEngineLearned), into m_saved too: Apply stays grey.
+void SettingsFrame::TakeLearnedNow()
+{
+    if (!m_canSave || !wxFileExists(m_saved.Path()))
+        return;
+    const Config read = m_saved;
+    TakeEngineLearned(m_saved, read);
+    TakeEngineLearned(m_edit, read);
+    RefillWordLists();
 }
 
 void SettingsFrame::RefillWordLists()
@@ -1486,12 +1503,12 @@ void SettingsFrame::BuildTray()
         const int i = clickValues.Index(m_edit.GetString(key, byDefault));
         return i == wxNOT_FOUND ? clickValues.Index(byDefault) : i;
     };
-    Choice(T("Щелчок по значку"),
+    Choice(T("Клик по значку"),
            T("«Следующая раскладка» – у окна, где вы печатали, и курсор остаётся там. Если назначен и двойной "
-             "щелчок, одиночный срабатывает чуть позже: ждёт, не будет ли второго"),
+             "клик, одиночный срабатывает чуть позже: ждёт, не будет ли второго"),
            clickNames, clickIndex("tray_click", ""),
            [this, clickValues](int i) { m_edit.SetString("tray_click", clickValues[i]); });
-    Choice(T("Двойной щелчок по значку"), T("Правый щелчок всегда открывает меню"), clickNames,
+    Choice(T("Двойной клик по значку"), T("Правый клик всегда открывает меню"), clickNames,
            clickIndex("tray_double_click", "settings"),
            [this, clickValues](int i) { m_edit.SetString("tray_double_click", clickValues[i]); });
     FinishPage();
@@ -1522,7 +1539,7 @@ void SettingsFrame::BuildSounds()
     // The engine's LayoutSound.h: sound_switch, sound_fix - per cent, 0 - none.
     Section(kIconSounds, T("Звуки"));
     Numbers(T("Звук при переключении раскладки"),
-            T("Сочетанием FluentSwitcher или Windows, щелчком по значку у часов. Звук – switch.wav в папке sounds рядом "
+            T("Сочетанием FluentSwitcher или Windows, кликом по значку у часов. Звук – switch.wav в папке sounds рядом "
               "с приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
             "sound_switch", 0, { 0, 30, 60, 100 }, { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") });
     Numbers(T("Звук при исправлении текста"),
@@ -1832,7 +1849,7 @@ void SettingsFrame::BuildAbout()
                     });
     Toggle(T("Проверять обновления"),
            T("Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. Новую "
-             "версию оно скачает и поставит только по вашему щелчку – по уведомлению или кнопке «Обновить»"),
+             "версию оно скачает и поставит только по вашему клику – по уведомлению или кнопке «Обновить»"),
            "check_updates", true);
     // "Проверить сейчас"; once a newer version is known, "Обновить" has the engine install it (UpdateInstall.h) or,
     // when it cannot (no engine, a release without the file), "Скачать" opens its page; when GitHub could not be

@@ -143,8 +143,8 @@ const std::unordered_map<std::string, const char*>& English()
         { "Обычные флаги", "Regular flags" },
         { "Флаги с переливом", "Waving flags" },
         { "Значок приложения", "App icon" },
-        { "Щелчок по значку", "Click on the icon" },
-        { "Двойной щелчок по значку", "Double click on the icon" },
+        { "Клик по значку", "Click on the icon" },
+        { "Двойной клик по значку", "Double click on the icon" },
         { "Флаг у курсора", "Flag at the cursor" },
         { "Вид флага", "Look of the flag" },
         { "Флаг раскладки или её буквы на тёмной плашке", "The layout's flag or its letters on a dark badge" },
@@ -282,7 +282,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Средний", "Medium" },
         { "Громкий", "Loud" },
         { "Звук при переключении раскладки", "Sound when the layout is switched" },
-        { "Сочетанием FluentSwitcher или Windows, щелчком по значку у часов. Звук – switch.wav в папке sounds рядом с "
+        { "Сочетанием FluentSwitcher или Windows, кликом по значку у часов. Звук – switch.wav в папке sounds рядом с "
           "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой",
           "With a hotkey of FluentSwitcher or Windows, with a click on the tray icon. The sound is switch.wav in the "
           "sounds folder next to the app; put en.wav, ru.wav there for a sound of each language" },
@@ -292,10 +292,10 @@ const std::unordered_map<std::string, const char*>& English()
         { "Меню", "Menu" },
         { "Включить / выключить", "Turn on / off" },
         { "«Следующая раскладка» – у окна, где вы печатали, и курсор остаётся там. Если назначен и двойной "
-          "щелчок, одиночный срабатывает чуть позже: ждёт, не будет ли второго",
+          "клик, одиночный срабатывает чуть позже: ждёт, не будет ли второго",
           "“Next layout” – of the window you were typing in, and the cursor stays there. If a double click is set "
           "too, a single one fires a bit later: it waits to see if a second comes" },
-        { "Правый щелчок всегда открывает меню", "A right click always opens the menu" },
+        { "Правый клик всегда открывает меню", "A right click always opens the menu" },
         { "Слабая", "Light" },
         { "Средняя", "Medium" },
         { "Сильная", "Strong" },
@@ -582,7 +582,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Открыть на GitHub", "Open on GitHub" },
         { "Проверять обновления", "Check for updates" },
         { "Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. Новую "
-          "версию оно скачает и поставит только по вашему щелчку – по уведомлению или кнопке «Обновить»",
+          "версию оно скачает и поставит только по вашему клику – по уведомлению или кнопке «Обновить»",
           "Once a day the app asks GitHub for the number of the latest version and sends nothing else. It downloads "
           "and installs a new version only when you click – the notification or the “Update” button" },
         { "Обновления", "Updates" },

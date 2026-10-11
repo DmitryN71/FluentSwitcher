@@ -131,7 +131,8 @@ namespace procstart
 			if (parm.mode != SW_CREATEPROC_SHELLEXE)
 				return SW_ERR_UNSUPPORTED;
 
-			IFH_RET(internal::ShellExecuteFromExplorer(sExe, args, NULL, NULL, 0));
+			// Окно - как обычно (0 - SW_HIDE: программа запустилась бы невидимой).
+			IFH_RET(internal::ShellExecuteFromExplorer(sExe, args, NULL, NULL, parm.isHide ? SW_HIDE : SW_SHOWNORMAL));
 
 			RETURN_SUCCESS;
 		}

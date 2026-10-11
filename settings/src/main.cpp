@@ -54,9 +54,21 @@ HWND OpenWindow()
     return search.found;
 }
 
-// Closes the windows of process `pid` (the settings window this one replaces).
+// Closes the windows of process `pid` (the settings window this one replaces) - if it is still this program: after
+// "Сохранить" the old one is gone at once, and its number may already belong to another (review 11.10.2026).
 void CloseWindowsOf(unsigned long pid)
 {
+    auto pathOf = [](HANDLE process) {
+        wchar_t path[MAX_PATH * 2] = {};
+        DWORD size = MAX_PATH * 2;
+        return process && QueryFullProcessImageNameW(process, 0, path, &size) ? std::wstring(path, size) : std::wstring();
+    };
+    HANDLE other = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    const std::wstring otherPath = pathOf(other), ownPath = pathOf(GetCurrentProcess());
+    if (other)
+        CloseHandle(other);
+    if (otherPath.empty() || _wcsicmp(otherPath.c_str(), ownPath.c_str()) != 0)
+        return;
     EnumWindows([](HWND window, LPARAM param) -> BOOL {
         DWORD owner = 0;
         GetWindowThreadProcessId(window, &owner);

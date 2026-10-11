@@ -7,7 +7,8 @@
 // и шлёт ему SendMessageTimeout с сообщением RegisterWindowMessage(имя). Отвечает поток интерфейса движка.
 // Сами настройки окно пишет в FluentSwitcher.json, движок только перечитывает файл.
 //
-//   SimpleSwitcher.ReloadConfig          -> 1; перечитать FluentSwitcher.json и применить
+//   SimpleSwitcher.ReloadConfig          -> 1; перечитать FluentSwitcher.json и применить; 0 - не прочитался, прежние
+//                                           настройки остались
 //   SimpleSwitcher.GetState              -> биты SettingsState
 //   SimpleSwitcher.SetEnabled (0/1)      -> 1 или 0, если для включения нужны права администратора
 //   SimpleSwitcher.SetAutostart (0/1)    -> 1 или 0, если не вышло (задаче планировщика нужны права администратора)
@@ -110,7 +111,7 @@ namespace SettingsIpc {
 			// Счёт исправлений вручную в памяти новее файла (в файл он идёт раз в минуту), а окно его не меняет: оставить
 			// свой целиком - и снятое с него (исправили обратно, забытое при трёхстах словах) не вернётся из файла.
 			auto fixCounts = std::move(cfg_details::conf_gui()->autoswitch_fix);
-			cfg_details::ReloadGuiConfig();
+			const bool loaded = cfg_details::ReloadGuiConfig(); // нет - остались прежние настройки, окно скажет
 			cfg_details::conf_gui()->autoswitch_fix = std::move(fixCounts);
 			SyncLayouts(); // в файле могли остаться не все раскладки Windows
 			ApplyAcessebil();
@@ -120,7 +121,7 @@ namespace SettingsIpc {
 				g_enabled.TryEnable(false); // "работать в программах от администратора" без прав - как в старом окне
 			}
 			new_layout_request(); // флаг в трее: набор флагов мог смениться
-			return 1;
+			return loaded ? 1 : 0;
 		}
 		if (msg == msgSetEnabled) {
 			bool on = wParam != 0;

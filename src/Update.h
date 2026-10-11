@@ -114,11 +114,17 @@ inline Result Check() {
 	r.latest = !tag.empty() && (tag[0] == 'v' || tag[0] == 'V') ? tag.substr(1) : tag;
 	r.page = std::wstring(kReleasesPage) + L"/tag/" + std::wstring(tag.begin(), tag.end()); // метки - ASCII
 	// Установщик и архив этого выпуска - с их суммами; без суммы файл не годится для обновления по щелчку.
+	// Поле может быть и null (у GitHub "digest" бывает пустым, пока файл загружается): value() на нём бросал исключение
+	// из потока проверки - и движок падал раз в минуту после каждого запуска (ревью 11.10.2026).
+	auto text = [](const nlohmann::json& o, const char* key) {
+		const auto it = o.find(key);
+		return it != o.end() && it->is_string() ? it->get<std::string>() : std::string();
+	};
 	if (json.is_object() && json.contains("assets") && json["assets"].is_array())
 		for (const auto& a : json["assets"]) {
 			if (!a.is_object()) continue;
-			const std::string name = a.value("name", std::string()), url = a.value("browser_download_url", std::string());
-			std::string digest = a.value("digest", std::string());
+			const std::string name = text(a, "name"), url = text(a, "browser_download_url");
+			std::string digest = text(a, "digest");
 			if (url.empty() || !digest.starts_with("sha256:")) continue;
 			digest = digest.substr(7);
 			for (auto& c : digest) c = (char)tolower((unsigned char)c);

@@ -293,7 +293,7 @@ namespace cfg_details {
 
 	using ConfPtr = std::shared_ptr<ProgramConfig>;
 
-	inline constinit ConfPtr g_config;
+	inline constinit std::atomic<ConfPtr> g_config;
 	inline constinit std::unique_ptr<ProgramConfig> g_guiCfg;
 
 	inline auto conf_gui() { return g_guiCfg.get(); }
@@ -307,37 +307,43 @@ namespace cfg_details {
 	bool FileMissesFields(const ProgramConfig& cfg);
 	TStatus Save_conf_To_Stream(std::ostream& outp, const ProgramConfig& gui);
 
+	// Новые настройки - всем потокам. Атомарно: хук и рабочий поток копируют указатель (conf_get_unsafe) в то же время,
+	// и простой shared_ptr при замене мог дать им уже освобождённые настройки - движок падал посреди набора (ревью
+	// 11.10.2026).
 	inline void ApplyGuiConfig() {
 		ConfPtr ptr = MAKE_SHARED(ptr);
 		*ptr = *conf_gui();
-		g_config.swap(ptr);
+		g_config.store(std::move(ptr));
 	}
 
 	inline void SaveGuiConfig() {
 		IFS_LOG(Save_conf(*conf_gui()));
 	}
 
+	// Файл не прочитался - остаются прежние настройки целиком: читаем в новый объект, а не поверх рабочего (раньше
+	// ошибка посреди файла оставляла половину новых значений и половину старых, и они применялись; ревью 11.10.2026).
 	inline bool ReloadGuiConfig() {
-		bool res = true;
-		if (!g_guiCfg) {
+		const bool first = !g_guiCfg;
+		if (first) {
 			g_guiCfg = MAKE_UNIQUE(g_guiCfg);
 		}
-		auto errLoadConf = LoadConfig(*conf_gui());
+		ProgramConfig fresh;
+		auto errLoadConf = LoadConfig(fresh);
 		if (errLoadConf != TStatus::SW_ERR_SUCCESS) {
 			IFS_LOG(errLoadConf);
-			res = false;
+			if (first) ApplyGuiConfig(); // при запуске - хоть значения по умолчанию (WinMain скажет "Bad config")
+			return false;
 		}
-		else {
-			if (conf_gui()->config_version != GET_SW_VERSION()) {
-				conf_gui()->config_version = GET_SW_VERSION();
-				SaveGuiConfig();
-			}
-			else if (FileMissesFields(*conf_gui())) {
-				SaveGuiConfig();
-			}
+		*conf_gui() = std::move(fresh);
+		if (conf_gui()->config_version != GET_SW_VERSION()) {
+			conf_gui()->config_version = GET_SW_VERSION();
+			SaveGuiConfig();
+		}
+		else if (FileMissesFields(*conf_gui())) {
+			SaveGuiConfig();
 		}
 		ApplyGuiConfig();
-		return res;
+		return true;
 	}
 }
 
@@ -348,7 +354,7 @@ namespace cfg_details {
 */
 
 inline auto conf_get_unsafe() { // Проблемы синтаксиса conf_get_unsafe()->...  1) std::generator не держит temporary 2) множественном вызов даст другую версию.
-    auto res = std::const_pointer_cast<const ProgramConfig>(cfg_details::g_config);
+    auto res = std::const_pointer_cast<const ProgramConfig>(cfg_details::g_config.load());
     return res; 
 }
 

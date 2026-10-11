@@ -21,9 +21,24 @@ bool Config::Load(const wxString& path, wxString* error)
 {
     m_path = path;
     m_json = nlohmann::json::object();
-    std::ifstream in(path.wc_str(), std::ios::binary);
-    if (!in)
+    if (GetFileAttributesW(path.wc_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND)
         return true; // no file yet: the engine's defaults
+    // The file is there but may be held a moment (an antivirus, a sync client, the engine replacing it): a few tries,
+    // then an error - not an empty config, which "Сохранить" would write over all the settings (review 11.10.2026).
+    std::ifstream in;
+    for (int attempt = 0; attempt < 10; attempt++)
+    {
+        in.open(path.wc_str(), std::ios::binary);
+        if (in)
+            break;
+        in.clear();
+        Sleep(50);
+    }
+    if (!in)
+    {
+        *error = wxString::Format("can't open %s (error %lu)", path, GetLastError());
+        return false;
+    }
     try
     {
         // Comments allowed, as the engine reads it.
@@ -54,6 +69,14 @@ bool Config::Save(wxString* error) const
             *error = "can't write " + tmp;
             return false;
         }
+    }
+    // The data on the disk before the rename: MOVEFILE_WRITE_THROUGH makes only the rename itself durable, and a power
+    // loss right after it left a file of zeros in place of the settings (review 11.10.2026).
+    HANDLE written = CreateFileW(tmp.wc_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (written != INVALID_HANDLE_VALUE)
+    {
+        FlushFileBuffers(written);
+        CloseHandle(written);
     }
     if (!MoveFileExW(tmp.wc_str(), m_path.wc_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
     {

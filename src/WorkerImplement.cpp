@@ -1325,8 +1325,11 @@ TStatus WorkerImplement::RunProcess(HotKeyType hk, bool after_wait) {
     parm.sExe = wpath.c_str();
     parm.sCmd = wargs.c_str();
 
-    // todo - use proxy process for unelevated.
-    // parm.admin = it.elevated ? TSWAdmin::SW_ADMIN_ON : TSWAdmin::SW_ADMIN_OFF;
+    // Всегда с правами пользователя: движок от администратора запускает через Проводник (procstart, SW_ADMIN_OFF), не
+    // передавая свои права. Иначе любая программа пользователя вписала бы команду в FluentSwitcher.json и через
+    // SimpleSwitcher.RunCommand получила бы запуск от администратора без вопроса Windows (ревью 11.10.2026). Нет
+    // Проводника - команда не выполняется, от администратора её не запускаем. Поле elevated окно не показывает.
+    parm.admin = TSWAdmin::SW_ADMIN_OFF;
 
     parm.mode = procstart::SW_CREATEPROC_SHELLEXE;
     CAutoHandle hProc;

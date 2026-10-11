@@ -84,6 +84,20 @@ void TakeEngineLearned(Config& edit, const Config& saved)
         else
             out.erase(key);
     }
+    // The automatic switch on / off: the engine writes it too (the tray menu, its hotkey) - as on the disk, unless it was
+    // changed here (review 11.10.2026: an unrelated Apply wrote the window's old value back, and it came back on).
+    for (const char* key : { "autoswitch" })
+    {
+        const auto d = now.find(key), b = before.find(key);
+        const auto o = std::as_const(out).find(key);
+        const bool here = (o == out.cend()) != (b == before.end()) || (o != out.cend() && *o != *b);
+        if (here)
+            continue;
+        if (d != now.end())
+            out[key] = *d;
+        else
+            out.erase(key);
+    }
     // The words the engine learned ("выучено" in the lists), as it has them: those still in the lists, and not the ones
     // removed here and added again by hand (the window had the mark, it has not now).
     auto marks = [](const nlohmann::json& json, const char* key) {
@@ -1393,8 +1407,13 @@ void SettingsFrame::BuildLayouts()
 {
     Section(kIconLayouts, T("Раскладки"));
 
-    // The layouts of Windows first; how FluentSwitcher switches between them below.
-    auto& layouts = m_edit.Json()["layouts_info"];
+    // The layouts of Windows first; how FluentSwitcher switches between them below. Read without operator[]: on a config
+    // without the field it put "layouts_info": null into it, saved by the next Apply - and the engine stopped with
+    // "Bad config" at every start (review 11.10.2026).
+    static const nlohmann::json kNoLayouts = nlohmann::json::array();
+    const auto& file = std::as_const(m_edit).Json();
+    const auto found = file.find("layouts_info");
+    const nlohmann::json& layouts = found != file.end() ? *found : kNoLayouts;
     if (!layouts.is_array() || layouts.empty())
         AddSettingsCard(m_page, m_column, T("Раскладок пока нет"),
                         T("FluentSwitcher заполнит список раскладками Windows при запуске"),
@@ -1897,11 +1916,11 @@ wxString SettingsFrame::UpdateText(const Update::State& state)
 {
     m_updatePage.clear();
     m_updateInstall = false;
-    if (state.failed)
-    {
-        m_updatePage = Update::kReleasesPage;
-        return T("Не удалось связаться с GitHub. Страница загрузки откроется в браузере");
-    }
+    // A failed check leaves the button "Проверить сейчас": it became "Открыть страницу загрузки" for good, and with the
+    // automatic checks off the window could never ask GitHub again. A newer version known from an earlier answer is
+    // still shown (review 11.10.2026).
+    if (state.failed && !Update::NewerKnown(state))
+        return T("Не удалось связаться с GitHub. Проверьте ещё раз позже");
     if (!state.checkedAt || state.latest.empty())
         return T("Ещё не проверялось");
     const wxString when = wxString::Format(T("Проверено: %s"),
@@ -2038,6 +2057,19 @@ bool SettingsFrame::Apply()
         return false;
     const wxString oldLanguage = m_saved.GetString("gui_lang", wxString());
     const wxString oldTheme = m_saved.GetString("ui_theme", wxString());
+    const bool oldAdmin = m_saved.GetBool("isMonitorAdmin", false);
+    // A new window in the new language or theme - started when all of Apply is done. Started in the middle, it closed
+    // this window's question about administrator rights (RestartElevated) half a second later, as "Не сейчас" (review
+    // 11.10.2026).
+    struct Later
+    {
+        std::function<void()> run;
+        ~Later()
+        {
+            if (run)
+                run();
+        }
+    } newWindow;
     if (m_edit != m_saved)
     {
         wxString error;
@@ -2059,23 +2091,25 @@ bool SettingsFrame::Apply()
         if (m_edit.GetString("gui_lang", wxString()) != oldLanguage ||
             m_edit.GetString("ui_theme", wxString()) != oldTheme)
         {
-            // The texts and colours are read when the window is built: a new window in the new language or
-            // theme, on this section. This one stays on the screen until the new one is there and closes it
-            // (main.cpp, --replace-pid): before, this one closed first, and for half a second to a second there was
-            // no window at all (Dmitry, 11.10.2026: "так долго перерисовывается"). Its place now, for the new one.
-            SavePlacement();
-            wxString command = wxString(GetCommandLineW());
-            command += wxString::Format(" --section=%d --replace-pid=%lu", m_section, GetCurrentProcessId());
-            STARTUPINFOW si = { sizeof(si) };
-            PROCESS_INFORMATION pi = {};
-            std::wstring line = command.ToStdWstring();
-            if (CreateProcessW(nullptr, line.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
-            {
-                AllowSetForegroundWindow(pi.dwProcessId); // the new window comes up over this one
-                CloseHandle(pi.hThread);
-                CloseHandle(pi.hProcess);
-                m_restarted = true;
-            }
+            newWindow.run = [this] {
+                // The texts and colours are read when the window is built: a new window in the new language or
+                // theme, on this section. This one stays on the screen until the new one is there and closes it
+                // (main.cpp, --replace-pid): before, this one closed first, and for half a second to a second there was
+                // no window at all (Dmitry, 11.10.2026: "так долго перерисовывается"). Its place now, for the new one.
+                SavePlacement();
+                wxString command = wxString(GetCommandLineW());
+                command += wxString::Format(" --section=%d --replace-pid=%lu", m_section, GetCurrentProcessId());
+                STARTUPINFOW si = { sizeof(si) };
+                PROCESS_INFORMATION pi = {};
+                std::wstring line = command.ToStdWstring();
+                if (CreateProcessW(nullptr, line.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
+                {
+                    AllowSetForegroundWindow(pi.dwProcessId); // the new window comes up over this one
+                    CloseHandle(pi.hThread);
+                    CloseHandle(pi.hProcess);
+                    m_restarted = true;
+                }
+            };
         }
     }
     m_engine = Engine::Find(m_folder, m_enginePid);
@@ -2084,14 +2118,20 @@ bool SettingsFrame::Apply()
         RefreshEngine();
         return true; // saved; the engine reads the file when it starts
     }
-    Engine::ReloadConfig(m_engine);
     wxString problem;
+    if (!Engine::ReloadConfig(m_engine))
+        problem = T("FluentSwitcher не смог прочитать настройки и работает с прежними: в FluentSwitcher.json ошибка. ");
     const long state = Engine::GetState(m_engine);
     if (m_edit.GetBool("isMonitorAdmin", false) && CanElevateSelf() && state && !(state & Engine::StateElevated) &&
         !m_enginePid)
         return RestartElevated();
-    if (m_autostart != ((state & Engine::StateAutostart) != 0) && !Engine::SetAutostart(m_engine, m_autostart))
-        problem = T("Автозапуск не изменился: в режиме «от имени администратора» для этого нужны права администратора. ");
+    // Autostart again also when the administrator mode changed: the engine's state after the reload is already the new
+    // mode's and looked right, and the other way (the scheduler task or the Run value) stayed - an elevated start at every
+    // logon with autostart shown off (review 11.10.2026).
+    const bool adminChanged = oldAdmin != m_edit.GetBool("isMonitorAdmin", false);
+    if ((adminChanged || m_autostart != ((state & Engine::StateAutostart) != 0)) &&
+        !Engine::SetAutostart(m_engine, m_autostart))
+        problem += T("Автозапуск не изменился: в режиме «от имени администратора» для этого нужны права администратора. ");
     if (m_logging != ((state & Engine::StateLogging) != 0) && !Engine::SetLogging(m_engine, m_logging))
         problem += T("Журнал отладки не переключился. ");
     if (m_enabled != ((state & Engine::StateEnabled) != 0) && !Engine::SetEnabled(m_engine, m_enabled))

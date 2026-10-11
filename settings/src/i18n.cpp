@@ -593,8 +593,9 @@ const std::unordered_map<std::string, const char*>& English()
         { "Проверено: %s", "Checked: %s" },
         { "Вышла версия %s", "Version %s is out" },
         { "У вас последняя версия", "You have the latest version" },
-        { "Не удалось связаться с GitHub. Страница загрузки откроется в браузере",
-          "Could not reach GitHub. The download page opens in the browser" },
+        { "Не удалось связаться с GitHub. Проверьте ещё раз позже", "Could not reach GitHub. Check again later" },
+        { "FluentSwitcher не смог прочитать настройки и работает с прежними: в FluentSwitcher.json ошибка. ",
+          "FluentSwitcher could not read the settings and keeps the old ones: FluentSwitcher.json has an error. " },
         { "Не удалось записать update.json в папку приложения", "Could not write update.json in the app's folder" },
         { "Лицензия GPL-3.0", "GPL-3.0 license" },
         { "Приложение бесплатное, исходный код открыт. Поставляется без каких-либо гарантий. Части "

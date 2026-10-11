@@ -143,6 +143,9 @@ unsigned long HotkeyEditor::s_doubleMs = 280;
 namespace
 {
 const int kMaxRecordMs = 10000; // no keys for this long: the recording gives up (the hook holds all keys)
+// The keys held down when the recording began (Record): their presses reached Windows before the hook, so their
+// releases must too, and their auto-repeats are no new press (HookProc).
+bool g_heldBefore[256] = {};
 
 wxString Placeholder(int slot)
 {
@@ -182,6 +185,16 @@ HotkeyEditor::HotkeyEditor(wxWindow* parent, const wxString& stored, int slots, 
         view->Bind(wxEVT_KILL_FOCUS, [this, slot](wxFocusEvent& e) {
             if (m_recordingSlot == slot)
                 Stop();
+            e.Skip();
+        });
+        // From the keyboard too (review 11.10.2026: only the mouse could): Enter or Space records, Delete or Backspace
+        // clears. The kit leaves the keys to the user of the field (fluent_controls.h).
+        view->Bind(wxEVT_KEY_DOWN, [this, slot, view](wxKeyEvent& e) {
+            const int key = e.GetKeyCode();
+            if (m_recordingSlot < 0 && (key == WXK_RETURN || key == WXK_NUMPAD_ENTER || key == WXK_SPACE))
+                return Record(slot);
+            if (m_recordingSlot < 0 && (key == WXK_DELETE || key == WXK_BACK) && !m_values[slot].empty())
+                return view->onClear();
             e.Skip();
         });
         m_views.push_back(view);
@@ -246,6 +259,8 @@ void HotkeyEditor::Record(int slot)
     m_recordingSince = GetTickCount();
     m_recorder.Start(m_sides, s_doubleMs);
     TakeEngineMarks();
+    for (int vk = 8; vk < 256; vk++)
+        g_heldBefore[vk] = (GetAsyncKeyState(vk) & 0x8000) != 0;
     s_recording = this;
     if (!s_hook)
         s_hook = SetWindowsHookExW(WH_KEYBOARD_LL, HookProc, GetModuleHandleW(nullptr), 0);
@@ -318,6 +333,14 @@ LRESULT CALLBACK HotkeyEditor::HookProc(int code, WPARAM wParam, LPARAM lParam)
         std::find(s_engineMarks.begin(), s_engineMarks.end(), k->dwExtraInfo) != s_engineMarks.end())
         return CallNextHookEx(nullptr, code, wParam, lParam);
     const bool down = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
+    // Held since before the recording: let it through, not recorded. Its release swallowed, the key stayed down for
+    // every program - Ctrl held while clicking the field made every click a Ctrl+click (review 11.10.2026).
+    if (g_heldBefore[k->vkCode & 0xFF])
+    {
+        if (!down)
+            g_heldBefore[k->vkCode & 0xFF] = false;
+        return CallNextHookEx(nullptr, code, wParam, lParam);
+    }
     if (k->scanCode == 0x21D)
         return 1; // the made-up LCtrl that AltGr layouts add to the right Alt
     if (k->vkCode == VK_ESCAPE)

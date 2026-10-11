@@ -33,10 +33,21 @@ inline bool Installed(const std::wstring& folder) {
 	return std::filesystem::is_regular_file(std::filesystem::path(folder) / L"unins000.exe", ec);
 }
 
+// Только файлы выпусков FluentSwitcher на GitHub. Адрес и сумма - из update.json, а его может переписать любая программа
+// пользователя: движок от администратора скачал бы и запустил чужой файл с его же суммой (ревью 11.10.2026 - тот же
+// класс, что SimpleSwitcher.RunCommand). Сюда GitHub отвечает переадресацией на своё хранилище - её WinINet проходит сам.
+inline bool OurReleaseFile(const std::string& url) {
+	return url.starts_with("https://github.com/DmitryN71/FluentSwitcher/releases/download/");
+}
+
 // Скачать url в path, сверяя SHA-256 (строчными). false - error.
 inline bool Download(const std::string& url, const std::wstring& path, const std::string& sha256, std::string& error) {
 	if (url.empty() || sha256.size() != 64) {
 		error = "no file or no checksum in the release";
+		return false;
+	}
+	if (!OurReleaseFile(url)) {
+		error = "not a file of a FluentSwitcher release on GitHub";
 		return false;
 	}
 	const std::string agent = std::string("FluentSwitcher/") + FS_VERSION;

@@ -167,6 +167,11 @@ namespace cfg_details {
 			std::ifstream ifs(p, std::ios::binary);
 
 			json data = json::parse(ifs, nullptr, true, true);
+			// Пустое значение (null) - как нет поля, значение по умолчанию: "layouts_info": null, которое записывало окно
+			// настроек без файла (до 1.5.6), давало "Bad config" при каждом запуске (ревью 11.10.2026).
+			if (data.is_object())
+				for (auto it = data.begin(); it != data.end();)
+					it = it->is_null() ? data.erase(it) : std::next(it);
 			data.get_to(cfg);
 
 			const auto& arr = data["hotkeys"];
@@ -217,6 +222,13 @@ namespace cfg_details {
 			if (outp.fail()) {
 				IFS_RET(SW_ERR_UNKNOWN, L"can't write {}", tmp.wstring());
 			}
+		}
+		// Данные - на диск до замены: MOVEFILE_WRITE_THROUGH надёжна только для самого переименования, и отключение питания
+		// сразу после него оставляло вместо настроек файл из нулей - "Bad config" при каждом запуске (ревью 11.10.2026).
+		if (HANDLE written = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+			written != INVALID_HANDLE_VALUE) {
+			FlushFileBuffers(written);
+			CloseHandle(written);
 		}
 		IFW_RET(MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH));
 

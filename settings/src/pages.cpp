@@ -1288,15 +1288,8 @@ void SettingsFrame::BuildTyping()
 
     // "Где кончается слово" (separate_ext_mode) is not shown since 1.5.0-rc1 (Дмитрий 08.10.2026: nobody understands
     // it, and the fixes at punctuation are made for the default): the file keeps its value, and the engine uses it.
-    TextField* letters = nullptr;
-    AddSettingsCard(m_page, m_column, T("Считать буквами"),
-                    T("Эти знаки не разделяют слова: some_name, кто-то"), [&](wxWindow* card) {
-                        return letters = new TextField(card, m_edit.GetString("treat_as_letters", "_-"), 120);
-                    });
-    letters->onChange = [this, letters] {
-        m_edit.SetString("treat_as_letters", letters->Value());
-        Changed();
-    };
+    // So "Считать буквами" (treat_as_letters, "_-") since 1.5.6 (Дмитрий 11.10.2026): its one sensible value is the
+    // default - without "-" the words with hyphens (кто-то, e-mail) fall apart for the automatic switch.
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
     CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, знака препинания, Enter или Tab"),

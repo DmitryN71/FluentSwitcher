@@ -410,8 +410,6 @@ const std::unordered_map<std::string, const char*>& English()
           "A word also covers the words that start with it: IPsec - and IPsecs. A word gets here by itself the third "
           "time it is brought back, marked \"learned\"" },
         { "Буквы: EN, RU", "Letters: EN, RU" },
-        { "Считать буквами", "Treat as letters" },
-        { "Эти знаки не разделяют слова: some_name, кто-то", "These characters do not split words: some_name, well-known" },
         { "Как переключать раскладку", "How to switch the layout" },
         { "Если в каком-то приложении раскладка после исправления не переключается, выберите второй способ: "
           "FluentSwitcher нажмёт то сочетание, которым раскладка переключается в Windows",

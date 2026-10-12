@@ -3,11 +3,12 @@
 // Переход в окно с другой раскладкой - не переключение, без звука. Файлы - в папке sounds рядом с программой:
 // переключение - <ru-ru>.wav, <ru>.wav, иначе switch.wav (свой звук языка - по желанию); исправление - fix.wav.
 // Любой можно заменить своим WAV. Громкость - уровнем самих отсчётов (PCM 8/16 бит), другие форматы - как есть.
-// Звук идёт в Bluetooth-наушники или через удалённый рабочий стол - сначала 0,3 с тишины (SlowStart).
+// Звук идёт в Bluetooth-наушники или через удалённый рабочий стол - сначала 0,2 с тишины (SlowStart).
 #pragma once
 
 #include <mmsystem.h>
 #include <mmdeviceapi.h>
+#include <endpointvolume.h>
 #include <wrl/client.h>
 
 #include <fstream>
@@ -27,7 +28,10 @@ public:
 	// стола. Щелчок переключения (40 мс) пропадал целиком, звук исправления (125 мс) - через RDP слышно, в наушниках - нет
 	// (форум, WinnyS, 12.10.2026; отчёт: звук запускался на каждое переключение). Тогда перед звуком - тишина, за неё
 	// вывод просыпается. Устройство - вывод по умолчанию сейчас: его перечислитель BTHENUM (наушники), BTHHFENUM (гарнитура).
-	static constexpr int kWakeMs = 300;
+	// В наушниках уже что-то играет (музыка, видео) - они не спят: тишина только задержала бы щелчок. Сама тишина - 0,2 с
+	// (в 1.5.8-test1 было 0,3 - Дмитрий: "щелчок слышно, но прямо с заметной задержкой"; звук исправления в 125 мс
+	// пропадал целиком - значит, теряется больше 0,125 с).
+	static constexpr int kWakeMs = 200;
 	static const wchar_t* SlowStart() {
 		if (GetSystemMetrics(SM_REMOTESESSION)) return L"a remote session";
 		static const PROPERTYKEY kEnumerator = { { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 24 };
@@ -46,6 +50,13 @@ public:
 			    v.vt == VT_LPWSTR && v.pwszVal)
 				bluetooth = _wcsnicmp(v.pwszVal, L"BTH", 3) == 0;
 			PropVariantClear(&v);
+			ComPtr<IAudioMeterInformation> meter;
+			float peak = 0;
+			if (bluetooth && SUCCEEDED(out->Activate(__uuidof(IAudioMeterInformation), CLSCTX_ALL, nullptr, &meter)) &&
+			    SUCCEEDED(meter->GetPeakValue(&peak)) && peak > 0.0001f) {
+				LOG_ANY("sound: Bluetooth, something is playing there - no silence first");
+				bluetooth = false;
+			}
 		}
 		if (SUCCEEDED(init)) CoUninitialize();
 		return bluetooth ? L"Bluetooth" : nullptr;

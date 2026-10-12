@@ -308,8 +308,9 @@ const std::unordered_map<std::string, const char*>& English()
         { "Этого окна и меню значка у часов. Окно откроется на новом языке после сохранения",
           "Of this window and of the tray icon's menu. The window reopens in the new language after saving" },
         { "Тема", "Theme" },
-        { "Этого окна и меню у значка у часов. Окно откроется в новой теме после сохранения",
-          "Of this window and the tray icon's menu. The window reopens in the new theme after saving" },
+        { "Этого окна и меню у значка у часов. «Как в Windows»: окно – как приложения, меню – как панель задач. Окно откроется в новой теме после сохранения",
+          "Of this window and the tray icon's menu. \"As in Windows\": the window as the apps, the menu as the taskbar. "
+          "The window reopens in the new theme after saving" },
         { "Как в Windows", "As in Windows" },
         { "Светлая", "Light" },
         { "Тёмная", "Dark" },

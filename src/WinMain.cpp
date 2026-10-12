@@ -59,6 +59,19 @@ int QuitRunningCopy() {
 	return 0;
 }
 
+// Уже работает FluentSwitcher из этой же папки (движок, его окно SimpleSwitcher_Timer_001).
+bool RunningCopy() {
+	std::wstring self;
+	IFS_LOG(PathUtils::GetPath_exe_noLower(self));
+	HWND engine = nullptr;
+	while ((engine = FindWindowExW(HWND_MESSAGE, engine, L"SimpleSwitcher_Timer_001", nullptr)) != nullptr) {
+		DWORD pid = 0;
+		GetWindowThreadProcessId(engine, &pid);
+		if (pid != GetCurrentProcessId() && StrUtils::IsEqualCI(ProcessPath(pid).c_str(), self.c_str())) return true;
+	}
+	return false;
+}
+
 // --cleanup (удаление программы): убрать автозапуск - значение Run и задачу планировщика, если они ведут
 // к этому exe (копию в другой папке и её автозапуск не трогаем). Задачу с правами администратора без них
 // не убрать: тогда эта же команда с правами (Windows спросит).
@@ -120,6 +133,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 	if (args.contains(L"--cleanup")) {
 		return CleanupAutostart();
+	}
+	// Эта копия уже работает: второй запуск - её окно настроек, а не второй FluentSwitcher с серым значком (форум, gutasiho,
+	// 12.10.2026). Из автозапуска - выйти молча (запись в реестре и задача планировщика сразу). Запуски, которым прежняя
+	// копия ещё может мешать выходя, - как были: обновление (--updated) и перезапуск окном настроек (/set-autostart,
+	// /no-elevate) - "Включено" они ждут сами (EnableHolder, ниже).
+	if (!args.contains(L"--updated") && !args.contains(L"/set-autostart") && !args.contains(L"/no-elevate") && RunningCopy()) {
+		if (args.contains(c_sArgAutostart)) return 0;
+		return RunSettingsWindow(hInstance);
 	}
 	// Запущен обновлением (UpdateInstall.h: установщик или прежняя портативная копия): сказать "обновлено" (gui2/main.cpp).
 	g_updatedStart = args.contains(L"--updated");

@@ -404,7 +404,8 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			}
 			else {
 				const bool command = curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN);
-				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold());
+				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold(),
+					curk.HasMod(VK_CONTROL) && curk.HasMod(VK_MENU));
 				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
 					KeyHold::CanStart() && KeyHold::EarlyPoint();
 				if (early && !autoswitchHere()) {

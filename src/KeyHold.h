@@ -422,7 +422,7 @@ inline std::vector<bool> word; // true - заглавная
 inline UINT lastLetter = 0;    // клавиша последней буквы слова
 inline UINT firstKeys[2] = {}; // клавиши первых двух букв (i, 'i - fix_lone_i)
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
-inline bool broken = false;    // в слове цифра, сочетание - не наш случай
+inline bool broken = false;    // в слове цифра, буква с AltGr, автоповтор, другая клавиша - не наш случай
 // Набрано с CapsLock (ПРОПИСНЫМИ): слово проверит автопереключение (от пяти букв - AutoSwitch::CapsWord), а ДВе ЗАглавные
 // и i - нет: регистр там от CapsLock, а не от Shift (форум, gutasiho, 11.10.2026: "ЗИМА ВОЗМЕЗДИЯ").
 inline bool capsLock = false;
@@ -464,7 +464,7 @@ inline void ResetWord() {
 // Фокус перешёл (EVENT_OBJECT_FOCUS, Hooker::FocusProc): в другом поле слово начинается заново. Но не посреди набора:
 // списки подсказок (адресная строка браузера, VS Code, упоминания в мессенджерах) передают фокус своей строке после
 // каждой буквы - слово стиралось бы, и его конец не проверялся. Сочетание, которым перешли в другое поле (Ctrl+L,
-// Ctrl+Shift+R), слово и так "портит" - его сбрасываем всегда.
+// Ctrl+Shift+R), слово и так начинает заново (Track).
 inline void FocusIn() {
 	if (word.empty() || broken || now() - letterAt > 500) ResetWord();
 }
@@ -489,8 +489,8 @@ inline bool LetterHere(UINT vk) {
 
 // Нажатие, которое движок получает как набор (не пробел). true - в слово добавилась буква. repeat - автоповтор
 // зажатой клавиши: так слова не набирают ("ааааа", W в игре), слово - не наш случай (не считать буквы автоповтора, а
-// с ними и придерживать пробел после них).
-inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = false) {
+// с ними и придерживать пробел после них). altGr - сочетание с Ctrl и Alt сразу: так набирают буквы с AltGr.
+inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = false, bool altGr = false) {
 	if (CHotKey::IsKnownMods(vk)) return false; // сам Shift (Ctrl...) - не буква и не помеха
 	// Число с . и , (number): цифра, такая клавиша только после цифры; остальное - не число (громкость, NumLock - ничего).
 	const bool media = (vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE) || vk == VK_NUMLOCK || vk == VK_SCROLL;
@@ -513,9 +513,17 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		else
 			number = -1;
 	}
+	// Сочетание (Ctrl+V, Ctrl+Z, Ctrl+Backspace, Win+V) - граница слова: после него слово начинается заново, как после
+	// стрелок (движок так и считает: AnalyzeTyped - очистка, CaretMoved). Раньше слово после сочетания не проверялось до
+	// пробела вовсе (Дмитрий, 12.10.2026: вставил файл, набрал "Здуфыу" - не переключилось, и в журнале ничего). Буква с
+	// AltGr (польская ą) - часть слова: такое слово не наше, как и было.
 	if (command) {
-		word.clear();
-		broken = true;
+		if (altGr) {
+			word.clear();
+			broken = true;
+		}
+		else
+			ResetWord();
 		return false;
 	}
 	if (caps) {
@@ -543,6 +551,12 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 	}
 	if (vk >= '0' && vk <= '9') {
 		if (!shift) broken = true; // цифра; с Shift - знак ( «"!), он по краям слова не мешает
+		return false;
+	}
+	// Insert: с Shift - вставка из буфера, дальше слово заново (то самое "Здуфыу" - файл вставили Shift+Insert); один - режим
+	// замены, текст не меняется.
+	if (vk == VK_INSERT) {
+		if (shift) ResetWord();
 		return false;
 	}
 	if (vk == VK_RETURN || vk == VK_TAB || vk == VK_ESCAPE || (vk >= VK_PRIOR && vk <= VK_DOWN) || vk == VK_DELETE) {

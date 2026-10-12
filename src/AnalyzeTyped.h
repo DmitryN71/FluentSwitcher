@@ -44,11 +44,15 @@ inline TKeyType AnalizeTyped(const CHotKey& key, UINT vk, const TScanCode_Ext& s
 	case VK_ESCAPE:
 		return KEYTYPE_COMMAND_CLEAR;
 
+	// Shift+Insert - вставка из буфера: текст другой, курсор после вставленного - как Ctrl+V (Дмитрий, 12.10.2026). Один
+	// Insert - режим замены, текст тот же.
+	case VK_INSERT:
+		return is_shift ? KEYTYPE_COMMAND_CLEAR : KEYTYPE_COMMAND_NO_CLEAR;
+
 	case VKE_CapsLock:
 	case VK_SCROLL:
 	case VK_PRINT:
 	case VK_NUMLOCK:
-	case VK_INSERT:
 		return KEYTYPE_COMMAND_NO_CLEAR;
 	}
 

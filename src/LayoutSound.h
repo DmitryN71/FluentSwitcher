@@ -3,9 +3,12 @@
 // Переход в окно с другой раскладкой - не переключение, без звука. Файлы - в папке sounds рядом с программой:
 // переключение - <ru-ru>.wav, <ru>.wav, иначе switch.wav (свой звук языка - по желанию); исправление - fix.wav.
 // Любой можно заменить своим WAV. Громкость - уровнем самих отсчётов (PCM 8/16 бит), другие форматы - как есть.
+// Звук идёт в Bluetooth-наушники или через удалённый рабочий стол - сначала 0,3 с тишины (SlowStart).
 #pragma once
 
 #include <mmsystem.h>
+#include <mmdeviceapi.h>
+#include <wrl/client.h>
 
 #include <fstream>
 #include <map>
@@ -17,8 +20,78 @@
 class LayoutSound {
 	HKL m_last = 0;
 	ULONGLONG m_fixAt = 0; // когда началось последнее исправление: его смена раскладки - без звука переключения
-	std::map<std::wstring, std::vector<char>> m_cache; // "<файл>|<громкость>" -> WAV в памяти (играет из неё)
+	std::map<std::wstring, std::vector<char>> m_cache; // "<файл>|<громкость>|<тишина>" -> WAV в памяти (играет из неё)
 
+public:
+	// Bluetooth-наушники, пока молчат, засыпают, и начало звука после паузы теряется; так же - звук удалённого рабочего
+	// стола. Щелчок переключения (40 мс) пропадал целиком, звук исправления (125 мс) - через RDP слышно, в наушниках - нет
+	// (форум, WinnyS, 12.10.2026; отчёт: звук запускался на каждое переключение). Тогда перед звуком - тишина, за неё
+	// вывод просыпается. Устройство - вывод по умолчанию сейчас: его перечислитель BTHENUM (наушники), BTHHFENUM (гарнитура).
+	static constexpr int kWakeMs = 300;
+	static const wchar_t* SlowStart() {
+		if (GetSystemMetrics(SM_REMOTESESSION)) return L"a remote session";
+		static const PROPERTYKEY kEnumerator = { { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 24 };
+		using Microsoft::WRL::ComPtr;
+		const HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+		bool bluetooth = false;
+		{
+			ComPtr<IMMDeviceEnumerator> devices;
+			ComPtr<IMMDevice> out;
+			ComPtr<IPropertyStore> props;
+			PROPVARIANT v;
+			PropVariantInit(&v);
+			if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&devices))) &&
+			    SUCCEEDED(devices->GetDefaultAudioEndpoint(eRender, eConsole, &out)) &&
+			    SUCCEEDED(out->OpenPropertyStore(STGM_READ, &props)) && SUCCEEDED(props->GetValue(kEnumerator, &v)) &&
+			    v.vt == VT_LPWSTR && v.pwszVal)
+				bluetooth = _wcsnicmp(v.pwszVal, L"BTH", 3) == 0;
+			PropVariantClear(&v);
+		}
+		if (SUCCEEDED(init)) CoUninitialize();
+		return bluetooth ? L"Bluetooth" : nullptr;
+	}
+
+	// Тот же WAV (PCM) с тишиной ms в начале; не PCM или не разобрать - пусто.
+	static std::vector<char> WithSilence(const std::vector<char>& wav, int ms) {
+		if (wav.size() < 12 || memcmp(wav.data(), "RIFF", 4) != 0 || memcmp(wav.data() + 8, "WAVE", 4) != 0) return {};
+		WORD format = 0, block = 0, bits = 0;
+		DWORD rate = 0;
+		size_t at = 12, fmt = 0, fmtSize = 0;
+		while (at + 8 <= wav.size()) {
+			DWORD size = 0;
+			memcpy(&size, wav.data() + at + 4, 4);
+			const size_t body = at + 8;
+			if (body + size > wav.size()) return {};
+			if (memcmp(wav.data() + at, "fmt ", 4) == 0 && size >= 16) {
+				memcpy(&format, wav.data() + body, 2);
+				memcpy(&rate, wav.data() + body + 4, 4);
+				memcpy(&block, wav.data() + body + 12, 2);
+				memcpy(&bits, wav.data() + body + 14, 2);
+				fmt = body;
+				fmtSize = size;
+			}
+			else if (memcmp(wav.data() + at, "data", 4) == 0) {
+				if (!fmt || format != WAVE_FORMAT_PCM || !block || (bits != 8 && bits != 16)) return {};
+				const DWORD silence = (DWORD)((ULONGLONG)rate * ms / 1000) * block;
+				const DWORD data = size + silence;
+				std::vector<char> res;
+				auto put = [&](const void* p, size_t n) { res.insert(res.end(), (const char*)p, (const char*)p + n); };
+				const DWORD riff = (DWORD)(4 + 8 + fmtSize + (fmtSize & 1) + 8 + data);
+				put("RIFF", 4); put(&riff, 4); put("WAVE", 4);
+				const DWORD fs = (DWORD)fmtSize;
+				put("fmt ", 4); put(&fs, 4); put(wav.data() + fmt, fmtSize);
+				if (fmtSize & 1) res.push_back(0);
+				put("data", 4); put(&data, 4);
+				res.insert(res.end(), silence, bits == 8 ? (char)0x80 : (char)0);
+				put(wav.data() + body, size);
+				return res;
+			}
+			at = body + size + (size & 1);
+		}
+		return {};
+	}
+
+private:
 	static std::wstring Lower(std::wstring s) {
 		for (auto& c : s) c = (wchar_t)towlower(c);
 		return s;
@@ -75,7 +148,8 @@ class LayoutSound {
 	void Play(const std::wstring& path, int volume) {
 		volume = std::clamp(volume, 0, 100);
 		if (path.empty() || volume == 0) return;
-		const std::wstring key = path + L"|" + std::to_wstring(volume);
+		const wchar_t* slow = SlowStart();
+		const std::wstring key = path + L"|" + std::to_wstring(volume) + (slow ? L"|wake" : L"");
 		auto it = m_cache.find(key);
 		if (it == m_cache.end()) {
 			std::ifstream f(path, std::ios::binary);
@@ -86,9 +160,17 @@ class LayoutSound {
 				PlaySoundW(path.c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 				return;
 			}
+			if (slow) {
+				if (auto padded = WithSilence(wav, kWakeMs); !padded.empty()) wav = std::move(padded);
+			}
 			it = m_cache.emplace(key, std::move(wav)).first;
 		}
-		LOG_ANY(L"sound: {} at {}%", path, volume);
+		if (slow) {
+			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({})", path, volume, kWakeMs, slow);
+		}
+		else {
+			LOG_ANY(L"sound: {} at {}%", path, volume);
+		}
 		// Из памяти и не дожидаясь конца; следующий звук прерывает этот, буфер в кэше живёт дальше.
 		PlaySoundW((LPCWSTR)it->second.data(), nullptr, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
 	}

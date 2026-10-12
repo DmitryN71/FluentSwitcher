@@ -129,10 +129,12 @@ inline bool AllUpper(const std::wstring& s) {
 	return true;
 }
 
-// Слово ПРОПИСНЫМИ от пяти букв - не аббревиатура (форум, gutasiho, 11.10.2026: "ЗИМА DJPVTPLBZ" в имени файла не
+// Слово ПРОПИСНЫМИ от четырёх букв - не аббревиатура (форум, gutasiho, 11.10.2026: "ЗИМА DJPVTPLBZ" в имени файла не
 // переключалось - Skip считал аббревиатурой всё прописное): решать по нему, как по слову с заглавной (Titled, "Djpvtplbz" -
-// "Возмездия": так словарь знает и имена). Короче - аббревиатура (USB, ООН, ВДНХ), не трогаем.
-inline constexpr size_t kCapsWordMin = 5;
+// "Возмездия": так словарь знает и имена). Короче - аббревиатура (USB, ООН), не трогаем. Было от пяти; от четырёх - в 1.5.7
+// ("PBVF" - "ЗИМА", gutasiho, 12.10): аббревиатура в своей раскладке ("NASA", "JSON") там - не слово ("ТФЫФ"), а без
+// гласных (ВДНХ) Skip и так не трогает.
+inline constexpr size_t kCapsWordMin = 4;
 inline bool CapsWord(const std::wstring& typed, const std::wstring& there) {
 	const Part t = Letters(typed), a = Letters(there);
 	auto caps = [](const std::wstring& core) {

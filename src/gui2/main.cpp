@@ -30,15 +30,21 @@ void StartGui() {
 	// Счёт до трёх - отмены ДВух ЗАглавных и автопереключения, исправления вручную: на третий раз слово уходит в список
 	// (исключения или "Переключать всегда"), о чём говорит уведомление у флага. true - ушло.
 	// name - имя списка в настройках: слово отмечается выученным (learned), окно настроек так его и показывает.
+	// warnTitle, warnText - уведомление на второй раз: слово не уходит в список молча (Дмитрий, 12.10.2026: "FluentSwitcher
+	// это помнит и не переключает, когда нужно").
 	struct Learned {
 		std::string word;
 		ULONGLONG at = 0;
 	};
 	std::map<std::string, Learned> lastLearned; // по имени списка: слово, которое только что ушло туда (uncount)
 	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const char* name,
-	                       const std::wstring& word, const char* title, const char* text) {
+	                       const std::wstring& word, const char* title, const char* text, const char* warnTitle = nullptr,
+	                       const char* warnText = nullptr) {
 		const std::string utf8 = StrUtils::Convert(word);
-		if (++counts[utf8] < 3) {
+		if (const int count = ++counts[utf8]; count < 3) {
+			if (count == 2 && warnTitle)
+				trayIcon.Notify(StrUtils::Convert(std::vformat(LOC(warnTitle), std::make_format_args(utf8))),
+				                StrUtils::Convert(std::string(LOC(warnText))), [] { show_main_wind(); });
 			// Не больше 300 слов в счёте: слова, вернутые или исправленные раз-другой, иначе копились бы в файле настроек
 			// навсегда (ревью 11.10.2026; было только у исправлений вручную). Это слово остаётся.
 			if (counts.size() > 300)
@@ -304,12 +310,15 @@ void StartGui() {
 
 			if (msg == WM_AutoSwitchLearn) {
 				// Слово вернули сразу после автопереключения. Как у ДВух ЗАглавных: на третий раз - в исключения
-				// автопереключения.
+				// автопереключения; на второй - предупредить (вернули по ошибке - исправить снова в 10 с: не в счёт,
+				// WorkerImplement::TakeHandFix).
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
 				LOG_ANY(L"autoswitch: {} switched back", *word);
 				countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions", *word,
 				            "\"{}\" will not be switched any more",
-				            "It is in the exceptions of the layout auto switch: Settings, Auto switch");
+				            "It is in the exceptions of the layout auto switch: Settings, Auto switch",
+				            "Once more and \"{}\" will not be switched any more",
+				            "You switched it back for the second time. By mistake? Fix it again within 10 seconds");
 				saveWord("autoswitch_exceptions", *word);
 				return 0;
 			}

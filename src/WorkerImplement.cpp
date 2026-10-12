@@ -442,7 +442,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     if (m_autoWord.undone) return no("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
-    // С CapsLock - как на экране, ПРОПИСНЫМИ: такое слово - от пяти букв (AutoSwitch::CapsWord), короче - аббревиатура.
+    // С CapsLock - как на экране, ПРОПИСНЫМИ: такое слово - от четырёх букв (AutoSwitch::CapsWord), короче - аббревиатура.
     std::wstring typed;
     for (auto* key : keys) {
         auto c = InputSender::KeyText(*key, lay, key->is_caps);
@@ -514,7 +514,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
         if (!force) {
-            // ПРОПИСНЫМИ от пяти букв ("DJPVTPLBZ" - "ВОЗМЕЗДИЯ") - по слову с заглавной, не аббревиатура.
+            // ПРОПИСНЫМИ от четырёх букв ("DJPVTPLBZ" - "ВОЗМЕЗДИЯ") - по слову с заглавной, не аббревиатура.
             const bool caps = AutoSwitch::CapsWord(typed, there);
             const std::wstring typedAs = caps ? AutoSwitch::Titled(typed) : typed;
             const std::wstring thereAs = caps ? AutoSwitch::Titled(there) : there;

@@ -18,7 +18,7 @@ free and open source under GPL-3.0.
   ("njkm" - "толь"): the beginnings of words come from built-in lists of frequent words (Russian, English and Ukrainian). Short words go by their
   neighbors: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
   too: "нфдлштп" - "yalking". A word with hyphens too, also with a part of one letter: "у-ьфшд" - "e-mail",
-  "d-nhtnmb[" - "в-третьих". A word in CAPITALS from five letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
+  "d-nhtnmb[" - "в-третьих". A word in CAPITALS from four letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
   "ЗИМА ВОЗМЕЗДИЯ". Words with digits, abbreviations (USB, ВДНХ), a word typed again after the layout was switched by
   hand right after a fix, a word after Backspace, passwords, the console (but for the console apps listed, such as far.exe) and the apps of "No automatic switch in apps" are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word

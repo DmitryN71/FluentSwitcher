@@ -33,6 +33,25 @@ private:
 	NOTIFYICONDATA nid {};
 	HWND hwnd = 0;
 
+	// Проводник перезапустили (или он упал): панель задач новая, значков у часов на ней нет - их добавляют заново по
+	// рассылке TaskbarCreated. Её получают только окна верхнего уровня, а окно значка - только для сообщений, поэтому для
+	// неё - своё скрытое окно (форум, WinnyS, 12.10.2026: значок пропадал до первой смены раскладки - тогда SetIcon
+	// добавлял его снова).
+	inline static const UINT WM_TaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+	HWND listener = nullptr;
+	static LRESULT CALLBACK ListenerProc(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+		if (msg == WM_TaskbarCreated && Inst) {
+			Inst->AddAgain();
+			return 0;
+		}
+		return DefWindowProcW(wnd, msg, wParam, lParam);
+	}
+	void AddAgain() {
+		if (!nid.hIcon) return;
+		const bool added = Shell_NotifyIcon(NIM_ADD, &nid) != FALSE;
+		LOG_ANY("tray: the taskbar was created again, the icon added again: {}", added);
+	}
+
 	// Меню у флага - как меню Windows 11 (и FluentClipper): тёмное при тёмной панели задач. Своё меню
 	// обычной программы Windows всегда рисует светлым; тёмное включают недокументированные функции
 	// uxtheme (порядковые номера 135 SetPreferredAppMode и 136 FlushMenuThemes, Windows 10 1903+),
@@ -206,10 +225,19 @@ public:
 		nid.uCallbackMessage = WM_TRAYICON;
 		swprintf_s(nid.szTip, L"FluentSwitcher %S", details::SW_VERSION);
 
-
+		WNDCLASSW wc{};
+		wc.lpfnWndProc = ListenerProc;
+		wc.hInstance = GetModuleHandleW(nullptr);
+		wc.lpszClassName = L"FluentSwitcher_TaskbarListener";
+		RegisterClassW(&wc);
+		listener = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
+		                           wc.hInstance, nullptr);
+		// От имени администратора рассылку Проводника (обычные права) Windows иначе не пропустит.
+		if (listener) ChangeWindowMessageFilterEx(listener, WM_TaskbarCreated, MSGFLT_ALLOW, nullptr);
 	}
 	~WinTray() {
 		DeleteIcon();
+		if (listener) DestroyWindow(listener);
 	}
 
 	void SetIcon(HICON icon) {

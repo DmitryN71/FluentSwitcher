@@ -3,7 +3,8 @@
 // Выделенное транслитом (форум, xvii, 12.10.2026: "как в Punto" - имена файлов и папок латиницей): кириллица - латиницей,
 // остальное как есть. Без апострофов и знаков - годится в имя файла.
 //   Русский: а-a б-b в-v г-g д-d е-e ё-e ж-zh з-z и-i й-y к-k л-l м-m н-n о-o п-p р-r с-s т-t у-u ф-f х-kh ц-ts ч-ch
-//   ш-sh щ-shch ы-y э-e ю-yu я-ya, ь и ъ выпадают ("Отчёт за май" - "Otchet za may", "Объявление" - "Obyavlenie").
+//   ш-sh щ-shch ы-y э-e ю-yu я-ya, ь - апостроф, ъ - два ("Отчёт за май" - "Otchet za may", "нельзя открыть" -
+//   "nel'zya otkryt'", "Объявление" - "Ob''yavlenie"): так текст возвращается обратно (ToCyrillic; Дмитрий, 13.10.2026).
 //   Украинский - по официальной таблице (постановление Кабмина Украины № 55, 2010): г-h ґ-g и-y і-i, є ї й ю я в начале
 //   слова - ye yi y yu ya, дальше - ie i i iu ia, зг - zgh, апостроф выпадает ("Київ" - "Kyiv", "Згорани" - "Zghorany").
 // Украинский текст - по его буквам (ґ є і ї, апостроф внутри слова) или по украинской раскладке (Ukrainian).
@@ -58,9 +59,9 @@ inline const wchar_t* Russian(wchar_t c) {
 	case L'ч': return L"ch";
 	case L'ш': return L"sh";
 	case L'щ': return L"shch";
-	case L'ъ': return L"";
+	case L'ъ': return L"''";
 	case L'ы': return L"y";
-	case L'ь': return L"";
+	case L'ь': return L"'";
 	case L'э': return L"e";
 	case L'ю': return L"yu";
 	case L'я': return L"ya";
@@ -80,6 +81,7 @@ inline const wchar_t* Ukrainian(wchar_t c, bool start, wchar_t prev) {
 	case L'й': return start ? L"y" : L"i";
 	case L'ю': return start ? L"yu" : L"iu";
 	case L'я': return start ? L"ya" : L"ia";
+	case L'ь': return L""; // по официальной таблице не передаётся
 	}
 	return Russian(c);
 }
@@ -118,9 +120,9 @@ inline std::wstring Convert(const std::wstring& s, bool ukrainian) {
 
 // Обратно, латиницу - кириллицей (Дмитрий, 13.10.2026: "ZIMA" - "ЗИМА"), когда в выделенном кириллицы нет. Таблица - та же,
 // русская, и распространённые другие написания: shch zh kh ts ch sh yu ya yo ye ju ja jo - одной буквой, j - й, h - х,
-// c q - к, w - в, x - кс, апостроф между буквами - ь (Ol'ga - Ольга); y после гласной - й (may - май), после согласной -
-// ы (tsvety - цветы). Не всё обратимо: ь, ъ и ё не вернуть, е и э - одна e (стала е). Расширение файла в конце (.docx)
-// остаётся латиницей.
+// c q - к, w - в, x - кс, апостроф после согласной - ь, два - ъ (nel'zya - нельзя, otkryt' - открыть, Ob''yavlenie -
+// Объявление); y после гласной - й (may - май), после согласной - ы (tsvety - цветы). Не всё обратимо: ё не вернуть, е и
+// э - одна e (стала е). Расширение файла в конце (.docx) остаётся латиницей.
 inline std::wstring ToCyrillic(const std::wstring& s) {
 	static const std::pair<const wchar_t*, const wchar_t*> table[] = {
 		{ L"shch", L"щ" }, { L"zh", L"ж" }, { L"kh", L"х" }, { L"ts", L"ц" }, { L"ch", L"ч" }, { L"sh", L"ш" },
@@ -142,9 +144,13 @@ inline std::wstring ToCyrillic(const std::wstring& s) {
 	std::wstring out;
 	for (size_t i = 0; i < end;) {
 		const wchar_t c = s[i];
-		if (c == L'\'' && i > 0 && i + 1 < end && latin(s[i - 1]) && latin(s[i + 1])) {
-			out += (latin(s[i - 1]) && s[i - 1] <= L'Z' && s[i + 1] <= L'Z') ? L'Ь' : L'ь';
-			i++;
+		// Апостроф после согласной - ь, два - ъ (в конце слова тоже: otkryt'); после гласной - апостроф как есть.
+		if (c == L'\'' && i > 0 && latin(s[i - 1]) && !wcschr(L"aeiouy", low(s[i - 1]))) {
+			const bool hard = i + 1 < end && s[i + 1] == L'\'';
+			const size_t next = i + (hard ? 2 : 1);
+			const bool up = s[i - 1] <= L'Z' && !(next < end && latin(s[next]) && s[next] > L'Z');
+			out += hard ? (up ? L'Ъ' : L'ъ') : (up ? L'Ь' : L'ь');
+			i = next;
 			continue;
 		}
 		if (!latin(c)) {

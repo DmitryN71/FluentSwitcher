@@ -1175,7 +1175,10 @@ TStatus WorkerImplement::GetClipStringCallback() {
             const bool uk = Translit::UkrainianText(data) || PRIMARYLANGID(LOWORD((UINT_PTR)CurLay())) == LANG_UKRAINIAN;
             std::wstring latin = Translit::Convert(data, uk);
             const bool back = latin == data;
-            if (back) latin = Translit::ToCyrillic(data);
+            // Неоднозначное (ts - ц или тс, e - е или э) - по русскому словарю Windows: "prigoditsya" - "пригодится".
+            if (back) latin = Translit::ToCyrillic(data, [](const std::wstring& w) {
+                return SpellCheck::CheckAnyCaseEvenCaps(w, L"ru-RU") == SpellCheck::Result::Word;
+            });
             if (latin == data) {
                 LOG_ANY(L"translit: no letters to change. skip");
             } else {

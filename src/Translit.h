@@ -1,7 +1,11 @@
 #pragma once
 
+#include <functional>
+#include <string>
+#include <vector>
+
 // Выделенное транслитом (форум, xvii, 12.10.2026: "как в Punto" - имена файлов и папок латиницей): кириллица - латиницей,
-// остальное как есть. Без апострофов и знаков - годится в имя файла.
+// остальное как есть. Из знаков - только апостроф на месте ь и ъ (чтобы вернуть обратно); годится в имя файла.
 //   Русский: а-a б-b в-v г-g д-d е-e ё-e ж-zh з-z и-i й-y к-k л-l м-m н-n о-o п-p р-r с-s т-t у-u ф-f х-kh ц-ts ч-ch
 //   ш-sh щ-shch ы-y э-e ю-yu я-ya, ь - апостроф, ъ - два ("Отчёт за май" - "Otchet za may", "нельзя открыть" -
 //   "nel'zya otkryt'", "Объявление" - "Ob''yavlenie"): так текст возвращается обратно (ToCyrillic; Дмитрий, 13.10.2026).
@@ -121,9 +125,13 @@ inline std::wstring Convert(const std::wstring& s, bool ukrainian) {
 // Обратно, латиницу - кириллицей (Дмитрий, 13.10.2026: "ZIMA" - "ЗИМА"), когда в выделенном кириллицы нет. Таблица - та же,
 // русская, и распространённые другие написания: shch zh kh ts ch sh yu ya yo ye ju ja jo - одной буквой, j - й, h - х,
 // c q - к, w - в, x - кс, апостроф после согласной - ь, два - ъ (nel'zya - нельзя, otkryt' - открыть, Ob''yavlenie -
-// Объявление); y после гласной - й (may - май), после согласной - ы (tsvety - цветы). Не всё обратимо: ё не вернуть, е и
-// э - одна e (стала е). Расширение файла в конце (.docx) остаётся латиницей.
-inline std::wstring ToCyrillic(const std::wstring& s) {
+// Объявление); y после гласной - й (may - май), после согласной - ы (tsvety - цветы). Расширение файла в конце (.docx)
+// остаётся латиницей. Ё не вернуть.
+// Где написание неоднозначно, у слова есть варианты: ts - ц или тс (tsvet - цвет, но prigoditsya - пригодится, detskiy -
+// детский), e в начале слова и после гласной - е или э (eto - это, aeroport - аэропорт). known - знает ли словарь слово
+// (движок: словарь Windows, русский): первый вариант он не знает, а другой знает - другой (Дмитрий, 13.10.2026:
+// "пригодиця", "меняеця"). Без словаря - первый: ц и е.
+inline std::wstring ToCyrillic(const std::wstring& s, const std::function<bool(const std::wstring&)>& known = nullptr) {
 	static const std::pair<const wchar_t*, const wchar_t*> table[] = {
 		{ L"shch", L"щ" }, { L"zh", L"ж" }, { L"kh", L"х" }, { L"ts", L"ц" }, { L"ch", L"ч" }, { L"sh", L"ш" },
 		{ L"yu", L"ю" }, { L"ya", L"я" }, { L"yo", L"ё" }, { L"ye", L"е" }, { L"ju", L"ю" }, { L"ja", L"я" },
@@ -141,7 +149,34 @@ inline std::wstring ToCyrillic(const std::wstring& s) {
 	if (const size_t dot = s.rfind(L'.'); dot != std::wstring::npos && s.size() - dot - 1 >= 1 && s.size() - dot - 1 <= 5 &&
 		std::all_of(s.begin() + dot + 1, s.end(), [&](wchar_t c) { return latin(c) || iswdigit(c); }))
 		end = dot;
+	auto upper = [](std::wstring& p, bool all) {
+		for (size_t k = 0; k < p.size(); k++)
+			if (k == 0 || all) p[k] = (wchar_t)(UINT_PTR)CharUpperW((LPWSTR)(UINT_PTR)p[k]);
+	};
+	// Слово - кусками: main - буква по таблице, alt - другой вариант (пусто - его нет).
+	struct Piece { std::wstring main, alt; };
+	std::vector<Piece> word;
 	std::wstring out;
+	auto flush = [&] {
+		size_t choices = 0;
+		for (const auto& p : word) choices += !p.alt.empty();
+		auto build = [&](unsigned mask) {
+			std::wstring w;
+			unsigned bit = 0;
+			for (const auto& p : word) w += !p.alt.empty() && (mask >> bit++ & 1) ? p.alt : p.main;
+			return w;
+		};
+		std::wstring chosen = build(0);
+		if (known && choices > 0 && choices <= 6 && !known(chosen)) {
+			for (unsigned mask = 1; mask < (1u << choices); mask++)
+				if (const std::wstring w = build(mask); known(w)) {
+					chosen = w;
+					break;
+				}
+		}
+		out += chosen;
+		word.clear();
+	};
 	for (size_t i = 0; i < end;) {
 		const wchar_t c = s[i];
 		// Апостроф после согласной - ь, два - ъ (в конце слова тоже: otkryt'); после гласной - апостроф как есть.
@@ -149,20 +184,22 @@ inline std::wstring ToCyrillic(const std::wstring& s) {
 			const bool hard = i + 1 < end && s[i + 1] == L'\'';
 			const size_t next = i + (hard ? 2 : 1);
 			const bool up = s[i - 1] <= L'Z' && !(next < end && latin(s[next]) && s[next] > L'Z');
-			out += hard ? (up ? L'Ъ' : L'ъ') : (up ? L'Ь' : L'ь');
+			word.push_back({ std::wstring(1, hard ? (up ? L'Ъ' : L'ъ') : (up ? L'Ь' : L'ь')), {} });
 			i = next;
 			continue;
 		}
 		if (!latin(c)) {
+			flush();
 			out += c;
 			i++;
 			continue;
 		}
 		size_t len = 1;
-		std::wstring piece;
-		const wchar_t prevOut = out.empty() ? 0 : (wchar_t)(UINT_PTR)CharLowerW((LPWSTR)(UINT_PTR)out.back());
+		Piece piece;
+		const wchar_t prevOut = word.empty() || word.back().main.empty()
+			? 0 : (wchar_t)(UINT_PTR)CharLowerW((LPWSTR)(UINT_PTR)word.back().main.back());
 		if (low(c) == L'y' && !(i + 1 < end && wcschr(L"uaoe", low(s[i + 1])))) {
-			piece = vowel(prevOut) || !(i > 0 && latin(s[i - 1])) ? L"й" : L"ы";
+			piece.main = vowel(prevOut) || word.empty() ? L"й" : L"ы";
 		}
 		else {
 			for (const auto& [from, to] : table) {
@@ -172,12 +209,15 @@ inline std::wstring ToCyrillic(const std::wstring& s) {
 				while (k < n && low(s[i + k]) == from[k]) k++;
 				if (k == n) {
 					len = n;
-					piece = to;
+					piece.main = to;
+					if (wcscmp(from, L"ts") == 0) piece.alt = L"тс";
+					else if (wcscmp(from, L"e") == 0 && (word.empty() || vowel(prevOut))) piece.alt = L"э";
 					break;
 				}
 			}
 		}
-		if (piece.empty()) {
+		if (piece.main.empty()) {
+			flush();
 			out += c;
 			i++;
 			continue;
@@ -187,12 +227,13 @@ inline std::wstring ToCyrillic(const std::wstring& s) {
 			const bool nextUpper = i + len < end && latin(s[i + len]) && s[i + len] <= L'Z';
 			const bool restUpper = std::all_of(s.begin() + i, s.begin() + i + len, [](wchar_t x) { return x <= L'Z'; });
 			const bool allCaps = len > 1 ? restUpper : nextUpper || (i > 0 && latin(s[i - 1]) && s[i - 1] <= L'Z');
-			for (size_t k = 0; k < piece.size(); k++)
-				if (k == 0 || allCaps) piece[k] = (wchar_t)(UINT_PTR)CharUpperW((LPWSTR)(UINT_PTR)piece[k]);
+			upper(piece.main, allCaps);
+			upper(piece.alt, allCaps);
 		}
-		out += piece;
+		word.push_back(std::move(piece));
 		i += len;
 	}
+	flush();
 	out.append(s, end, std::wstring::npos);
 	return out;
 }

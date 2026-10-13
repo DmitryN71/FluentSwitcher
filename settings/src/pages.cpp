@@ -17,6 +17,7 @@
 #include <wx/tokenzr.h>
 #include <wx/tooltip.h>
 #include <wx/utils.h>
+#include <wx/wupdlock.h>
 
 #include "../../src/Update.h" // after wxWidgets: Windows headers of its own
 #include "../../src/UpdateInstall.h"
@@ -708,13 +709,182 @@ void ShowCard(wxWindow* card)
         static_cast<wxScrolledWindow*>(card->GetParent())->FitInside();
     }
 }
+
+// ----- The search of the settings (1.5.9; Dmitry, 13.10.2026: "у нас уже столько настроек") -----
+
+// A text as the search compares it: lower case (Cyrillic too - CharLowerBuffW; wxString::Lower knows Latin only), ё as
+// е, the lines of a wrapped description as one.
+wxString Folded(const wxString& text)
+{
+    std::wstring s = text.ToStdWstring();
+    if (!s.empty())
+        CharLowerBuffW(s.data(), (DWORD)s.size());
+    for (wchar_t& c : s)
+        if (c == L'ё')
+            c = L'е';
+        else if (c == L'\n' || c == L'\r' || c == L'\t')
+            c = L' ';
+    return wxString(s);
+}
+
+// The words of a query: its letters and digits.
+std::vector<wxString> QueryWords(const wxString& folded)
+{
+    std::vector<wxString> words;
+    wxString word;
+    for (wxUniChar c : folded)
+    {
+        if (IsCharAlphaNumericW((WCHAR)c.GetValue()))
+            word += c;
+        else if (!word.empty())
+        {
+            words.push_back(word);
+            word.clear();
+        }
+    }
+    if (!word.empty())
+        words.push_back(word);
+    return words;
+}
+
+// A word of the query in a text: as typed, or a long one without its ending - "звуков" finds "звуки", "переключения" -
+// "переключение".
+bool HasWord(const wxString& text, const wxString& word)
+{
+    if (text.Find(word) != wxNOT_FOUND)
+        return true;
+    const size_t n = word.length();
+    const size_t cut = n >= 6 ? 2 : n == 5 ? 1 : 0;
+    return cut && text.Find(word.Left(n - cut)) != wxNOT_FOUND;
+}
+
+// A found card on the page of the search: its title, its description in one line, its section on the right with a
+// chevron, as the cards of Windows' own Settings that lead to a page. A click, Enter or Space opens it; Up / Down go
+// through the list (onArrow).
+class SearchHit : public wxPanel
+{
+public:
+    std::function<void()> onOpen;
+    std::function<void(bool down)> onArrow;
+
+    SearchHit(wxWindow* parent, const wxString& title, const wxString& about, const wxString& section)
+        : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE),
+          m_title(title), m_about(about), m_section(section), m_font(UiFont(10)), m_small(UiFont(9)),
+          m_chevron(FluentIcon(kIconChevron, g.text2))
+    {
+        SetBackgroundStyle(wxBG_STYLE_PAINT);
+        SetBackgroundColour(g.card);
+        wxClientDC dc(this);
+        dc.SetFont(m_font);
+        int height = dc.GetCharHeight();
+        dc.SetFont(m_small);
+        if (!m_about.empty())
+            height += FromDIP(2) + dc.GetCharHeight();
+        SetMinSize(wxSize(FromDIP(240), height + 2 * FromDIP(14)));
+        SetCursor(wxCursor(wxCURSOR_HAND));
+        Bind(wxEVT_PAINT, &SearchHit::OnPaint, this);
+        Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) { m_hover = true; Refresh(); });
+        Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) { m_hover = m_pressed = false; Refresh(); });
+        Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) {
+            m_pressed = true;
+            SetFocus();
+        });
+        Bind(wxEVT_LEFT_UP, [this](wxMouseEvent& e) {
+            const bool click = m_pressed && wxRect(GetClientSize()).Contains(e.GetPosition());
+            m_pressed = false;
+            if (click && onOpen)
+                onOpen();
+        });
+        Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& e) {
+            const int key = e.GetKeyCode();
+            if ((key == WXK_RETURN || key == WXK_NUMPAD_ENTER || key == WXK_SPACE) && onOpen)
+                onOpen();
+            else if ((key == WXK_UP || key == WXK_DOWN) && onArrow)
+                onArrow(key == WXK_DOWN);
+            else
+                e.Skip();
+        });
+        Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& e) { Refresh(); e.Skip(); });
+        Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) { Refresh(); e.Skip(); });
+    }
+
+    bool AcceptsFocus() const override { return true; }
+
+private:
+    void OnPaint(wxPaintEvent&)
+    {
+        wxAutoBufferedPaintDC dc(this);
+        dc.SetBackground(wxBrush(GetParent()->GetBackgroundColour()));
+        dc.Clear();
+        const wxRect r(GetClientSize());
+        const double radius = FromDIP(6);
+        FillRound(dc, r, radius, m_hover ? g.controlHover : g.card, &g.border);
+        if (ShowsFocus(this))
+            DrawFocusRing(this, dc, r, radius);
+        const int pad = FromDIP(14);
+        // The section and the chevron on the right.
+        const wxBitmap chevron = m_chevron.GetBitmapFor(this);
+        int right = r.GetRight() - pad - chevron.GetLogicalWidth();
+        dc.DrawBitmap(chevron, right, (r.height - chevron.GetLogicalHeight()) / 2, true);
+        dc.SetFont(m_small);
+        dc.SetTextForeground(g.text2);
+        const wxSize section = dc.GetTextExtent(m_section);
+        right -= FromDIP(8) + section.x;
+        dc.DrawText(m_section, right, (r.height - section.y) / 2);
+        // The title and the description on the left, cut with "..." before the section.
+        const int width = right - FromDIP(24) - pad;
+        const int aboutHeight = m_about.empty() ? 0 : FromDIP(2) + dc.GetCharHeight();
+        dc.SetFont(m_font);
+        const int titleHeight = dc.GetCharHeight();
+        const int y = (r.height - titleHeight - aboutHeight) / 2;
+        dc.SetTextForeground(g.text);
+        dc.DrawText(wxControl::Ellipsize(m_title, dc, wxELLIPSIZE_END, width, wxELLIPSIZE_FLAGS_NONE), pad, y);
+        if (!m_about.empty())
+        {
+            dc.SetFont(m_small);
+            dc.SetTextForeground(g.text2);
+            dc.DrawText(wxControl::Ellipsize(m_about, dc, wxELLIPSIZE_END, width, wxELLIPSIZE_FLAGS_NONE), pad,
+                        y + titleHeight + FromDIP(2));
+        }
+    }
+
+    wxString m_title, m_about, m_section;
+    wxFont m_font, m_small;
+    wxBitmapBundle m_chevron;
+    bool m_hover = false, m_pressed = false;
+};
+
+// The control that got the focus (Tab, a click, the arrows) - scrolled into sight (Dmitry, 11.10.2026: Tab went to a
+// field out of sight, and the page stayed where it was).
+void KeepFocusInSight(wxScrolledWindow* page)
+{
+    page->Bind(wxEVT_CHILD_FOCUS, [page](wxChildFocusEvent& e) {
+        e.Skip(); // the page still remembers its last focused control
+        wxWindow* focused = wxWindow::FindFocus();
+        int unitX = 0, unitY = 0, viewX = 0, viewY = 0;
+        page->GetScrollPixelsPerUnit(&unitX, &unitY);
+        if (!focused || unitY <= 0)
+            return;
+        page->GetViewStart(&viewX, &viewY);
+        const wxRect r = focused->GetScreenRect();
+        const int top = page->ScreenToClient(r.GetTopLeft()).y, height = page->GetClientSize().y;
+        const int margin = page->FromDIP(12);
+        int y = viewY;
+        if (top < margin)
+            y = viewY + (top - margin) / unitY - 1;
+        else if (top + r.height > height - margin)
+            y = viewY + (top + r.height - height + margin + unitY - 1) / unitY;
+        if (y != viewY)
+            page->Scroll(-1, std::max(0, y));
+    });
+}
 }
 
 SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsigned long enginePid,
                              const wxString& loadError, int section)
     : wxFrame(nullptr, wxID_ANY, "FluentSwitcher"),
       m_saved(config), m_edit(config), m_folder(folder), m_enginePid(enginePid), m_canSave(loadError.empty()),
-      m_savedTimer(this)
+      m_highlightTimer(this), m_savedTimer(this)
 {
     SetIcon(wxICON(aaaa));
     SetBackgroundColour(g.bg);
@@ -724,6 +894,30 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     wxToolTip::SetAutoPop(30000);
 
     m_nav = new SectionNav(this);
+    // The search above the sections, as in Windows' own Settings: the results replace the page while it has text.
+    m_search = new TextField(this, wxString(), 160, true, 100);
+    m_search->SetHint(T("Найти параметр"));
+    m_search->SetIcon(kIconSearch);
+    m_search->onChange = [this] { Search(); };
+    m_search->onEnter = [this] {
+        if (!m_searching)
+            Search();
+        if (!m_searchHits.empty())
+            static_cast<SearchHit*>(m_searchHits.front())->onOpen();
+    };
+    m_search->onKey = [this](int key) {
+        if (key != WXK_DOWN || !m_searching || m_searchHits.empty())
+            return false;
+        m_searchHits.front()->SetFocus();
+        return true;
+    };
+    // Back in the field after a card was opened: its results again (made anew - the cards may have changed).
+    m_search->onFocus = [this] {
+        CallAfter([this] {
+            if (!m_searching && !m_search->Value().empty())
+                Search();
+        });
+    };
     m_title = FluentText(this, wxString(), 20, g.text, true);
     m_pagesSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -740,6 +934,11 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     BuildCommands();
     BuildAdvanced();
     BuildAbout();
+    m_searchPage = NewSettingsPage(this, &m_searchColumn);
+    m_searchPage->Hide();
+    KeepFocusInSight(m_searchPage);
+    m_pagesSizer->Add(m_searchPage, 1, wxEXPAND);
+    Bind(wxEVT_TIMER, [this](wxTimerEvent&) { EndHighlight(); }, m_highlightTimer.GetId());
 
     // The program's folder has no button of its own (FluentClipper's "database folder" is useful, ours is not):
     // the debug log card opens the log's folder.
@@ -801,10 +1000,20 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     });
     cancel->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
     Bind(wxEVT_CHAR_HOOK, [this, save, cancel](wxKeyEvent& e) {
+        // Esc leaves the results (in the field it empties it first, TextField), otherwise closes the window.
         if (e.GetKeyCode() == WXK_ESCAPE && e.GetModifiers() == wxMOD_NONE)
-            return (void)Close();
-        // Tab goes round the whole window, as in Windows' own Settings: the controls of the page shown, the buttons at the
-        // bottom, the list of sections, the page again; Shift+Tab the other way. Our own ring: Windows' navigation went
+        {
+            if (!m_searching)
+                return (void)Close();
+            m_search->Clear();
+            m_search->FocusText(false);
+            return;
+        }
+        if (e.GetKeyCode() == 'F' && e.GetModifiers() == wxMOD_CONTROL)
+            return m_search->FocusText(true);
+        // Tab goes round the whole window, as in Windows' own Settings: the controls of the page shown (or of the search's
+        // results), the buttons at the bottom, the search, the list of sections, the page again; Shift+Tab the other way.
+        // Our own ring: Windows' navigation went
         // round the page only - the buttons and the list do not take the focus from the keyboard themselves (Dmitry,
         // 11.10.2026: "Tab ... в левую часть окна ... не переходит никогда").
         if (e.GetKeyCode() == WXK_TAB && !e.ControlDown() && !e.AltDown() && m_section >= 0 &&
@@ -828,10 +1037,11 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
                 }
                 return any;
             };
-            collect(m_pages[m_section]);
+            collect(m_searching ? m_searchPage : m_pages[m_section]);
             for (wxWindow* button : { (wxWindow*)save, (wxWindow*)m_apply, (wxWindow*)cancel })
                 if (button->IsEnabled() && button->IsShownOnScreen())
                     ring.push_back(button);
+            ring.push_back(m_search);
             ring.push_back(m_nav);
             int at = -1;
             for (wxWindow* w = wxWindow::FindFocus(); w && at < 0; w = w->GetParent())
@@ -840,7 +1050,10 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
                         at = i;
             const int n = (int)ring.size();
             const int next = at < 0 ? (e.ShiftDown() ? n - 1 : 0) : (at + (e.ShiftDown() ? n - 1 : 1)) % n;
-            ring[next]->SetFocus();
+            if (ring[next] == m_search)
+                m_search->FocusText(true);
+            else
+                ring[next]->SetFocus();
             return;
         }
         e.Skip();
@@ -862,8 +1075,12 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     right->Add(m_title, 0, wxTOP | wxBOTTOM, FromDIP(12));
     right->Add(m_pagesSizer, 1, wxEXPAND);
     right->Add(footer, 0, wxEXPAND | wxTOP | wxBOTTOM | wxRIGHT, FromDIP(16));
+    // The field as wide as the sections and level with the title.
+    wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
+    left->Add(m_search, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(4));
+    left->Add(m_nav, 1, wxEXPAND | wxTOP, FromDIP(8));
     wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
-    sizer->Add(m_nav, 0, wxEXPAND | wxLEFT | wxTOP | wxBOTTOM, FromDIP(8));
+    sizer->Add(left, 0, wxEXPAND | wxLEFT | wxTOP | wxBOTTOM, FromDIP(8));
     sizer->Add(right, 1, wxEXPAND | wxLEFT, FromDIP(20));
     SetSizer(sizer);
 
@@ -871,14 +1088,17 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
         SetStatus(T("Не удалось прочитать FluentSwitcher.json: ") + loadError, true);
     ShowSection(section);
     // Not narrower than the widest page: the pages scroll only up and down, and a card cut at the right edge hid its
-    // switch or button (Dmitry, 11.10.2026). The height - for the eleven sections and "Закрыть FluentSwitcher" under them.
+    // switch or button (Dmitry, 11.10.2026). The height - for the search, the eleven sections and "Закрыть FluentSwitcher"
+    // under them.
     int widest = 0;
     for (wxWindow* page : m_pages)
         if (page->GetSizer())
             widest = std::max(widest, page->GetSizer()->CalcMin().x);
     const int client = m_nav->GetBestSize().x + FromDIP(8 + 20) + widest + wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, this);
-    const wxSize least(std::max(FromDIP(720), ClientToWindowSize(wxSize(client, 1)).x), FromDIP(560));
-    SetSize(wxSize(std::max(FromDIP(860), least.x), FromDIP(660)));
+    const int tall = left->CalcMin().y + FromDIP(8 + 8);
+    const wxSize least(std::max(FromDIP(720), ClientToWindowSize(wxSize(client, 1)).x),
+                       std::max(FromDIP(560), ClientToWindowSize(wxSize(1, tall)).y));
+    SetSize(wxSize(std::max(FromDIP(860), least.x), std::max(FromDIP(660), least.y)));
     SetMinSize(least);
     if (!RestorePlacement())
         CentreOnScreen();
@@ -944,28 +1164,7 @@ void SettingsFrame::Section(const char* icon, const wxString& title)
     m_page = NewSettingsPage(this, &m_column);
     m_pagesSizer->Add(m_page, 1, wxEXPAND);
     m_pages.push_back(m_page);
-    // The control that got the focus (Tab, a click) - scrolled into sight (Dmitry, 11.10.2026: Tab went to a field out
-    // of sight, and the page stayed where it was).
-    wxScrolledWindow* page = m_page;
-    page->Bind(wxEVT_CHILD_FOCUS, [page](wxChildFocusEvent& e) {
-        e.Skip(); // the page still remembers its last focused control
-        wxWindow* focused = wxWindow::FindFocus();
-        int unitX = 0, unitY = 0, viewX = 0, viewY = 0;
-        page->GetScrollPixelsPerUnit(&unitX, &unitY);
-        if (!focused || unitY <= 0)
-            return;
-        page->GetViewStart(&viewX, &viewY);
-        const wxRect r = focused->GetScreenRect();
-        const int top = page->ScreenToClient(r.GetTopLeft()).y, height = page->GetClientSize().y;
-        const int margin = page->FromDIP(12);
-        int y = viewY;
-        if (top < margin)
-            y = viewY + (top - margin) / unitY - 1;
-        else if (top + r.height > height - margin)
-            y = viewY + (top + r.height - height + margin + unitY - 1) / unitY;
-        if (y != viewY)
-            page->Scroll(-1, std::max(0, y));
-    });
+    KeepFocusInSight(m_page);
     m_titles.Add(title);
     m_nav->AddSection(icon, title);
 }
@@ -990,6 +1189,7 @@ wxWindow* SettingsFrame::Choice(const wxString& title, const wxString& descripti
     AddSettingsCard(m_page, m_column, title, description, [&](wxWindow* card) {
         return choice = new FluentChoice(card, items, selection);
     }, below);
+    m_searchExtra[choice->GetParent()] = wxJoin(items, ' ', '\0');
     choice->onChange = [this, choice, picked] {
         picked(choice->GetSelection());
         Changed();
@@ -2099,12 +2299,208 @@ void SettingsFrame::ShowSection(int section)
 {
     if (section < 0 || section >= (int)m_pages.size())
         section = 0;
+    if (m_searchPage)
+        m_searchPage->Hide();
+    m_searching = false;
     for (size_t i = 0; i < m_pages.size(); i++)
         m_pages[i]->Show((int)i == section);
     m_title->SetLabel(m_titles[section]);
     m_nav->Select(section);
     m_section = section;
     Layout();
+}
+
+// ---------------------------------------------------------------------------------------------
+// The search
+// ---------------------------------------------------------------------------------------------
+
+std::vector<SettingsFrame::Found> SettingsFrame::FindCards(const std::vector<wxString>& words) const
+{
+    std::vector<Found> found[3]; // all the words in the title; in the visible texts; somewhere
+    if (words.empty())
+        return found[0];
+    const wxString tipSign = WithTip(wxString());
+    for (size_t section = 0; section < m_pages.size(); section++)
+        for (wxWindow* child : m_pages[section]->GetChildren())
+        {
+            // A card: AddSettingsCard makes its title and description first. Hidden ones (FluentSwitcher running or not)
+            // are not found.
+            Card* card = dynamic_cast<Card*>(child);
+            if (!card || !card->IsShown() || card->GetChildren().size() < 2)
+                continue;
+            auto part = card->GetChildren().begin();
+            wxStaticText* titleLabel = dynamic_cast<wxStaticText*>(*part);
+            wxStaticText* aboutLabel = dynamic_cast<wxStaticText*>(*++part);
+            if (!titleLabel || !aboutLabel)
+                continue;
+            wxString title = titleLabel->GetLabelText();
+            title.EndsWith(tipSign, &title);
+            // The description in one line (Wrap put line breaks in it); a list's count after a dot: "VMware, IPsec ·
+            // Пока пусто".
+            wxString about = aboutLabel->IsShown() ? aboutLabel->GetLabelText() : wxString();
+            const bool list = std::any_of(m_wordLists.begin(), m_wordLists.end(),
+                                          [aboutLabel](const WordListOnPage& l) { return l.label == aboutLabel; });
+            if (list && about.Contains("\n"))
+                about = about.BeforeLast('\n') + wxString::FromUTF8(" \xC2\xB7 ") + about.AfterLast('\n');
+            about.Replace("\n", " ");
+            // Its hotkeys before it: the results show what is set ("break" finds the actions on Break).
+            wxString keys;
+            std::function<void(wxWindow*)> hotkeys = [&](wxWindow* parent) {
+                for (wxWindow* w : parent->GetChildren())
+                    if (HotkeyEditor* editor = dynamic_cast<HotkeyEditor*>(w))
+                    {
+                        const wxString shown = HotkeyDisplay(editor->Value());
+                        if (!shown.empty())
+                            keys += (keys.empty() ? "" : ", ") + shown;
+                    }
+                    else
+                        hotkeys(w);
+            };
+            hotkeys(card);
+            if (!keys.empty())
+                about = about.empty() ? keys : keys + wxString::FromUTF8(" \xC2\xB7 ") + about;
+            // Elsewhere: the details (the tooltip of the title), the section, the items of its list.
+            wxString more = titleLabel->GetToolTipText() + " " + m_titles[section];
+            if (const auto extra = m_searchExtra.find(card); extra != m_searchExtra.end())
+                more += " " + extra->second;
+            const wxString inTitle = Folded(title), visible = Folded(title + " " + about),
+                           all = visible + " " + Folded(more);
+            auto every = [&words](const wxString& text) {
+                return std::all_of(words.begin(), words.end(), [&text](const wxString& w) { return HasWord(text, w); });
+            };
+            const int tier = every(inTitle) ? 0 : every(visible) ? 1 : every(all) ? 2 : -1;
+            if (tier >= 0)
+                found[tier].push_back({ (int)section, card, title, about });
+        }
+    for (int tier : { 1, 2 })
+        found[0].insert(found[0].end(), found[tier].begin(), found[tier].end());
+    return found[0];
+}
+
+void SettingsFrame::Search()
+{
+    const wxString query = Folded(m_search->Value()).Strip(wxString::both);
+    if (query.empty())
+    {
+        if (m_searching)
+            ShowSection(m_section);
+        return;
+    }
+    // Nothing for the query as typed - the same keys in the other layouts: "pderb" finds "звуки" (the window's field
+    // may be typed in the wrong layout too, and the automatic switch waits for the end of a word).
+    std::vector<Found> found = FindCards(QueryWords(query));
+    wxString typedAs;
+    if (found.empty())
+        for (const wxString& other : OtherForms(query, SwitchLayouts(m_edit)))
+            if (!(found = FindCards(QueryWords(Folded(other)))).empty())
+            {
+                typedAs = other;
+                break;
+            }
+
+    wxWindowUpdateLocker noFlicker(this);
+    m_searchColumn->Clear(true);
+    m_searchHits.clear();
+    if (found.empty() || !typedAs.empty())
+    {
+        wxStaticText* note = FluentText(m_searchPage,
+                                        found.empty() ? T("Ничего не нашлось. Попробуйте другое слово")
+                                                      : wxString::Format(T("Найдено по «%s»: набрано в другой раскладке"),
+                                                                         typedAs),
+                                        9, g.text2);
+        m_searchColumn->Add(note, 0, wxLEFT | wxBOTTOM, FromDIP(4));
+    }
+    for (const Found& f : found)
+    {
+        SearchHit* hit = new SearchHit(m_searchPage, f.title, f.about, m_titles[f.section]);
+        const int at = (int)m_searchHits.size();
+        hit->onOpen = [this, section = f.section, card = f.card] { OpenFound(section, card); };
+        hit->onArrow = [this, at](bool down) {
+            const int next = at + (down ? 1 : -1);
+            if (next < 0)
+                m_search->FocusText(false);
+            else if (next < (int)m_searchHits.size())
+                m_searchHits[next]->SetFocus();
+        };
+        m_searchColumn->Add(hit, 0, wxEXPAND | wxBOTTOM, FromDIP(4));
+        m_searchHits.push_back(hit);
+    }
+    for (wxWindow* page : m_pages)
+        page->Hide();
+    m_searchPage->Show();
+    m_title->SetLabel(T("Результаты поиска"));
+    m_nav->Select(-1);
+    m_searching = true;
+    Layout();
+    m_searchPage->Scroll(0, 0);
+    m_searchPage->Layout();
+    m_searchPage->FitInside();
+}
+
+void SettingsFrame::OpenFound(int section, wxWindow* card)
+{
+    if (section < 0 || section >= (int)m_pages.size())
+        return;
+    ShowSection(section);
+    wxScrolledWindow* page = m_pages[section];
+    const wxWindowList& cards = page->GetChildren();
+    if (std::find(cards.begin(), cards.end(), card) == cards.end()) // gone meanwhile: the commands' cards are made anew
+        return;
+    // The card at the top of the page (positions as unscrolled: from the top).
+    page->Scroll(0, 0);
+    page->Layout();
+    page->FitInside();
+    int unitX = 0, unitY = 0;
+    page->GetScrollPixelsPerUnit(&unitX, &unitY);
+    if (unitY > 0)
+        page->Scroll(-1, std::max(0, (card->GetPosition().y - FromDIP(8)) / unitY));
+    // Its control takes the focus: Space or the arrows change it at once.
+    std::function<wxWindow*(wxWindow*)> control = [&](wxWindow* parent) -> wxWindow* {
+        for (wxWindow* child : parent->GetChildren())
+        {
+            if (!child->IsShown() || !child->IsEnabled())
+                continue;
+            if (wxWindow* inside = control(child))
+                return inside;
+            if (child->AcceptsFocus())
+                return child;
+        }
+        return nullptr;
+    };
+    if (wxWindow* focus = control(card))
+        focus->SetFocus();
+    // Outlined in the accent color for a moment: where it is on the page. Its own painting is the kit's (Card); this
+    // handler, bound later, comes first and leaves it the card while it is not outlined.
+    EndHighlight();
+    m_highlight = card;
+    card->Bind(wxEVT_PAINT, &SettingsFrame::PaintHighlight, this);
+    card->Refresh();
+    m_highlightTimer.StartOnce(2500);
+}
+
+void SettingsFrame::PaintHighlight(wxPaintEvent& e)
+{
+    wxWindow* card = static_cast<wxWindow*>(e.GetEventObject());
+    if (card != m_highlight.get())
+        return e.Skip();
+    wxAutoBufferedPaintDC dc(card);
+    dc.SetBackground(wxBrush(card->GetParent()->GetBackgroundColour()));
+    dc.Clear();
+    const wxRect r(card->GetClientSize());
+    const int ring = card->FromDIP(2);
+    FillRound(dc, r, card->FromDIP(6), g.accent);
+    FillRound(dc, wxRect(r).Deflate(ring), card->FromDIP(6) - ring, g.card);
+}
+
+void SettingsFrame::EndHighlight()
+{
+    m_highlightTimer.Stop();
+    if (wxWindow* card = m_highlight.get())
+    {
+        card->Unbind(wxEVT_PAINT, &SettingsFrame::PaintHighlight, this);
+        card->Refresh();
+    }
+    m_highlight.Release();
 }
 
 // ---------------------------------------------------------------------------------------------

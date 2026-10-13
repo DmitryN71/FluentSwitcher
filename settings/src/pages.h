@@ -10,11 +10,14 @@
 
 #include <wx/frame.h>
 #include <wx/timer.h>
+#include <wx/weakref.h>
 
 #include <functional>
+#include <unordered_map>
 #include <vector>
 
 namespace Update { struct State; } // Update.h
+class TextField;                     // textfield.h
 
 
 class SettingsFrame : public wxFrame
@@ -71,6 +74,23 @@ private:
     void CheckUpdateNow(FluentButton* button);
 
     void ShowSection(int section);
+    // The search (the field above the sections; 1.5.9): the cards with all the words of the query - in the title, the
+    // description, the details, the section's name, the items of the card's list or its hotkeys. Those with them in the
+    // title first, then in the visible texts, then elsewhere.
+    struct Found
+    {
+        int section;
+        wxWindow* card;
+        wxString title, about;
+    };
+    std::vector<Found> FindCards(const std::vector<wxString>& words) const;
+    // The page of the results for the field's text, made anew (the cards change: the commands, the hidden ones); an empty
+    // field - back to the section shown before.
+    void Search();
+    // A found card: its section, the card in sight and its control focused, the card outlined for a moment.
+    void OpenFound(int section, wxWindow* card);
+    void PaintHighlight(wxPaintEvent& e);
+    void EndHighlight();
     // A note if another action has the hotkey `one` too.
     wxString SameHotkey(const wxString& one, const char* except) const;
     void RefreshEngine();
@@ -111,6 +131,15 @@ private:
     wxBoxSizer* m_column = nullptr;
     std::vector<wxScrolledWindow*> m_pages;
     wxArrayString m_titles;
+
+    TextField* m_search = nullptr;
+    wxScrolledWindow* m_searchPage = nullptr;
+    wxBoxSizer* m_searchColumn = nullptr;
+    std::vector<wxWindow*> m_searchHits; // the rows of the results, in order
+    bool m_searching = false;            // the results are shown (m_section - the section to go back to)
+    std::unordered_map<wxWindow*, wxString> m_searchExtra; // a card -> the items of its list (Choice), for the search
+    wxWeakRef<wxWindow> m_highlight;     // the found card, outlined (the commands' cards may go meanwhile)
+    wxTimer m_highlightTimer;
 
     wxStaticText* m_updateLabel = nullptr; // the description of the "Обновления" card
     struct WordListOnPage

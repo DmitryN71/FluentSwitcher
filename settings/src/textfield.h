@@ -1,5 +1,5 @@
-// A one-line text box in the Windows 11 look (the kit has one for numbers only): the pages' fields and the field of the
-// word lists (wordlist.cpp).
+// A one-line text box in the Windows 11 look (the kit has one for numbers only): the pages' fields, the field of the
+// word lists (wordlist.cpp) and the search of the settings (pages.cpp).
 #pragma once
 
 #include "fluent_ui.h"
@@ -13,7 +13,9 @@ class TextField : public wxPanel
 {
 public:
     std::function<void()> onChange;
-    std::function<void()> onEnter; // with `enter`: Enter pressed in it
+    std::function<void()> onEnter;        // with `enter`: Enter pressed in it
+    std::function<void()> onFocus;        // the box got the focus
+    std::function<bool(int key)> onKey;   // a key pressed in it, before the box takes it: true - taken (the arrows)
 
     // enter: Enter goes to onEnter (otherwise the box does not take it); Esc empties a box that is not empty. maxLength -
     // characters at most: paths and pasted lists are long (a path of 73 characters was cut at 64 and never matched).
@@ -38,19 +40,32 @@ public:
                     e.Skip();
             });
         }
-        m_text->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& e) { Refresh(); e.Skip(); });
+        m_text->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& e) {
+            if (!onKey || !onKey(e.GetKeyCode()))
+                e.Skip();
+        });
+        m_text->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& e) {
+            Refresh();
+            if (onFocus)
+                onFocus();
+            e.Skip();
+        });
         m_text->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) { Refresh(); e.Skip(); });
         Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
             wxAutoBufferedPaintDC dc(this);
             dc.SetBackground(wxBrush(GetParent()->GetBackgroundColour()));
             dc.Clear();
-            FillInput(dc, wxRect(GetClientSize()), FromDIP(4), g.input, m_text->HasFocus() ? &g.accent : nullptr,
-                      FromDIP(2));
+            const wxSize size = GetClientSize();
+            FillInput(dc, wxRect(size), FromDIP(4), g.input, m_text->HasFocus() ? &g.accent : nullptr, FromDIP(2));
+            if (m_icon.IsOk())
+            {
+                const wxBitmap icon = m_icon.GetBitmapFor(this);
+                dc.DrawBitmap(icon, size.x - FromDIP(10) - icon.GetLogicalWidth(), (size.y - icon.GetLogicalHeight()) / 2,
+                              true);
+            }
         });
         Bind(wxEVT_SIZE, [this](wxSizeEvent& e) {
-            const wxSize size = GetClientSize();
-            const int h = m_text->GetBestSize().y;
-            m_text->SetSize(FromDIP(10), (size.y - h) / 2, size.x - FromDIP(20), h);
+            LayoutText();
             e.Skip();
         });
         Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) { m_text->SetFocus(); });
@@ -59,7 +74,29 @@ public:
     wxString Value() const { return m_text->GetValue(); }
     void Clear() { m_text->Clear(); } // onChange too
     void SetHint(const wxString& hint) { m_text->SetHint(hint); }
+    // An icon at the right end, grey: the magnifier of the search, as in Windows' own Settings (a Fluent path).
+    void SetIcon(const char* path)
+    {
+        m_icon = FluentIcon(path, g.text2);
+        LayoutText();
+        Refresh();
+    }
+    void FocusText(bool selectAll)
+    {
+        m_text->SetFocus();
+        if (selectAll)
+            m_text->SelectAll();
+    }
 
 private:
+    void LayoutText()
+    {
+        const wxSize size = GetClientSize();
+        const int h = m_text->GetBestSize().y;
+        const int icon = m_icon.IsOk() ? FromDIP(16 + 8) : 0;
+        m_text->SetSize(FromDIP(10), (size.y - h) / 2, size.x - FromDIP(20) - icon, h);
+    }
+
     wxTextCtrl* m_text;
+    wxBitmapBundle m_icon;
 };

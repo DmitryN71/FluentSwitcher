@@ -24,6 +24,8 @@ ICONS = [
     ("kIconQuit", "arrow_exit"),
     ("kIconDelete", "delete"),
     ("kIconDismiss", "dismiss"),
+    ("kIconSearch", "search"),
+    ("kIconChevron", "chevron_right"),
 ]
 
 # Drawn by hand in the same 20 px grid and 1 px strokes, with the arrow of arrow_exit: written after the others.

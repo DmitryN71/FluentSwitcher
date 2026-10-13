@@ -31,6 +31,10 @@ struct WordListWords
 // "Слов в списке: 12", "Приложений в списке: 2"; none - "Пока пусто".
 wxString WordListCount(WordKind kind, size_t n);
 
+// The same keys in the other layouts: "ghbdtn" - "привет" (the settings' search takes a query typed in the wrong layout
+// so too).
+wxArrayString OtherForms(const wxString& word, const std::vector<HKL>& layouts);
+
 // The window of a list. layouts: those that take part in the switch, for the other forms of the words. True - "Готово":
 // *list is the new list.
 bool EditWordList(wxWindow* parent, WordKind kind, const wxString& title, const wxString& about,

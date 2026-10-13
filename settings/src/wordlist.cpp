@@ -103,6 +103,8 @@ std::vector<Form> FormsOf(const wxString& word, const std::vector<HKL>& layouts)
     return forms;
 }
 
+}
+
 wxArrayString OtherForms(const wxString& word, const std::vector<HKL>& layouts)
 {
     wxArrayString texts;
@@ -111,6 +113,9 @@ wxArrayString OtherForms(const wxString& word, const std::vector<HKL>& layouts)
         texts.Add(forms[i].text);
     return texts;
 }
+
+namespace
+{
 
 bool IsLatin(const wxString& text)
 {

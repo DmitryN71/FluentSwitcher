@@ -616,6 +616,11 @@ const std::unordered_map<std::string, const char*>& English()
           "and more" },
         { "Лицензии", "Licenses" },
         { "Рядом с приложением нет файла THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.txt is not next to the app" },
+        // The search (pages.cpp)
+        { "Найти параметр", "Find a setting" },
+        { "Результаты поиска", "Search results" },
+        { "Ничего не нашлось. Попробуйте другое слово", "Nothing found. Try another word" },
+        { "Найдено по «%s»: набрано в другой раскладке", "Found for “%s”: typed in the other layout" },
     };
     return table;
 }

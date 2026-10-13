@@ -77,9 +77,11 @@ Name: "{autoprograms}\FluentSwitcher"; Filename: "{app}\FluentSwitcher.exe"
 
 [Run]
 Filename: "{app}\FluentSwitcher.exe"; Description: "{cm:LaunchProgram,FluentSwitcher}"; Flags: nowait postinstall skipifsilent
-; An update by a click (the program runs this installer with /VERYSILENT, src\UpdateInstall.h): start the new version,
-; it says "updated" and deletes this installer from the temporary folder.
-Filename: "{app}\FluentSwitcher.exe"; Parameters: "--updated"; Flags: nowait; Check: WizardSilent
+; An update by a click (the program runs this installer with /VERYSILENT as %TEMP%\FluentSwitcher-update\
+; FluentSwitcher-setup.exe, src\UpdateInstall.h - every version since 1.5.5): start the new version, it says "updated" and
+; deletes this installer from the temporary folder. Any other silent install starts nothing (mPaSoft, forum, 13.10.2026;
+; skipifsilent here would have left the program closed after an update by a click).
+Filename: "{app}\FluentSwitcher.exe"; Parameters: "--updated"; Flags: nowait; Check: UpdateByClick
 
 [UninstallRun]
 ; Close it, then remove its autostart (the Run value or the scheduled task - that one asks for administrator rights).
@@ -93,6 +95,14 @@ Type: filesandordirs; Name: "{app}\log"
 Type: dirifempty; Name: "{app}"
 
 [Code]
+// This installer was started by the program's own update (src\UpdateInstall.h): silent, from its folder in the temporary
+// files.
+function UpdateByClick: Boolean;
+begin
+  Result := WizardSilent and
+            (Pos('\fluentswitcher-update\fluentswitcher-setup.exe', Lowercase(ExpandConstant('{srcexe}'))) > 0);
+end;
+
 // Before files are replaced: close a running FluentSwitcher of this folder. Only 1.0 and newer know --quit;
 // an older test build would start a second copy instead.
 function PrepareToInstall(var NeedsRestart: Boolean): String;

@@ -71,7 +71,8 @@ free and open source under GPL-3.0.
   runs on that computer too, turn off "Advanced" – "Work in remote access windows" here, otherwise both copies fix
   the word.
 - The settings window and the flag's menu are in English, Russian and Ukrainian, the theme as in Windows, light or dark.
-  The settings window opens where and as large as it was closed.
+  The settings window opens where and as large as it was closed. The search of the settings (Ctrl+F) finds a
+  setting by the words of its title, description, list items and the hotkeys set, also typed in the other layout.
 - **One-click update**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
   it tells about a new version with a notification by the clock. A click on it (or "Update" in "About") downloads
   the new version from GitHub, checks its SHA-256 checksum and installs it without questions - with the installer

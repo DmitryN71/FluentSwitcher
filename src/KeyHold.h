@@ -531,7 +531,11 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		earlyDone = true; // посреди слова движок с CapsLock не решает (AutoSwitchEarly) - не держать зря
 	}
 	if (vk == VK_BACK) {
-		if (!word.empty()) word.pop_back();
+		// Опечатку в слове стёрли: посреди слова решать снова - "нет" движка было о слове с опечаткой ("facc" - "face").
+		if (!word.empty()) {
+			word.pop_back();
+			if (!capsLock) earlyDone = false;
+		}
 		if (word.size() < 2) firstKeys[1] = 0;
 		if (word.empty()) firstKeys[0] = 0;
 		return false;

@@ -84,8 +84,14 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
 
     switch (key.type) {
         case KEYTYPE_BACKSPACE: {
+            // Опечатку поправили в набираемом слове - оно проверяется как обычно: буфер стёр ту же букву (Дмитрий,
+            // 13.10.2026: "афсс", Backspace, "удшаею" - "facelift." не переключалось никогда). Не проверяется слово, где
+            // Backspace стёр больше него (пробел, слово перед ним: на экране может быть не то, что в буфере), или то, что
+            // движок в нём уже переключил посреди набора (стирают, может быть, его ошибку).
+            const bool inWord = !m_cycleList.TrailingWordKeys().empty();
+            const bool switchedHere = m_autoSwitched.early && m_autoSwitched.ends == m_wordEnds;
+            if (!inWord || switchedHere) m_autoWord.backspace = true;
             m_cycleList.DeleteLastSymbol();
-            m_autoWord.backspace = true;
             break;
         }
         default: {
@@ -439,7 +445,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     };
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return no("a password, a console or an excluded program", false);
-    if (m_autoWord.backspace) return no("the word was edited with Backspace");
+    if (m_autoWord.backspace) return no("Backspace past the word or in what was switched in it");
     if (m_autoWord.undone) return no("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
@@ -631,7 +637,7 @@ void WorkerImplement::AutoSwitchEarly() {
     if (!cfg->autoswitch || !cfg->autoswitch_early || !KeyHold::Allowed(m_holdId)) return never("off or too late");
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return never("a password, a console or an excluded program");
-    if (m_autoWord.backspace) return never("the word was edited with Backspace");
+    if (m_autoWord.backspace) return never("Backspace past the word or in what was switched in it");
     if (m_autoWord.undone) return never("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();

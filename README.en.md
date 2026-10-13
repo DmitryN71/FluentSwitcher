@@ -20,7 +20,7 @@ free and open source under GPL-3.0.
   too: "нфдлштп" - "yalking". A word with hyphens too, also with a part of one letter: "у-ьфшд" - "e-mail",
   "d-nhtnmb[" - "в-третьих". A word in CAPITALS from four letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
   "ЗИМА ВОЗМЕЗДИЯ". Words with digits, abbreviations (USB, ВДНХ), a word typed again after the layout was switched by
-  hand right after a fix, a word after Backspace, passwords, the console (but for the console apps listed, such as far.exe) and the apps of "No automatic switch in apps" are left alone; fixed
+  hand right after a fix, passwords, the console (but for the console apps listed, such as far.exe) and the apps of "No automatic switch in apps" are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word
   you keep fixing by hand goes to "Always switch" the third time, a word with hyphens too (e-Residency, ВСХВ-ВДНХ-ВВЦ). The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked. The journal
   of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the

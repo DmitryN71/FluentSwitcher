@@ -230,6 +230,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 										pending_double_vk = vkCode;
 										pending_double_time.SetToNow();
 										LOG_ANY("double {} waits for the release", LogHotKey(key));
+										Worker()->PostMsg([](auto w) { w->DoublePending(); });
 										break;
 									}
 									msg_hotkey.hotkey = key;

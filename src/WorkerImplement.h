@@ -42,6 +42,9 @@ class WorkerImplement {
         m_twoCaps = {};      // (и указатель на клавишу в буфере больше не годен)
         m_autoWord.twoCapsUndone = false;
     }
+    // Второе нажатие "дважды" уже есть (сработает на отпускание): одиночное первое, отложенное ради него, не делать -
+    // даже если второе держат дольше, чем оно ждёт (HookerKeyboard; форум, init0, 13.10.2026).
+    void DoublePending() { m_lastHotKeyTime = GetTickCount64(); }
     // Следующая раскладка у окна, которое сейчас впереди (щелчок по флагу у часов, TrayIcon.h).
     void SwitchToNextLayout() {
         IFS_LOG(AnalizeTopWnd());

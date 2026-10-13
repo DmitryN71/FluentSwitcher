@@ -1338,6 +1338,16 @@ TStatus WorkerImplement::RunProcess(HotKeyType hk, bool after_wait) {
     RETURN_SUCCESS;
 }
 
+// Notepad++ и другие редакторы на Scintilla без выделения копируют по Ctrl+C всю строку: "выделенное" оказывалось этой
+// строкой, и исправленная вставлялась на место курсора - строка дописывалась (форум, init0, 13.10.2026: "GhbdtnПривет",
+// когда набранного слова уже не было и "Shift дважды" взялся за выделенное). Выделено ли - спрашиваем сам редактор.
+static bool NothingSelectedInScintilla(HWND focus) {
+    wchar_t cls[32] = {};
+    if (!focus || !GetClassNameW(focus, cls, (int)std::size(cls)) || wcsncmp(cls, L"Scintilla", 9) != 0) return false;
+    DWORD_PTR empty = 0;
+    return SendMessageTimeoutW(focus, 2650 /*SCI_GETSELECTIONEMPTY*/, 0, 0, SMTO_ABORTIFHUNG, 200, &empty) && empty;
+}
+
 void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
     // Нажато среди придержанных: отпустить их, когда сочетание сделано (или пропущено).
     struct Release {
@@ -1518,6 +1528,10 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         // REVERT AND CHANGE LAYOUT
 
         if (Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine)) {
+            if (hk != hk_RevertLine && NothingSelectedInScintilla(topWndInfo2.hwnd_top)) {
+                LOG_ANY("nothing selected (Scintilla): skip");
+                RETURN_SUCCESS;
+            }
             // "Буфер занят" - до конца восстановления (GetClipStringCallback). Если буфер так и не
             // изменится (ничего не выделено), сигнал снимется сам через 3 с.
             int busy = m_clipWorker.busy.Set();

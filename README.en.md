@@ -41,7 +41,8 @@ free and open source under GPL-3.0.
   (Shift + CapsLock, Ctrl + CapsLock) work, CAPITALS come with a hotkey of your own for "Press CapsLock".
 - **Fixes the text from the start of the line**: selects from the cursor to the start of the line and fixes it.
 - Fixes several last words or all recent text; UPPER / lower case, inverted case and transliteration for the
-  selection ("Отчёт за май" - "Otchet za may", Ukrainian by the official table).
+  selection ("Отчёт за май" - "Otchet za may", Ukrainian by the official table; Latin without Cyrillic - back:
+  "ZIMA" - "ЗИМА").
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
   a mouse click; a flag (regular or waving) or the letters on a dark badge, below or above the cursor, four sizes, transparency. In
   browsers only in text fields. Set apart from the tray icon.

@@ -116,4 +116,79 @@ inline std::wstring Convert(const std::wstring& s, bool ukrainian) {
 	return out;
 }
 
+// Обратно, латиницу - кириллицей (Дмитрий, 13.10.2026: "ZIMA" - "ЗИМА"), когда в выделенном кириллицы нет. Таблица - та же,
+// русская, и распространённые другие написания: shch zh kh ts ch sh yu ya yo ye ju ja jo - одной буквой, j - й, h - х,
+// c q - к, w - в, x - кс, апостроф между буквами - ь (Ol'ga - Ольга); y после гласной - й (may - май), после согласной -
+// ы (tsvety - цветы). Не всё обратимо: ь, ъ и ё не вернуть, е и э - одна e (стала е). Расширение файла в конце (.docx)
+// остаётся латиницей.
+inline std::wstring ToCyrillic(const std::wstring& s) {
+	static const std::pair<const wchar_t*, const wchar_t*> table[] = {
+		{ L"shch", L"щ" }, { L"zh", L"ж" }, { L"kh", L"х" }, { L"ts", L"ц" }, { L"ch", L"ч" }, { L"sh", L"ш" },
+		{ L"yu", L"ю" }, { L"ya", L"я" }, { L"yo", L"ё" }, { L"ye", L"е" }, { L"ju", L"ю" }, { L"ja", L"я" },
+		{ L"jo", L"ё" },
+		{ L"a", L"а" }, { L"b", L"б" }, { L"v", L"в" }, { L"g", L"г" }, { L"d", L"д" }, { L"e", L"е" }, { L"z", L"з" },
+		{ L"i", L"и" }, { L"j", L"й" }, { L"k", L"к" }, { L"l", L"л" }, { L"m", L"м" }, { L"n", L"н" }, { L"o", L"о" },
+		{ L"p", L"п" }, { L"r", L"р" }, { L"s", L"с" }, { L"t", L"т" }, { L"u", L"у" }, { L"f", L"ф" }, { L"h", L"х" },
+		{ L"c", L"к" }, { L"q", L"к" }, { L"w", L"в" }, { L"x", L"кс" },
+	};
+	auto latin = [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z'); };
+	auto low = [](wchar_t c) { return (c >= L'A' && c <= L'Z') ? (wchar_t)(c + 32) : c; };
+	auto vowel = [](wchar_t c) { return c && wcschr(L"аеёиоуыэюя", c) != nullptr; };
+	// Расширение в конце: точка и до пяти латинских букв и цифр.
+	size_t end = s.size();
+	if (const size_t dot = s.rfind(L'.'); dot != std::wstring::npos && s.size() - dot - 1 >= 1 && s.size() - dot - 1 <= 5 &&
+		std::all_of(s.begin() + dot + 1, s.end(), [&](wchar_t c) { return latin(c) || iswdigit(c); }))
+		end = dot;
+	std::wstring out;
+	for (size_t i = 0; i < end;) {
+		const wchar_t c = s[i];
+		if (c == L'\'' && i > 0 && i + 1 < end && latin(s[i - 1]) && latin(s[i + 1])) {
+			out += (latin(s[i - 1]) && s[i - 1] <= L'Z' && s[i + 1] <= L'Z') ? L'Ь' : L'ь';
+			i++;
+			continue;
+		}
+		if (!latin(c)) {
+			out += c;
+			i++;
+			continue;
+		}
+		size_t len = 1;
+		std::wstring piece;
+		const wchar_t prevOut = out.empty() ? 0 : (wchar_t)(UINT_PTR)CharLowerW((LPWSTR)(UINT_PTR)out.back());
+		if (low(c) == L'y' && !(i + 1 < end && wcschr(L"uaoe", low(s[i + 1])))) {
+			piece = vowel(prevOut) || !(i > 0 && latin(s[i - 1])) ? L"й" : L"ы";
+		}
+		else {
+			for (const auto& [from, to] : table) {
+				const size_t n = wcslen(from);
+				if (i + n > end) continue;
+				size_t k = 0;
+				while (k < n && low(s[i + k]) == from[k]) k++;
+				if (k == n) {
+					len = n;
+					piece = to;
+					break;
+				}
+			}
+		}
+		if (piece.empty()) {
+			out += c;
+			i++;
+			continue;
+		}
+		// Регистр: первая латинская прописная - прописная; ПРОПИСНЫМИ (и следующая буква прописная) - вся прописная.
+		if (c <= L'Z') {
+			const bool nextUpper = i + len < end && latin(s[i + len]) && s[i + len] <= L'Z';
+			const bool restUpper = std::all_of(s.begin() + i, s.begin() + i + len, [](wchar_t x) { return x <= L'Z'; });
+			const bool allCaps = len > 1 ? restUpper : nextUpper || (i > 0 && latin(s[i - 1]) && s[i - 1] <= L'Z');
+			for (size_t k = 0; k < piece.size(); k++)
+				if (k == 0 || allCaps) piece[k] = (wchar_t)(UINT_PTR)CharUpperW((LPWSTR)(UINT_PTR)piece[k]);
+		}
+		out += piece;
+		i += len;
+	}
+	out.append(s, end, std::wstring::npos);
+	return out;
+}
+
 }

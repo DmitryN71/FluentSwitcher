@@ -1171,12 +1171,16 @@ TStatus WorkerImplement::GetClipStringCallback() {
             }
         } else if (m_lastRevertRequest == hk_TranslitSelected) {
             // Транслитом (Translit.h): кириллица - латиницей. Украинский - по его буквам или по украинской раскладке.
+            // Кириллицы нет - обратно, латиница кириллицей ("ZIMA" - "ЗИМА").
             const bool uk = Translit::UkrainianText(data) || PRIMARYLANGID(LOWORD((UINT_PTR)CurLay())) == LANG_UKRAINIAN;
             std::wstring latin = Translit::Convert(data, uk);
+            const bool back = latin == data;
+            if (back) latin = Translit::ToCyrillic(data);
             if (latin == data) {
-                LOG_ANY(L"translit: no Cyrillic. skip");
+                LOG_ANY(L"translit: no letters to change. skip");
             } else {
-                LOG_ANY(L"translit ({}): {} -> {} chars", uk ? L"Ukrainian" : L"Russian", data.size(), latin.size());
+                LOG_ANY(L"translit ({}): {} -> {} chars", back ? L"back to Cyrillic" : uk ? L"Ukrainian" : L"Russian",
+                        data.size(), latin.size());
                 TextFixed();
                 RequestWaitClip(CLRMY_hk_INSERT);
                 m_clipWorker.setString(latin);

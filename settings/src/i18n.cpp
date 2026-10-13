@@ -39,6 +39,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Если выделенное уже прописными – строчными", "If it is uppercase already, to lowercase" },
         { "Выделенное иНВЕРСИЕЙ рЕГИСТРА", "Selection in iNVERTED cASE" },
         { "Для текста, набранного с нажатым CapsLock", "For text typed with CapsLock on" },
+        { "Выделенное транслитом", "Selection in transliteration" },
+        { "Кириллица латиницей – например, для имён файлов и папок: «Отчёт за май» – «Otchet za may». "
+          "Украинский – по официальной таблице: «Київ» – «Kyiv»",
+          "Cyrillic in Latin letters - for file and folder names, say: \"Отчёт за май\" - \"Otchet za may\". "
+          "Ukrainian - by the official table: \"Київ\" - \"Kyiv\"" },
         { "Следующая раскладка", "Next layout" },
         { "Переключает раскладку без исправления текста. Можно и одним Shift, как в Punto: он срабатывает при "
           "отпускании, а с буквой – нет",

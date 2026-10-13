@@ -4,6 +4,7 @@
 #include "AutoSwitch.h"
 #include "WordStart.h"
 #include "FieldText.h"
+#include "Translit.h"
 
 #include <atlbase.h>
 #include <UIAutomation.h>
@@ -1168,6 +1169,20 @@ TStatus WorkerImplement::GetClipStringCallback() {
                 AutoLayoutIsOurs();
                 pasted = true;
             }
+        } else if (m_lastRevertRequest == hk_TranslitSelected) {
+            // Транслитом (Translit.h): кириллица - латиницей. Украинский - по его буквам или по украинской раскладке.
+            const bool uk = Translit::UkrainianText(data) || PRIMARYLANGID(LOWORD((UINT_PTR)CurLay())) == LANG_UKRAINIAN;
+            std::wstring latin = Translit::Convert(data, uk);
+            if (latin == data) {
+                LOG_ANY(L"translit: no Cyrillic. skip");
+            } else {
+                LOG_ANY(L"translit ({}): {} -> {} chars", uk ? L"Ukrainian" : L"Russian", data.size(), latin.size());
+                TextFixed();
+                RequestWaitClip(CLRMY_hk_INSERT);
+                m_clipWorker.setString(latin);
+                IFS_LOG(ProcessRevert({.flags = SW_CLIENT_CTRLV}));
+                pasted = true;
+            }
         } else if (data.length() > 100) {
             LOG_ANY(L"TOO MANY TO REVERT. SKIP");
         } else if (m_lastRevertRequest == hk_toUpperSelected || m_lastRevertRequest == hk_InvertCaseSelected) {
@@ -1370,7 +1385,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
         LOG_ANY("hotkey hold {} already let go", keyData.holdId);
         m_holdId = 0;
         if (IsNeedSavedWords(hk) ||
-            Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine)) {
+            Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine, hk_TranslitSelected)) {
             LOG_ANY("skip hotkey {}: typed text went on meanwhile", LogHotKey(key));
             // Сочетание всё же было: одиночное нажатие, отложенное ради "дважды", не должно сработать вместо него.
             m_lastHotKeyTime = GetTickCount64();
@@ -1527,7 +1542,7 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
 
         // REVERT AND CHANGE LAYOUT
 
-        if (Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine)) {
+        if (Utils::is_in(hk, hk_RevertSelelected, hk_toUpperSelected, hk_InvertCaseSelected, hk_RevertLine, hk_TranslitSelected)) {
             if (hk != hk_RevertLine && NothingSelectedInScintilla(topWndInfo2.hwnd_top)) {
                 LOG_ANY("nothing selected (Scintilla): skip");
                 RETURN_SUCCESS;

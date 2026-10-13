@@ -43,6 +43,7 @@ public:
 		// менеджера буфера (FluentClipper: Ctrl+Shift+Insert).
 		add(hk_RevertLine);
 		add(hk_ToggleAutoswitch);
+		add(hk_TranslitSelected);
     }
 
     std::set <std::wstring> disableInPrograms;

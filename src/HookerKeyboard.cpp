@@ -300,6 +300,12 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				if (!possible_hk_up_current.IsEmpty() && msg_hotkey.IsEmpty()) {
 					msg_hotkey.hotkey = possible_hk_up_current;
 					msg_hotkey.hk = possible_hktype_up;
+					// Есть "дважды" той же клавишей ("Следующая раскладка" - Shift, "Исправить последнее слово" - Shift
+					// дважды): одиночное ждёт, не будет ли второго нажатия, как одиночное на нажатие (ниже, delay). Иначе
+					// раскладка переключалась уже на первом нажатии двойного, а потом слово исправлялось - и у кого-то
+					// исправление сталкивалось с переключением: слово не стиралось, а дописывалось (форум, init0, 13.10.2026).
+					for (const auto& [hk, key] : cfg->All_hot_keys())
+						if (key.IsDouble() && check_is_our_key(key, possible_hk_up_current)) double_exists = true;
 				}
 			//}
 

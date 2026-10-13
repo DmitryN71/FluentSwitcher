@@ -188,6 +188,9 @@ public:
 	// флагу) и исправление текста.
 	int sound_switch = 0;
 	int sound_fix = 0;
+	// Тишина перед звуком в Bluetooth-наушниках, мс: за неё они просыпаются (LayoutSound::SlowStart). 0,2 с хватает не
+	// всем (форум, WinnyS, 13.10.2026: HIPER TWS HIP APX9 - не слышно и с ней).
+	int sound_bluetooth_ms = 200;
 	// ДВе ЗАглавные (TwoCaps.h): исправлять после пробела; свои исключения (UTF-8).
 	bool two_caps = false;
 	// Английское i отдельным словом - I (TwoCaps::LoneI; не в консоли и не в редакторах кода).

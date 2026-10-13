@@ -55,7 +55,8 @@ free and open source under GPL-3.0.
 - **Sounds**, as in Punto: a click when the layout is switched (with a hotkey of FluentSwitcher or Windows, with a
   click on the tray icon) and a double click when FluentSwitcher fixes text, each with a volume of its own. The sounds
   are the project's own (tools/make_sounds.py) and can be replaced with any WAV files in `sounds`; with `en.wav`,
-  `ru.wav` each language gets a sound of its own.
+  `ru.wav` each language gets a sound of its own. They are heard in Bluetooth headphones too (a pause before a sound
+  lets them wake up; its length can be set) and through a remote desktop.
 - **Hotkeys on any keys**: left and right Ctrl, Shift, Alt, Win apart, double presses ("Shift twice"), firing on
   release, two hotkeys per action. Recorded in the settings window.
 - **The layout with one Shift**, as in Punto: "Next layout" on a single Shift (left, right or either) fires on

@@ -3,7 +3,8 @@
 // Переход в окно с другой раскладкой - не переключение, без звука. Файлы - в папке sounds рядом с программой:
 // переключение - <ru-ru>.wav, <ru>.wav, иначе switch.wav (свой звук языка - по желанию); исправление - fix.wav.
 // Любой можно заменить своим WAV. Громкость - уровнем самих отсчётов (PCM 8/16 бит), другие форматы - как есть.
-// Звук идёт в Bluetooth-наушники или через удалённый рабочий стол - сначала 0,2 с тишины (SlowStart).
+// Звук идёт в Bluetooth-наушники или через удалённый рабочий стол - сначала тишина (SlowStart): в наушники - sound_bluetooth_ms
+// (0,2 с по умолчанию), через удалённый стол - 0,2 с.
 #pragma once
 
 #include <mmsystem.h>
@@ -21,7 +22,7 @@
 class LayoutSound {
 	HKL m_last = 0;
 	ULONGLONG m_fixAt = 0; // когда началось последнее исправление: его смена раскладки - без звука переключения
-	std::map<std::wstring, std::vector<char>> m_cache; // "<файл>|<громкость>|<тишина>" -> WAV в памяти (играет из неё)
+	std::map<std::wstring, std::vector<char>> m_cache; // "<файл>|<громкость>|<причина тишины>|<мс>" -> WAV в памяти (играет из неё)
 
 public:
 	// Bluetooth-наушники, пока молчат, засыпают, и начало звука после паузы теряется; так же - звук удалённого рабочего
@@ -30,7 +31,8 @@ public:
 	// вывод просыпается. Устройство - вывод по умолчанию сейчас: его перечислитель BTHENUM (наушники), BTHHFENUM (гарнитура).
 	// В наушниках уже что-то играет (музыка, видео) - они не спят: тишина только задержала бы щелчок. Сама тишина - 0,2 с
 	// (в 1.5.8-test1 было 0,3 - Дмитрий: "щелчок слышно, но прямо с заметной задержкой"; звук исправления в 125 мс
-	// пропадал целиком - значит, теряется больше 0,125 с).
+	// пропадал целиком - значит, теряется больше 0,125 с). Наушникам, которым её мало (WinnyS, 13.10.2026: отчёт - тишина
+	// была, щелчка не слышно), - больше: sound_bluetooth_ms, окно настроек, «Звуки».
 	static constexpr int kWakeMs = 200;
 	static const wchar_t* SlowStart() {
 		if (GetSystemMetrics(SM_REMOTESESSION)) return L"a remote session";
@@ -218,7 +220,9 @@ private:
 		volume = std::clamp(volume, 0, 100);
 		if (path.empty() || volume == 0) return;
 		const wchar_t* slow = SlowStart();
-		const std::wstring key = path + L"|" + std::to_wstring(volume) + (slow ? std::wstring(L"|") + slow : L"");
+		const int wake = !slow ? 0 : Remote(slow) ? kWakeMs : std::clamp(conf_get_unsafe()->sound_bluetooth_ms, 0, 3000);
+		const std::wstring key = path + L"|" + std::to_wstring(volume) +
+		                         (slow ? std::wstring(L"|") + slow + L"|" + std::to_wstring(wake) : L"");
 		auto it = m_cache.find(key);
 		if (it == m_cache.end()) {
 			std::ifstream f(path, std::ios::binary);
@@ -231,12 +235,12 @@ private:
 			}
 			if (slow) {
 				if (Remote(slow)) Soften(wav);
-				if (auto padded = WithSilence(wav, kWakeMs); !padded.empty()) wav = std::move(padded);
+				if (auto padded = WithSilence(wav, wake); wake > 0 && !padded.empty()) wav = std::move(padded);
 			}
 			it = m_cache.emplace(key, std::move(wav)).first;
 		}
 		if (slow) {
-			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({}){}", path, volume, kWakeMs, slow,
+			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({}){}", path, volume, wake, slow,
 			        Remote(slow) ? L", softened" : L"");
 		}
 		else {

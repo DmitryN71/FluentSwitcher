@@ -121,6 +121,7 @@ namespace nlohmann {
 			tray_double_click,
 			sound_switch,
 			sound_fix,
+			sound_bluetooth_ms,
 			two_caps,
 			fix_lone_i,
 			two_caps_exceptions,

@@ -621,6 +621,13 @@ const std::unordered_map<std::string, const char*>& English()
         { "Результаты поиска", "Search results" },
         { "Ничего не нашлось. Попробуйте другое слово", "Nothing found. Try another word" },
         { "Найдено по «%s»: набрано в другой раскладке", "Found for “%s”: typed in the other layout" },
+        { "Пауза перед звуком в Bluetooth-наушниках", "Pause before a sound in Bluetooth headphones" },
+        { "Наушники засыпают в тишине и пропускают начало звука: не слышно щелчка – увеличьте паузу, щелчок запаздывает – уменьшите. Пока в них что-то играет, паузы нет", "Headphones fall asleep in silence and miss the start of a sound: no click heard - make the pause longer, the click comes late - make it shorter. While something plays in them, there is no pause" },
+        { "Без паузы", "No pause" },
+        { "0,1 секунды", "0.1 seconds" },
+        { "0,2 секунды", "0.2 seconds" },
+        { "0,5 секунды", "0.5 seconds" },
+        { "1 секунда", "1 second" },
     };
     return table;
 }

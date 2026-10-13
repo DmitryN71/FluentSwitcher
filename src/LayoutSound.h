@@ -102,6 +102,64 @@ public:
 		return {};
 	}
 
+	static bool Remote(const wchar_t* slow) { return slow && wcscmp(slow, L"a remote session") == 0; }
+
+	// Удалённый рабочий стол сжимает звук: резкий почти предельный щелчок (switch.wav: пик -0,4 дБ, начинается сразу с
+	// большого отсчёта) там искажался и звучал "дико громким", а звук исправления - тише и мягче - был обычным (Дмитрий,
+	// 13.10.2026, по RDP из дома, 1.5.8). Там у звука плавное начало (2 мс) и пик не выше kRemotePeak (-9 дБ от предела).
+	// PCM 8/16 бит; другое - как есть (false).
+	static constexpr double kRemotePeak = 0.35;
+	static bool Soften(std::vector<char>& wav) {
+		if (wav.size() < 12 || memcmp(wav.data(), "RIFF", 4) != 0 || memcmp(wav.data() + 8, "WAVE", 4) != 0) return false;
+		WORD format = 0, block = 0, bits = 0;
+		DWORD rate = 0;
+		size_t at = 12;
+		while (at + 8 <= wav.size()) {
+			DWORD size = 0;
+			memcpy(&size, wav.data() + at + 4, 4);
+			const size_t body = at + 8;
+			if (body + size > wav.size()) return false;
+			if (memcmp(wav.data() + at, "fmt ", 4) == 0 && size >= 16) {
+				memcpy(&format, wav.data() + body, 2);
+				memcpy(&rate, wav.data() + body + 4, 4);
+				memcpy(&block, wav.data() + body + 12, 2);
+				memcpy(&bits, wav.data() + body + 14, 2);
+			}
+			else if (memcmp(wav.data() + at, "data", 4) == 0) {
+				if (format != WAVE_FORMAT_PCM || !block || (bits != 8 && bits != 16)) return false;
+				const size_t bytes = bits / 8, count = size / bytes, perFrame = block / bytes;
+				auto get = [&](size_t i) -> double {
+					if (bytes == 2) {
+						short v;
+						memcpy(&v, wav.data() + body + i * 2, 2);
+						return v / 32768.0;
+					}
+					return ((unsigned char)wav[body + i] - 128) / 128.0;
+				};
+				auto put = [&](size_t i, double v) {
+					v = std::clamp(v, -1.0, 32767.0 / 32768.0);
+					if (bytes == 2) {
+						const short s = (short)std::lround(v * 32768.0);
+						memcpy(wav.data() + body + i * 2, &s, 2);
+					}
+					else
+						wav[body + i] = (char)(unsigned char)std::lround(v * 128.0 + 128.0);
+				};
+				double peak = 0;
+				for (size_t i = 0; i < count; i++) peak = (std::max)(peak, std::abs(get(i)));
+				const double gain = peak > kRemotePeak ? kRemotePeak / peak : 1.0;
+				const double fade = (std::max)(1.0, rate * 2 / 1000.0); // кадров в 2 мс
+				for (size_t i = 0; i < count; i++) {
+					const double frame = (double)(i / perFrame);
+					put(i, get(i) * gain * (std::min)(1.0, frame / fade));
+				}
+				return true;
+			}
+			at = body + size + (size & 1);
+		}
+		return false;
+	}
+
 private:
 	static std::wstring Lower(std::wstring s) {
 		for (auto& c : s) c = (wchar_t)towlower(c);
@@ -160,7 +218,7 @@ private:
 		volume = std::clamp(volume, 0, 100);
 		if (path.empty() || volume == 0) return;
 		const wchar_t* slow = SlowStart();
-		const std::wstring key = path + L"|" + std::to_wstring(volume) + (slow ? L"|wake" : L"");
+		const std::wstring key = path + L"|" + std::to_wstring(volume) + (slow ? std::wstring(L"|") + slow : L"");
 		auto it = m_cache.find(key);
 		if (it == m_cache.end()) {
 			std::ifstream f(path, std::ios::binary);
@@ -172,12 +230,14 @@ private:
 				return;
 			}
 			if (slow) {
+				if (Remote(slow)) Soften(wav);
 				if (auto padded = WithSilence(wav, kWakeMs); !padded.empty()) wav = std::move(padded);
 			}
 			it = m_cache.emplace(key, std::move(wav)).first;
 		}
 		if (slow) {
-			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({})", path, volume, kWakeMs, slow);
+			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({}){}", path, volume, kWakeMs, slow,
+			        Remote(slow) ? L", softened" : L"");
 		}
 		else {
 			LOG_ANY(L"sound: {} at {}%", path, volume);

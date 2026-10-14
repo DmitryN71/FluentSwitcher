@@ -69,12 +69,27 @@ inline std::vector<std::wstring> Suggest(const std::wstring& word, const std::ws
 
 // Слово как набрано или строчными: имена собственные ("Москва") словарь знает только с заглавной, а "Ghbdtn" надо
 // проверить и как "ghbdtn" (автопереключение, AutoSwitch.h).
+// Английские слова, которые словарь знает только с заглавной, а пишут их часто строчными: месяцы, дни недели, языки и
+// народы (Дмитрий, 14.10.2026: "Огдн" становилось July, а "огдн" - нет: "july" для словаря ошибка). Только они: любое
+// строчное, которое словарь знает с заглавной, сделало бы словами и "pu", "ip", "oder", а автопереключение - чаще
+// ошибающимся на опечатках (test_autoswitch, опечатки в HANDOFF: 152 ошибки из 38 тысяч стали 187).
+inline bool CapitalizedEnglish(const std::wstring& lower) {
+	static const wchar_t* const kWords[] = { L"january", L"february", L"march", L"april", L"may", L"june", L"july",
+		L"august", L"september", L"october", L"november", L"december", L"monday", L"tuesday", L"wednesday", L"thursday",
+		L"friday", L"saturday", L"sunday", L"english", L"russian", L"ukrainian", L"german", L"french", L"spanish",
+		L"italian", L"chinese", L"japanese", L"american", L"british", L"european", L"christmas" };
+	for (const wchar_t* w : kWords)
+		if (lower == w) return true;
+	return false;
+}
+
 inline Result CheckAnyCase(const std::wstring& word, const std::wstring& language) {
 	const Result asTyped = Check(word, language, true);
 	if (asTyped != Result::NotWord) return asTyped;
 	bool lower = true; // набрано строчными - второй раз спрашивать то же незачем
 	for (wchar_t c : word) lower = lower && !IsCharUpperW(c);
-	return lower ? asTyped : Check(word, language);
+	if (!lower) return Check(word, language);
+	return language.starts_with(L"en") && CapitalizedEnglish(word) ? Result::Word : asTyped;
 }
 
 // То же, но и для набранного ПРОПИСНЫМИ: как набрано словарь его пропускает (аббревиатура - не ошибка, "GHBDTN" для

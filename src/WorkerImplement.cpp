@@ -517,8 +517,11 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
                 Journal("switched", typed, typed.substr(0, keep) + there.substr(keep), "a number: its signs only, the layout stays");
             return true;
         }
-        // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a.
-        const bool force = AutoSwitch::Forced(typed, there, forced) && !AutoSwitch::Excepted(typed, there, exceptions);
+        // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a. Так же - адрес, набранный не
+        // в той раскладке, если набранное не слово своего языка: "еюьу" - t.me (AutoSwitch::Address; "июля" там - "b.kz").
+        const bool address = AutoSwitch::Address(typed, there) && dictionary(lay)(typed) != SpellCheck::Result::Word;
+        const bool force = (address || AutoSwitch::Forced(typed, there, forced)) &&
+                           !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
         if (!force) {
             // ПРОПИСНЫМИ от четырёх букв ("DJPVTPLBZ" - "ВОЗМЕЗДИЯ") - по слову с заглавной, не аббревиатура.
@@ -561,7 +564,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         if (IsPasswordUia()) return no("a password field", false);
         if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
         KeyHold::Claimed claimed{ m_holdId };
-        LOG_ANY(L"autoswitch: {} -> {}{}", typed, there, force ? L" (switch always)" : L"");
+        LOG_ANY(L"autoswitch: {} -> {}{}", typed, there, address && force ? L" (an address)" : force ? L" (switch always)" : L"");
         m_autoNo = {};
         // Переводятся те же клавиши, что проверены (слово до пробела), с короткими словами перед ним.
         const size_t total = m_cycleList.Size();

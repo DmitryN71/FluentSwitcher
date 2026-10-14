@@ -284,6 +284,43 @@ inline int NumberFix(const std::wstring& typed, const std::wstring& there) {
 	return -1;
 }
 
+// Адрес, набранный не в той раскладке (форум, Maz, 14.10.2026: "еюьу" - t.me): там - имя сайта или почта, буквы, цифры и
+// дефисы через точки, в конце - известная зона (ya.ru, vk.com, t.me, www.google.com, ivan@mail.ru), а набрано
+// кириллицей. Слово со знаком внутри иначе словом не считается (Skip: "not one word in the other layout"). Знак после
+// адреса - нет: перепечатка сделала бы из русской запятой "?". Что набранное - не слово своего языка ("июля" там -
+// "b.kz"), проверяет движок по словарю.
+inline bool Address(const std::wstring& typed, const std::wstring& there) {
+	if (typed.size() != there.size() || there.size() < 4) return false;
+	if (std::none_of(typed.begin(), typed.end(), [](wchar_t c) { return TwoCaps::ScriptOf(c) == TwoCaps::Script::Cyrillic; }))
+		return false;
+	static const wchar_t* const kZones[] = { L"ru", L"com", L"me", L"net", L"org", L"io", L"su", L"by", L"ua", L"kz", L"uz",
+		L"info", L"biz", L"pro", L"app", L"dev", L"ai", L"tv", L"co", L"cc", L"to", L"gg", L"fm", L"ly", L"xyz", L"online",
+		L"site", L"store", L"shop", L"tech", L"top", L"club", L"de", L"uk", L"us", L"eu", L"am", L"ge", L"md", L"kg", L"az",
+		L"lv", L"lt", L"ee", L"pl", L"cz", L"fr", L"it", L"es", L"nl", L"jp", L"cn" };
+	const std::wstring a = Lower(there);
+	auto ascii = [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9'); };
+	std::wstring host = a;
+	if (const size_t at = a.find(L'@'); at != std::wstring::npos) {
+		const std::wstring user = a.substr(0, at);
+		if (user.empty() || !std::all_of(user.begin(), user.end(), [&](wchar_t c) { return ascii(c) || wcschr(L"._-+", c); }))
+			return false;
+		host = a.substr(at + 1);
+	}
+	std::vector<std::wstring> labels;
+	for (size_t from = 0;;) {
+		const size_t dot = host.find(L'.', from);
+		labels.push_back(host.substr(from, dot == std::wstring::npos ? std::wstring::npos : dot - from));
+		if (dot == std::wstring::npos) break;
+		from = dot + 1;
+	}
+	if (labels.size() < 2) return false;
+	for (const auto& l : labels)
+		if (l.empty() || l.front() == L'-' || l.back() == L'-' ||
+		    !std::all_of(l.begin(), l.end(), [&](wchar_t c) { return ascii(c) || c == L'-'; }))
+			return false;
+	return std::ranges::any_of(kZones, [&](const wchar_t* z) { return labels.back() == z; });
+}
+
 // Почему слово не трогаем; nullptr - можно спрашивать словари. typed - как набрано, there - те же клавиши в другой
 // раскладке; minLetters - 2, после щелчка или стрелок в том же окне 4 (перед словом в поле не буква - 2).
 inline const char* Skip(const std::wstring& typed, const std::wstring& there, size_t minLetters,

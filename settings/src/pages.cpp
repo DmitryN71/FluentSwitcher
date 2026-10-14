@@ -250,6 +250,9 @@ wxString JournalReport(const wxString& folder, const Config& config, int* errors
 // "+fluentswitcher": the same mailbox, Gmail sorts the reports by it.
 const wchar_t* const kReportMail = L"dmitry.novikov71+fluentswitcher@gmail.com";
 
+// The report to the developer is in English whatever the window's language: a mail app may save the attached file
+// again in its own code page, and Cyrillic came as "????" (Maz's reports, 11.10 and 14.10.2026; Dmitry: "Да, давай").
+
 // Windows' own hotkeys for switching (HKCU\Keyboard Layout\Toggle): between languages and between the layouts of one.
 wxString WindowsSwitchHotkeys()
 {
@@ -258,12 +261,12 @@ wxString WindowsSwitchHotkeys()
         DWORD size = sizeof(value);
         if (RegGetValueW(HKEY_CURRENT_USER, L"Keyboard Layout\\Toggle", name, RRF_RT_REG_SZ, nullptr, value, &size) !=
             ERROR_SUCCESS)
-            return T("как по умолчанию");
+            return wxString("default");
         const wxString v(value);
-        return v == "1" ? wxString("Alt + Shift") : v == "2" ? wxString("Ctrl + Shift") : v == "3" ? T("не назначено")
+        return v == "1" ? wxString("Alt + Shift") : v == "2" ? wxString("Ctrl + Shift") : v == "3" ? wxString("none")
              : v == "4" ? wxString("`") : v;
     };
-    return wxString::Format(T("языка – %s, раскладки – %s"), read(L"Language Hotkey"), read(L"Layout Hotkey"));
+    return wxString::Format("language %s, layout %s", read(L"Language Hotkey"), read(L"Layout Hotkey"));
 }
 
 // Running programs that also take the keyboard (switchers, remappers, keyboard and mouse software): one of them may
@@ -293,7 +296,7 @@ wxString KeyboardPrograms()
     wxString list;
     for (const wxString& name : found)
         list += (list.empty() ? "" : ", ") + name;
-    return list.empty() ? T("нет") : list;
+    return list.empty() ? wxString("none") : list;
 }
 
 // The settings without what is personal: the learned words and the lists of words, the commands' programs and texts,
@@ -303,7 +306,7 @@ wxString SettingsForReport(const wxString& path)
     Config config;
     wxString error;
     if (!config.Load(path, &error))
-        return T("не прочитались: ") + error;
+        return "not read: " + error;
     nlohmann::json json = std::as_const(config).Json();
     for (const char* key : { "autoswitch_exceptions", "autoswitch_force", "autoswitch_fix", "autoswitch_undo",
                              "two_caps_exceptions", "two_caps_undo", "learned", "settings_window" })
@@ -363,17 +366,16 @@ wxString DeveloperReport(const wxString& folder, const wxString& configPath)
     }
     if (log.Strip(wxString::both).empty())
         return wxString();
-    wxString text = wxString::Format(T("Отправьте этот файл на %s"), kReportMail) + "\n\n";
-    // Wide: a narrow literal goes through the code page of Windows here, and the dash came out as "вЂ“" (Maz's report).
-    text += wxString::Format(L"FluentSwitcher %s – %s, %s\n", kVersion, T("отчёт для разработчика"),
-                             wxDateTime::Now().Format("%d.%m.%Y %H:%M"));
-    text += "Windows: " + WindowsVersion() + ", " + T("учётная запись: ") +
-            (CanElevateSelf() ? T("администратор") : T("обычная")) + "\n";
-    text += T("Раскладки: ") + LayoutList() + "\n";
-    text += T("Сочетания Windows для смены: ") + WindowsSwitchHotkeys() + "\n";
-    text += T("Программы, которые тоже работают с клавиатурой: ") + KeyboardPrograms() + "\n";
-    text += "\n--- " + T("Настройки (без списков слов и текстов команд)") + " ---\n" + SettingsForReport(configPath) + "\n";
-    text += "\n--- " + T("Запись (без набранного текста: вместо букв – их число)") + " ---\n" + log;
+    wxString text = wxString::Format("Send this file to %s", kReportMail) + "\n\n";
+    text += wxString::Format("FluentSwitcher %s - report to the developer, %s, window language %s\n", kVersion,
+                             wxDateTime::Now().Format("%d.%m.%Y %H:%M"),
+                             CurrentLanguage() == Language::Russian ? "Russian" : IsEnglish() ? "English" : "Ukrainian");
+    text += "Windows: " + WindowsVersion() + ", account: " + (CanElevateSelf() ? "administrator" : "standard") + "\n";
+    text += "Layouts: " + LayoutList() + "\n";
+    text += "Windows hotkeys to switch: " + WindowsSwitchHotkeys() + "\n";
+    text += "Other programs that work with the keyboard: " + KeyboardPrograms() + "\n";
+    text += "\n--- Settings (without the word lists and the commands' texts) ---\n" + SettingsForReport(configPath) + "\n";
+    text += "\n--- Recording (no typed text: the number of letters instead) ---\n" + log;
     return text;
 }
 

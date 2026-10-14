@@ -429,8 +429,8 @@ inline bool capsLock = false;
 inline std::atomic<bool> earlyDone = false; // рабочий поток: посреди этого слова решать больше нечего
 // Слово - число с клавишами . и , между цифрами ("1ю5ю3" в русской раскладке - 1.5.3; AutoSwitch::NumberFix), можно с
 // буквами впереди ("м1ю5ю4" - v1.5.4, "пю1ю2" - п.1.2; какие буквы годятся - решает движок): 0 - ещё ничего, 1 - цифры,
-// 2 - такая клавиша после цифр, 3 - буквы впереди, 4 - такая клавиша после них, -1 - не число. numberSign - после неё
-// пошли цифры.
+// 2 - такая клавиша после цифр, 3 - буквы впереди (и минус), 4 - такая клавиша после них, 5 - дефис между числами, -1 -
+// не число. numberSign - после неё пошли цифры.
 inline int number = 0;
 inline bool numberSign = false;
 inline int numberLetters = 0; // букв впереди (до четырёх)
@@ -505,6 +505,8 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 			number = number == 1 ? 2 : 4;
 			numberLast = vk;
 		}
+		else if (plain && vk == VK_OEM_MINUS && (number == 1 || number == 2))
+			number = 5; // дефис между числами: "1ю5ю8ю-1ю5ю9ю" (минус впереди - как буквы впереди, ниже)
 		else if (!command && !caps && !repeat && vk != VK_OEM_PERIOD && vk != VK_OEM_COMMA && IsLetterKey(vk) &&
 			(number == 0 || number == 3 || number == 4) && numberLetters < 4) {
 			number = 3; // и после . и , среди букв: "б" в "табл" - буква, не знак

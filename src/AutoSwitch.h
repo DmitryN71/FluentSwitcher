@@ -252,6 +252,14 @@ inline int NumberFix(const std::wstring& typed, const std::wstring& there) {
 				digits = true;
 				continue;
 			}
+			// Дефис - тот же в обеих раскладках: минус впереди ("-1ю5ю9ю") или между числами ("1ю5ю8ю-1ю5ю9ю" - диапазон
+			// версий; форум, Maz, 14.10.2026). За ним - цифра.
+			if (a == L'-' && typed[i] == L'-') {
+				const bool lead = i == p && p == 0;
+				const bool afterNumber = i > p && (iswdigit(there[i - 1]) || there[i - 1] == L'.' || there[i - 1] == L',');
+				if (!(lead || afterNumber) || i + 1 >= there.size() || !iswdigit(there[i + 1])) return false;
+				continue;
+			}
 			if ((a != L'.' && a != L',') || !TwoCaps::IsLetter(typed[i])) return false;
 			if (i == p ? p == 0 : !iswdigit(there[i - 1])) return false; // не начинается знаком; два знака подряд - нет
 			signs++;

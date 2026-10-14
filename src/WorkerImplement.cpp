@@ -1182,6 +1182,7 @@ TStatus WorkerImplement::GetClipStringCallback() {
             const std::string& name = conf_get_unsafe()->translit_table;
             const auto table = name == "wikipedia" ? Translit::Table::Wikipedia
                              : name == "passport"  ? Translit::Table::Passport
+                             : name == "mosmetro"  ? Translit::Table::Mosmetro
                                                    : Translit::Table::Reversible;
             std::wstring latin = Translit::Convert(data, uk, table);
             const bool back = latin == data;

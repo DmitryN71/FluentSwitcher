@@ -81,12 +81,15 @@ inline const wchar_t* Russian(wchar_t c) {
 //                "Объявление" - "Obyavleniye", "Достоевский" - "Dostoyevsky", "Ильинский" - "Ilyinsky". Обратно - с потерями.
 //   Passport   - загранпаспорта (ICAO Doc 9303, паспорта РФ с 2014 года): ё - e, й - i, ъ - ie, ь выпадает, ю - iu,
 //                я - ia: "Юлия" - "Iuliia", "Объявление" - "Obieiavlenie".
-// "Мосметро" опубликованной таблицы не имеет; по цели это Wikipedia. Украинский - всегда по официальной таблице.
-enum class Table { Reversible, Wikipedia, Passport };
+//   Mosmetro   - московского метро (Студия Лебедева, 2013; правила - iuliia.ru/mosmetro, ссылка xvii, 14.10.2026): как
+//                Wikipedia, но проще - е всегда e, ё - yo только после ь и ъ, щ - sch, ц после т - s, ь и ъ перед
+//                а е и о у э - y: "Объявление" - "Obyavlenie", "съешь ещё" - "syesh esche".
+// Украинский - всегда по официальной таблице.
+enum class Table { Reversible, Wikipedia, Passport, Mosmetro };
 
 inline bool RussianVowel(wchar_t c) { return c && wcschr(L"аеёиоуыэюя", c) != nullptr; }
 
-// Буква s[i] (строчная - low) по таблице table; соседи - для Wikipedia. Пустая строка - буква выпадает, nullptr - не русская.
+// Буква s[i] (строчная - low) по таблице table; соседи - для Wikipedia и Mosmetro. Пустая строка - буква выпадает, nullptr - не русская.
 inline const wchar_t* RussianIn(Table table, const std::wstring& s, size_t i, wchar_t low) {
 	if (table == Table::Reversible) return Russian(low);
 	if (table == Table::Passport) {
@@ -104,6 +107,22 @@ inline const wchar_t* RussianIn(Table table, const std::wstring& s, size_t i, wc
 	auto wordEnd = [&s](size_t j) { return j >= s.size() || !IsCharAlphaW(s[j]); };
 	const wchar_t prev = i > 0 ? at(i - 1) : 0, next = at(i + 1);
 	const bool start = i == 0 || !IsCharAlphaW(s[i - 1]);
+	if (table == Table::Mosmetro) {
+		switch (low) {
+		case L'е': return L"e";
+		case L'ё': return prev == L'ь' || prev == L'ъ' ? L"yo" : L"e";
+		case L'ц': return prev == L'т' ? L"s" : L"ts";
+		case L'щ': return L"sch";
+		case L'и':
+		case L'ы':
+			if (next == L'й' && wordEnd(i + 2)) return L"y";
+			return low == L'и' ? L"i" : L"y";
+		case L'й': return (prev == L'и' || prev == L'ы') && wordEnd(i + 1) ? L"" : L"y";
+		case L'ъ':
+		case L'ь': return next && wcschr(L"аеиоуэ", next) ? L"y" : L"";
+		}
+		return Russian(low);
+	}
 	switch (low) {
 	case L'е':
 		if (prev == L'ы' && wordEnd(i + 1)) return L"e"; // -ые: Naberezhnye

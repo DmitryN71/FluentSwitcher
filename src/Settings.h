@@ -191,6 +191,9 @@ public:
 	// Тишина перед звуком в Bluetooth-наушниках, мс: за неё они просыпаются (LayoutSound::SlowStart). 0,2 с хватает не
 	// всем (форум, WinnyS, 13.10.2026: HIPER TWS HIP APX9 - не слышно и с ней).
 	int sound_bluetooth_ms = 200;
+	// Таблица транслита русского (Translit::Table): "" - обратимая, "wikipedia" - как в Википедии, "passport" - как в
+	// загранпаспорте.
+	string translit_table = "";
 	// ДВе ЗАглавные (TwoCaps.h): исправлять после пробела; свои исключения (UTF-8).
 	bool two_caps = false;
 	// Английское i отдельным словом - I (TwoCaps::LoneI; не в консоли и не в редакторах кода).

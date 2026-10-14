@@ -5,7 +5,8 @@
 #include <vector>
 
 // Выделенное транслитом (форум, xvii, 12.10.2026: "как в Punto" - имена файлов и папок латиницей): кириллица - латиницей,
-// остальное как есть. Из знаков - только апостроф на месте ь и ъ (чтобы вернуть обратно); годится в имя файла.
+// остальное как есть. Из знаков - только апостроф на месте ь и ъ в обратимой таблице (чтобы вернуть обратно); годится в
+// имя файла. Русский - по выбранной таблице (Table, ниже); обратимая:
 //   Русский: а-a б-b в-v г-g д-d е-e ё-e ж-zh з-z и-i й-y к-k л-l м-m н-n о-o п-p р-r с-s т-t у-u ф-f х-kh ц-ts ч-ch
 //   ш-sh щ-shch ы-y э-e ю-yu я-ya, ь - апостроф, ъ - два ("Отчёт за май" - "Otchet za may", "нельзя открыть" -
 //   "nel'zya otkryt'", "Объявление" - "Ob''yavlenie"): так текст возвращается обратно (ToCyrillic; Дмитрий, 13.10.2026).
@@ -73,6 +74,52 @@ inline const wchar_t* Russian(wchar_t c) {
 	return nullptr;
 }
 
+// Таблица русского (translit_table; Дмитрий, 14.10.2026, после форума, xvii: "варианты «Википедия» и/или «Мосметро»"):
+//   Reversible - своя, обратимая (Russian выше): ь и ъ - апострофы, текст возвращается обратно (ToCyrillic).
+//   Wikipedia  - английской Википедии (WP:RUS, BGN/PCGN без знаков): читаемо, без апострофов - е в начале слова, после
+//                гласной, ь и ъ - ye, ё - yo, ь и ъ выпадают (перед а и о у ы э - y), окончания -ий, -ый - y, -ые - ye:
+//                "Объявление" - "Obyavleniye", "Достоевский" - "Dostoyevsky", "Ильинский" - "Ilyinsky". Обратно - с потерями.
+//   Passport   - загранпаспорта (ICAO Doc 9303, паспорта РФ с 2014 года): ё - e, й - i, ъ - ie, ь выпадает, ю - iu,
+//                я - ia: "Юлия" - "Iuliia", "Объявление" - "Obieiavlenie".
+// "Мосметро" опубликованной таблицы не имеет; по цели это Wikipedia. Украинский - всегда по официальной таблице.
+enum class Table { Reversible, Wikipedia, Passport };
+
+inline bool RussianVowel(wchar_t c) { return c && wcschr(L"аеёиоуыэюя", c) != nullptr; }
+
+// Буква s[i] (строчная - low) по таблице table; соседи - для Wikipedia. Пустая строка - буква выпадает, nullptr - не русская.
+inline const wchar_t* RussianIn(Table table, const std::wstring& s, size_t i, wchar_t low) {
+	if (table == Table::Reversible) return Russian(low);
+	if (table == Table::Passport) {
+		switch (low) {
+		case L'ё': return L"e";
+		case L'й': return L"i";
+		case L'ъ': return L"ie";
+		case L'ь': return L"";
+		case L'ю': return L"iu";
+		case L'я': return L"ia";
+		}
+		return Russian(low);
+	}
+	auto at = [&s](size_t j) { return j < s.size() && Cyrillic(s[j]) ? Lower(s[j]) : (wchar_t)0; };
+	auto wordEnd = [&s](size_t j) { return j >= s.size() || !IsCharAlphaW(s[j]); };
+	const wchar_t prev = i > 0 ? at(i - 1) : 0, next = at(i + 1);
+	const bool start = i == 0 || !IsCharAlphaW(s[i - 1]);
+	switch (low) {
+	case L'е':
+		if (prev == L'ы' && wordEnd(i + 1)) return L"e"; // -ые: Naberezhnye
+		return start || RussianVowel(prev) || prev == L'ь' || prev == L'ъ' ? L"ye" : L"e";
+	case L'ё': return L"yo";
+	case L'и':
+	case L'ы':
+		if (next == L'й' && wordEnd(i + 2)) return L"y"; // -ий, -ый: Dostoyevsky, Krasny
+		return low == L'и' ? L"i" : L"y";
+	case L'й': return (prev == L'и' || prev == L'ы') && wordEnd(i + 1) ? L"" : L"y";
+	case L'ъ':
+	case L'ь': return next && RussianVowel(next) && !wcschr(L"еёюя", next) ? L"y" : L"";
+	}
+	return Russian(low);
+}
+
 // start - буква в начале слова; prev - буква перед ней (строчная).
 inline const wchar_t* Ukrainian(wchar_t c, bool start, wchar_t prev) {
 	switch (c) {
@@ -90,7 +137,7 @@ inline const wchar_t* Ukrainian(wchar_t c, bool start, wchar_t prev) {
 	return Russian(c);
 }
 
-inline std::wstring Convert(const std::wstring& s, bool ukrainian) {
+inline std::wstring Convert(const std::wstring& s, bool ukrainian, Table table = Table::Reversible) {
 	std::wstring out;
 	out.reserve(s.size() + s.size() / 4);
 	auto letter = [&s](size_t j) { return j < s.size() && IsCharAlphaW(s[j]); };
@@ -103,7 +150,7 @@ inline std::wstring Convert(const std::wstring& s, bool ukrainian) {
 		}
 		const wchar_t low = Lower(c);
 		const bool start = i == 0 || !(IsCharAlphaW(s[i - 1]) || Apostrophe(s[i - 1]));
-		const wchar_t* t = ukrainian ? Ukrainian(low, start, i > 0 ? Lower(s[i - 1]) : 0) : Russian(low);
+		const wchar_t* t = ukrainian ? Ukrainian(low, start, i > 0 ? Lower(s[i - 1]) : 0) : RussianIn(table, s, i, low);
 		if (!t) {
 			out += c;
 			continue;

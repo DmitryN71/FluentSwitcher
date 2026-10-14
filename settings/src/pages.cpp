@@ -1634,6 +1634,18 @@ void SettingsFrame::BuildHotkeys()
         };
         editor->sameAs = [this, key](const wxString& one) { return SameHotkey(one, key); };
         editors.push_back(editor);
+        // The table of the transliteration (translit_table, the engine's Translit.h) - right under its action.
+        if (strcmp(key, "hk_TranslitSelected") == 0)
+        {
+            const wxArrayString tableValues = { wxString(), wxString("wikipedia"), wxString("passport") };
+            const int table = tableValues.Index(m_edit.GetString("translit_table", wxString()));
+            Choice(T("Таблица транслита"),
+                   T("Для русского: обратимая возвращается в кириллицу без потерь, в Википедии – читаемо и без апострофов, "
+                     "в загранпаспорте – как пишет МВД. Украинский – всегда по официальной таблице"),
+                   { T("Обратимая: Ob''yavlenie"), T("Как в Википедии: Obyavleniye"), T("Как в загранпаспорте: Obieiavlenie") },
+                   table == wxNOT_FOUND ? 0 : table,
+                   [this, tableValues](int i) { m_edit.SetString("translit_table", tableValues[i]); });
+        }
     }
     sides->onChange = [this, sides, editors, save = sides->onChange] {
         save(); // record_sides, and Save / Apply light up

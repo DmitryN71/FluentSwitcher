@@ -1179,7 +1179,11 @@ TStatus WorkerImplement::GetClipStringCallback() {
             // Транслитом (Translit.h): кириллица - латиницей. Украинский - по его буквам или по украинской раскладке.
             // Кириллицы нет - обратно, латиница кириллицей ("ZIMA" - "ЗИМА").
             const bool uk = Translit::UkrainianText(data) || PRIMARYLANGID(LOWORD((UINT_PTR)CurLay())) == LANG_UKRAINIAN;
-            std::wstring latin = Translit::Convert(data, uk);
+            const std::string& name = conf_get_unsafe()->translit_table;
+            const auto table = name == "wikipedia" ? Translit::Table::Wikipedia
+                             : name == "passport"  ? Translit::Table::Passport
+                                                   : Translit::Table::Reversible;
+            std::wstring latin = Translit::Convert(data, uk, table);
             const bool back = latin == data;
             // Неоднозначное (ts - ц или тс, e - е или э) - по русскому словарю Windows: "prigoditsya" - "пригодится".
             if (back) latin = Translit::ToCyrillic(data, [](const std::wstring& w) {

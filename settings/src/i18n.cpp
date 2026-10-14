@@ -628,6 +628,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "0,2 секунды", "0.2 seconds" },
         { "0,5 секунды", "0.5 seconds" },
         { "1 секунда", "1 second" },
+        { "Таблица транслита", "Transliteration table" },
+        { "Для русского: обратимая возвращается в кириллицу без потерь, в Википедии – читаемо и без апострофов, в загранпаспорте – как пишет МВД. Украинский – всегда по официальной таблице", "For Russian: reversible comes back to Cyrillic without losses, Wikipedia's is readable and has no apostrophes, the passport's is as the Russian passport office writes. Ukrainian - always by the official table" },
+        { "Обратимая: Ob''yavlenie", "Reversible: Ob''yavlenie" },
+        { "Как в Википедии: Obyavleniye", "As in Wikipedia: Obyavleniye" },
+        { "Как в загранпаспорте: Obieiavlenie", "As in a passport: Obieiavlenie" },
     };
     return table;
 }

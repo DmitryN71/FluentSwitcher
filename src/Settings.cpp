@@ -122,6 +122,7 @@ namespace nlohmann {
 			sound_switch,
 			sound_fix,
 			sound_bluetooth_ms,
+			translit_table,
 			two_caps,
 			fix_lone_i,
 			two_caps_exceptions,

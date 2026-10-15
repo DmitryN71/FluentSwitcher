@@ -648,8 +648,8 @@ void WorkerImplement::AutoSwitchEarly() {
     if (keys.empty()) return;
     std::wstring typed;
     for (auto* key : keys) {
-        if (key->is_caps) return never("CapsLock");
-        auto c = InputSender::KeyText(*key, lay, false);
+        // С CapsLock - как на экране, ПРОПИСНЫМИ: такое слово - с пятой буквы (AutoSwitch::kCapsEarlyMin).
+        auto c = InputSender::KeyText(*key, lay, key->is_caps);
         if (c.size() != 1) return never("a key that is not one letter");
         typed += c;
     }
@@ -675,7 +675,7 @@ void WorkerImplement::AutoSwitchEarly() {
         if (other == lay) continue;
         std::wstring there;
         for (auto* key : keys) {
-            auto c = InputSender::KeyText(*key, other, false);
+            auto c = InputSender::KeyText(*key, other, key->is_caps);
             if (c.size() != 1) {
                 there.clear();
                 break;

@@ -423,8 +423,9 @@ inline UINT lastLetter = 0;    // клавиша последней буквы �
 inline UINT firstKeys[2] = {}; // клавиши первых двух букв (i, 'i - fix_lone_i)
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, буква с AltGr, автоповтор, другая клавиша - не наш случай
-// Набрано с CapsLock (ПРОПИСНЫМИ): слово проверит автопереключение (от пяти букв - AutoSwitch::CapsWord), а ДВе ЗАглавные
-// и i - нет: регистр там от CapsLock, а не от Shift (форум, gutasiho, 11.10.2026: "ЗИМА ВОЗМЕЗДИЯ").
+// Набрано с CapsLock (ПРОПИСНЫМИ): слово проверит автопереключение (от четырёх букв - AutoSwitch::CapsWord, посреди слова -
+// с пятой: kCapsEarlyMin), а ДВе ЗАглавные и i - нет: регистр там от CapsLock, а не от Shift (форум, gutasiho, 11.10.2026:
+// "ЗИМА ВОЗМЕЗДИЯ").
 inline bool capsLock = false;
 inline std::atomic<bool> earlyDone = false; // рабочий поток: посреди этого слова решать больше нечего
 // Слово - число с клавишами . и , между цифрами ("1ю5ю3" в русской раскладке - 1.5.3; AutoSwitch::NumberFix), можно с
@@ -528,15 +529,12 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 			ResetWord();
 		return false;
 	}
-	if (caps) {
-		capsLock = true;
-		earlyDone = true; // посреди слова движок с CapsLock не решает (AutoSwitchEarly) - не держать зря
-	}
+	if (caps) capsLock = true;
 	if (vk == VK_BACK) {
 		// Опечатку в слове стёрли: посреди слова решать снова - "нет" движка было о слове с опечаткой ("facc" - "face").
 		if (!word.empty()) {
 			word.pop_back();
-			if (!capsLock) earlyDone = false;
+			earlyDone = false;
 		}
 		if (word.size() < 2) firstKeys[1] = 0;
 		if (word.empty()) firstKeys[0] = 0;

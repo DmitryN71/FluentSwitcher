@@ -139,6 +139,22 @@ public:
 		return std::wstring(buf, n);
 	}
 
+	// Мёртвая клавиша (надстрочный знак), что висит в Windows, примешивается к букве: ToUnicodeEx отдаёт её вместе с буквой и
+	// с флагом 4 (Keira, раскладка Бирмана, 1.5.5: "п˘ри¨вет", "hel˝lǒ" - на одни клавиши по два знака, хотя мёртвых клавиш
+	// не нажимала). Пока перепечатываем, человек не печатает (его клавиши придержаны) - висящий знак ничей: сбросить. Висит
+	// ли - пробел без изменения состояния (флаг 4) даёт не пробел; сброс - тот же пробел с изменением. В раскладках без мёртвых
+	// клавиш (русская, английская) - один вызов на букву, и только.
+	static void DropDeadKey(HKL lay) {
+		const UINT sc = MapVirtualKeyExW(VK_SPACE, MAPVK_VK_TO_VSC, lay);
+		BYTE state[256] = {};
+		wchar_t buf[8] = {};
+		for (int i = 0; i < 2; i++) {
+			if (ToUnicodeEx(VK_SPACE, sc, state, buf, 8, 4, lay) == 1 && buf[0] == L' ') return;
+			LOG_ANY("retype: a dead key was waiting in Windows, dropped");
+			ToUnicodeEx(VK_SPACE, sc, state, buf, 8, 0, lay);
+		}
+	}
+
 	// delay_ms > 0: по одной клавише, с паузой после каждой (см. retype_delay_ms); stop() - бросить (курсор переехал).
 	static void SendKeysAsText(const TKeyRevert& sendData, HKL lay, bool is_now_caps, int delay_ms = 0,
 	                           const std::function<bool()>& stop = nullptr) {
@@ -148,6 +164,7 @@ public:
 		LOG_ANY("Send {} keys as text, lay {}, is_now_caps: {}, delay {}", sendData.size(), (void*)lay, is_now_caps, delay_ms);
 
 		for (const auto& key : sendData) {
+			DropDeadKey(lay);
 			auto text = KeyText(key, lay, is_now_caps);
 			if (text.empty()) {
 				inputSender.AddPressBase(key);

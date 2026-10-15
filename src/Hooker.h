@@ -253,6 +253,19 @@ public:
 	//     у сенсорной панели, экрана и пера.
 	void Watch() {
 		const DWORD now = GetTickCount();
+		// Запись для отчёта: видна ли клавиатура через Raw Input и сколько нажатий дошло до программ мимо нашего перехвата -
+		// и тогда, когда заново его не подключаем (Maz, 14.10.2026: в поиске Маркета буквы шли мимо перехвата, а по
+		// отчёту не понять, видела ли их Windows вообще).
+		static bool recording = false;
+		static int reportedUnseen = 0;
+		if (LogSafe() && !recording) {
+			LOG_ANY("report: raw input comes {}, the keyboard hook saw a key {} ms ago", rawSeen, now - lastKeyTick);
+			reportedUnseen = 0;
+		}
+		recording = LogSafe();
+		if (recording && rawUnseen > 0 && rawUnseen != reportedUnseen)
+			LOG_ANY("hook: {} keys reached the programs, the keyboard hook did not see them", rawUnseen);
+		reportedUnseen = rawUnseen;
 		const bool keyboard = rawSeen && rawUnseen >= 4 && (LONG)(lastRawKeyTick - lastKeyTick) >= 1000 &&
 			now - lastRawKeyTick < 4000 && rawKeyWindow == GetForegroundWindow() && now - lastRehookKey >= 30000;
 		LASTINPUTINFO li{ sizeof(li) };

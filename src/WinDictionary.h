@@ -15,28 +15,43 @@ namespace SpellCheck {
 
 enum class Result { Unknown, Word, NotWord };
 
+// Не открылся словарь - снова не раньше чем через столько: сразу после входа в Windows словари бывают ещё не готовы, а
+// неудача запоминалась до перезапуска - автопереключение молчало весь сеанс (Maz, 14.10.2026: "с первого раза после
+// старта системы может ничего не переключаться"). Языка без словаря это стоит одного вопроса Windows раз в 10 с.
+inline constexpr ULONGLONG kRetryMs = 10000;
+
 // Словарь языка ("ru-RU", "en-US"), один на язык; нет - пусто.
 inline ISpellChecker* Checker(const std::wstring& language) {
 	using Microsoft::WRL::ComPtr;
 	static ComPtr<ISpellCheckerFactory> factory;
 	static std::map<std::wstring, ComPtr<ISpellChecker>> checkers;
+	static std::map<std::wstring, ULONGLONG> failedAt; // язык - когда его словарь не открылся
+	static ULONGLONG factoryFailedAt = 0;
 	static bool started = false;
 	if (!started) {
 		started = true;
 		CoInitializeEx(nullptr, COINIT_MULTITHREADED); // уже инициализирован - не страшно
-		if (FAILED(CoCreateInstance(__uuidof(SpellCheckerFactory), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))))
+	}
+	const ULONGLONG now = GetTickCount64();
+	if (!factory) {
+		if (factoryFailedAt && now - factoryFailedAt < kRetryMs) return nullptr;
+		if (FAILED(CoCreateInstance(__uuidof(SpellCheckerFactory), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)))) {
 			factory.Reset();
+			factoryFailedAt = now;
+			return nullptr;
+		}
 	}
-	if (!factory) return nullptr;
-	auto it = checkers.find(language);
-	if (it == checkers.end()) {
-		ComPtr<ISpellChecker> checker;
-		BOOL supported = FALSE;
-		if (SUCCEEDED(factory->IsSupported(language.c_str(), &supported)) && supported)
-			factory->CreateSpellChecker(language.c_str(), &checker);
-		it = checkers.emplace(language, checker).first;
+	if (auto it = checkers.find(language); it != checkers.end()) return it->second.Get();
+	if (auto f = failedAt.find(language); f != failedAt.end() && now - f->second < kRetryMs) return nullptr;
+	ComPtr<ISpellChecker> checker;
+	BOOL supported = FALSE;
+	if (SUCCEEDED(factory->IsSupported(language.c_str(), &supported)) && supported &&
+		SUCCEEDED(factory->CreateSpellChecker(language.c_str(), &checker)) && checker) {
+		failedAt.erase(language);
+		return checkers.emplace(language, checker).first->second.Get();
 	}
-	return it->second.Get();
+	failedAt[language] = now;
+	return nullptr;
 }
 
 // word - как есть (регистр не важен: проверяется строчными; keepCase - как набрано), language - "ru-RU", "en-US".

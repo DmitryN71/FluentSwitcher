@@ -181,7 +181,9 @@ namespace Utils
 		BYTE keyState[256] = { 0 };
 		keyState[VK_SHIFT] =is_shift ? 0x80 : 0;
 		TCHAR sBufKey[0x10] = { 0 };
-		int res = ToUnicodeEx(vk, scan, keyState, sBufKey, ARRAYSIZE(sBufKey), 0, lay);
+		// Флаг 4: не трогать состояние клавиатуры - мёртвая клавиша не повисает в Windows и не примешивается к следующей
+		// букве (InputSender::DropDeadKey).
+		int res = ToUnicodeEx(vk, scan, keyState, sBufKey, ARRAYSIZE(sBufKey), 4, lay);
 		if (res < 0) {
 			return -1;
 		}

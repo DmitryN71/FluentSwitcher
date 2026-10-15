@@ -49,6 +49,10 @@ SolidCompression=yes
 ; older test builds do not know it, Windows' Restart Manager offers to close them.
 CloseApplications=yes
 RestartApplications=no
+; The uninstall log anew on every install, not added to: appended, it grew by the whole list of files (the flags, about
+; 400 KB) with every update - 44 MB after a hundred test builds (15.10.2026). Every version installs the same folders,
+; and what an older one left is removed by [InstallDelete] and, on removal, by [UninstallDelete].
+UninstallLogMode=overwrite
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -92,6 +96,8 @@ Filename: "{app}\FluentSwitcher.exe"; Parameters: "--cleanup"; RunOnceId: "Clean
 Type: files; Name: "{app}\FluentSwitcher.json"
 Type: files; Name: "{app}\update.json"
 Type: filesandordirs; Name: "{app}\log"
+; The flags: also those an older version installed and this one no longer does (the log knows only this install).
+Type: filesandordirs; Name: "{app}\flags"
 Type: dirifempty; Name: "{app}"
 
 [Code]

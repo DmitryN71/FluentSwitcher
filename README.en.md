@@ -19,7 +19,7 @@ free and open source under GPL-3.0.
   neighbors: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
   too: "нфдлштп" - "yalking". A word with hyphens too, also with a part of one letter: "у-ьфшд" - "e-mail",
   "d-nhtnmb[" - "в-третьих". A word in CAPITALS from four letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
-  "ЗИМА ВОЗМЕЗДИЯ". A site or mail address typed in the wrong layout too: "еюьу" - "t.me", "нфюкг" - "ya.ru". Words
+  "ЗИМА ВОЗМЕЗДИЯ", in the middle of the word from the fifth letter. A site or mail address typed in the wrong layout too: "еюьу" - "t.me", "нфюкг" - "ya.ru". Words
   with digits, abbreviations (USB, ВДНХ), a word typed again after the layout was switched by
   hand right after a fix, passwords, the console (but for the console apps listed, such as far.exe) and the apps of "No automatic switch in apps" are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word

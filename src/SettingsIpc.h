@@ -72,6 +72,14 @@ namespace SettingsIpc {
 				if (!key.IsEmpty())
 					LOG_ANY("report: hotkey {} = {}", LogPlain(HotKeyTypeName(hk.hkId)), LogHotKey(key));
 		LOG_ANY("report: Windows layout hotkey for the emulation {}", LogHotKey(cfg->win_hotkey_cycle_lang));
+		// Словари Windows по языкам раскладок: без словаря автопереключение молчит (WinDictionary.h). Спрашивает их только
+		// поток движка.
+		Worker()->PostMsg([](auto) {
+			for (HKL lay : conf_get_unsafe()->layouts_info.EnabledLayouts()) {
+				const std::wstring lang = Utils::GetNameForHKL_simple(lay);
+				LOG_ANY(L"report: dictionary {} {}", LogPlain(lang), SpellCheck::Checker(lang) != nullptr);
+			}
+		});
 	}
 
 	inline const UINT msgReloadConfig = RegisterWindowMessageW(L"SimpleSwitcher.ReloadConfig");

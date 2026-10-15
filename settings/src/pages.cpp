@@ -269,14 +269,9 @@ wxString WindowsSwitchHotkeys()
     return wxString::Format("language %s, layout %s", read(L"Language Hotkey"), read(L"Layout Hotkey"));
 }
 
-// Running programs that also take the keyboard (switchers, remappers, keyboard and mouse software): one of them may
-// catch the keys first (forum, 10.10.2026: hotkeys did not work after Caramba).
-wxString KeyboardPrograms()
+// Running programs whose names contain one of `known` (lower case), by name; none - "none".
+wxString RunningPrograms(std::initializer_list<const char*> known)
 {
-    static const char* const known[] = { "caramba", "punto", "ps64ldr", "autohotkey", "everylang", "orfo",
-                                         "keyboardninja", "arumswitcher", "simpleswitcher", "langbar", "keyran",
-                                         "sharpkeys", "keytweak", "powertoys.keyboardmanager", "logioptions", "logi_",
-                                         "lghub", "setpoint", "icue", "razer", "steelseries", "x-mouse" };
     wxArrayString found;
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE)
@@ -297,6 +292,26 @@ wxString KeyboardPrograms()
     for (const wxString& name : found)
         list += (list.empty() ? "" : ", ") + name;
     return list.empty() ? wxString("none") : list;
+}
+
+// Running programs that also take the keyboard (switchers, remappers, keyboard and mouse software): one of them may
+// catch the keys first (forum, 10.10.2026: hotkeys did not work after Caramba).
+wxString KeyboardPrograms()
+{
+    return RunningPrograms({ "caramba", "punto", "ps64ldr", "autohotkey", "everylang", "orfo", "keyboardninja",
+                             "arumswitcher", "simpleswitcher", "langbar", "keyran", "sharpkeys", "keytweak",
+                             "powertoys.keyboardmanager", "logioptions", "logi_", "lghub", "setpoint", "icue", "razer",
+                             "steelseries", "x-mouse", "mahou" });
+}
+
+// Running antivirus programs other than Windows' own: a "secure keyboard input" of theirs hides the typed letters from
+// every program that watches the keyboard (Maz, 14.10.2026: the letters typed in a search field of a shop never reached
+// the program, the Backspaces did).
+wxString AntivirusPrograms()
+{
+    return RunningPrograms({ "avp.exe", "avpui.exe", "ekrn.exe", "egui.exe", "dwservice.exe", "dwengine.exe",
+                             "spideragent.exe", "bdagent.exe", "bdservicehost.exe", "avastui.exe", "avgui.exe",
+                             "norton", "mcshield.exe", "mbamservice.exe", "sophos", "avira", "360tray.exe" });
 }
 
 // The settings without what is personal: the learned words and the lists of words, the commands' programs and texts,
@@ -374,6 +389,7 @@ wxString DeveloperReport(const wxString& folder, const wxString& configPath)
     text += "Layouts: " + LayoutList() + "\n";
     text += "Windows hotkeys to switch: " + WindowsSwitchHotkeys() + "\n";
     text += "Other programs that work with the keyboard: " + KeyboardPrograms() + "\n";
+    text += "Antivirus programs besides Windows' own: " + AntivirusPrograms() + "\n";
     text += "\n--- Settings (without the word lists and the commands' texts) ---\n" + SettingsForReport(configPath) + "\n";
     text += "\n--- Recording (no typed text: the number of letters instead) ---\n" + log;
     return text;

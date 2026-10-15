@@ -489,6 +489,9 @@ inline bool Decide(const std::wstring& typed, const std::wstring& there, auto&& 
 // на 4-5-й букве (остальное - короткие слова и слова со знаками: их переключает конец слова).
 inline constexpr size_t kEarlyMin = 4; // раньше - нет (после щелчка или стрелок в том же окне - с пятой)
 inline constexpr size_t kEarlyMax = 8; // длиннее - только в конце слова (KeyHold::EarlyPoint)
+// ПРОПИСНЫМИ (с Shift или CapsLock) - с пятой буквы, как то же слово строчными: "PFVJH" - "ЗАМОР…" (Maz, 14.10.2026: в
+// строке поиска ждал "ЗАМОРОЗКА", не нажимая пробела). Четыре прописные - ещё аббревиатура (NASA, HTML, ГОСТ): ждать.
+inline constexpr size_t kCapsEarlyMin = 5;
 
 enum class Early {
 	NotYet, // решать на следующей букве
@@ -538,6 +541,10 @@ inline EarlyVerdict DecideEarly(const std::wstring& typed, const std::wstring& t
 	}
 	if (a.core.size() > kEarlyMax) return { Early::Never, "too long" };
 	if (typed.size() >= 3 && typed[0] == typed[1] && typed[1] == typed[2]) return { Early::Never, "repeated letters" };
+	if (AllUpper(t.core) && AllUpper(a.core) && t.core.size() == typed.size()) {
+		if (a.core.size() < kCapsEarlyMin) return { Early::NotYet, "capitals: an abbreviation so far" };
+		return DecideEarly(Lower(typed), Lower(there), minLetters, exceptions, knownTyped, knownThere);
+	}
 	if (AllUpper(t.core) || AllUpper(a.core)) return { Early::Never, "abbreviation" };
 	// Заглавная внутри: LShift, KBps, iPhone - имена и сокращения, или ДВе ЗАглавные (GHbdtn); решит конец слова.
 	for (size_t i = 1; i < t.core.size(); i++)

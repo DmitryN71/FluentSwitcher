@@ -328,15 +328,15 @@ const std::unordered_map<std::string, const char*>& English()
           "A word in the wrong layout is fixed by itself after a space, Enter or Tab: ghbdtn - \"привет\"" },
         { "Переключает, когда набранного нет в словаре Windows своего языка, а те же клавиши в другой раскладке – "
           "слово. Короткие слова решает по соседям: f vj;yj – «а можно», ns ult – «ты где», а plan B и «5 шт» не "
-          "трогает. Адрес, набранный не в той раскладке, исправляет: еюьу – t.me.\nНе трогает: слова с цифрами, "
-          "аббревиатуры, адреса и почту, опечатки в английских словах, слово, "
+          "трогает. Адрес и частые аббревиатуры, набранные не в той раскладке, исправляет: еюьу – t.me, ГЫИ – USB.\nНе трогает: слова с цифрами, "
+          "другие аббревиатуры, адреса и почту, опечатки в английских словах, слово, "
           "перепечатанное после ручной смены раскладки сразу после исправления, пароли, "
           "консоль.\nИсправилось зря – сразу нажмите «Исправить "
           "последнее слово» (Shift дважды): слово вернётся, а на третий раз попадёт в «Не переключать»",
           "Switches when the word typed is not in the Windows dictionary of its language while the same keys in the "
-          "other layout are a word. Short words go by their neighbours: f vj;yj - \"а можно\", ns ult - \"ты где\", "
-          "while plan B and \"5 шт\" are left alone. An address typed in the wrong layout is fixed: еюьу - t.me.\n"
-          "Leaves alone: words with digits, abbreviations, addresses and mail, typos in English words, a word typed again after the layout was switched by hand right after a fix, "
+          "other layout are a word. Short words go by their neighbors: f vj;yj - \"а можно\", ns ult - \"ты где\", "
+          "while plan B and \"5 шт\" are left alone. An address and frequent abbreviations typed in the wrong layout are fixed: еюьу - t.me, ГЫИ - USB.\n"
+          "Leaves alone: words with digits, other abbreviations, addresses and mail, typos in English words, a word typed again after the layout was switched by hand right after a fix, "
           "passwords, the console.\nFixed by mistake - press \"Fix the last word\" (Shift twice) at once: the word comes back, "
           "and the third time it goes to \"Never switch\"" },
         { "Не ждать конца слова", "Do not wait for the end of the word" },

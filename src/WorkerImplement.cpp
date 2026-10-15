@@ -520,7 +520,12 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a. Так же - адрес, набранный не
         // в той раскладке, если набранное не слово своего языка: "еюьу" - t.me (AutoSwitch::Address; "июля" там - "b.kz").
         const bool address = AutoSwitch::Address(typed, there) && dictionary(lay)(typed) != SpellCheck::Result::Word;
-        const bool force = (address || AutoSwitch::Forced(typed, there, forced)) &&
+        // И сокращение из встроенного списка, которое словарь не решит: "ГЫИ" - USB, "BYY" - ИНН, "Секд" - Ctrl, "зды" - pls
+        // (AutoSwitch::KnownShort).
+        const bool known = !address && AutoSwitch::KnownShort(typed, there, Utils::GetNameForHKL_simple(lay),
+            Utils::GetNameForHKL_simple(other),
+            [lang = Utils::GetNameForHKL_simple(lay)](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); });
+        const bool force = (address || known || AutoSwitch::Forced(typed, there, forced)) &&
                            !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
         if (!force) {
@@ -564,7 +569,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         if (IsPasswordUia()) return no("a password field", false);
         if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
         KeyHold::Claimed claimed{ m_holdId };
-        LOG_ANY(L"autoswitch: {} -> {}{}", typed, there, address && force ? L" (an address)" : force ? L" (switch always)" : L"");
+        LOG_ANY(L"autoswitch: {} -> {}{}", typed, there,
+                !force ? L"" : address ? L" (an address)" : known ? L" (a known abbreviation)" : L" (switch always)");
         m_autoNo = {};
         // Переводятся те же клавиши, что проверены (слово до пробела), с короткими словами перед ним.
         const size_t total = m_cycleList.Size();
@@ -1556,7 +1562,26 @@ void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
                 RETURN_SUCCESS;
             }
 
-            IFS_RET(ProcessRevert({.lay = info->layout, .flags = SW_CLIENT_SetLang | SW_CLIENT_NO_WAIT_LANG}));
+            // Одно сочетание у нескольких раскладок (форум, Ivan_Strelec, 15.10.2026: поставил по привычке одно и то же
+            // обеим - не работало, срабатывала всегда первая) - по кругу между ними: из одной из них - в следующую, из
+            // другой раскладки - в первую.
+            std::vector<HKL> same;
+            for (const auto& l : cfg->layouts_info.info) {
+                if (!l.enabled) continue;
+                for (const auto& k : l.hotkey.keys)
+                    if (!k.IsEmpty() && k.Compare(key, CHotKey::COMPARE_IGNORE_KEYUP | CHotKey::COMPARE_IGNORE_DOUBLE)) {
+                        same.push_back(l.layout);
+                        break;
+                    }
+            }
+            HKL target = info->layout;
+            if (same.size() > 1) {
+                const auto at = std::ranges::find(same, CurLay());
+                target = at == same.end() || at + 1 == same.end() ? same.front() : *(at + 1);
+                LOG_ANY(L"one hotkey for {} layouts: the next of them", same.size());
+            }
+
+            IFS_RET(ProcessRevert({.lay = target, .flags = SW_CLIENT_SetLang | SW_CLIENT_NO_WAIT_LANG}));
 
             RETURN_SUCCESS;
         }

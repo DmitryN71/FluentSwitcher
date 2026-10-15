@@ -321,12 +321,95 @@ inline bool Address(const std::wstring& typed, const std::wstring& there) {
 	return std::ranges::any_of(kZones, [&](const wchar_t* z) { return labels.back() == z; });
 }
 
+// Апострофы внутри слова там - английские сокращения: "Шэь" - I'm, "вщтэе" - don't, "Дуеэы" - Let's (Дмитрий,
+// 15.10.2026: в английских фразах из корпуса это больше половины оставленных слов). Апостроф - на месте набранной буквы
+// (э), между буквами латиницы; слово ли это - решает словарь (I'm, don't он знает целиком).
+inline bool Apostrophes(const std::wstring& typed, const std::wstring& there, const Part& a) {
+	if (typed.size() != there.size() || a.core.size() < 3) return false;
+	bool any = false;
+	for (size_t i = a.begin; i < a.end; i++) {
+		if (TwoCaps::IsLetter(there[i])) {
+			if (TwoCaps::ScriptOf(there[i]) != TwoCaps::Script::Latin) return false;
+			continue;
+		}
+		// a.begin и a.end - буквы: соседи внутри есть.
+		if ((there[i] != L'\'' && there[i] != L'’') || !TwoCaps::IsLetter(typed[i]) ||
+		    !TwoCaps::IsLetter(there[i - 1]) || !TwoCaps::IsLetter(there[i + 1]))
+			return false;
+		any = true;
+	}
+	return any;
+}
+
+// ----- Сокращения, которые словарь не решит -----
+// Аббревиатуры, слова без гласных, названия клавиш, единицы (Дмитрий, 15.10.2026: "ГЫИ" - USB не переключалось,
+// "понимаю, что Caramba пока впереди"): прописные короче четырёх букв и слова без гласных Skip не трогает, а словарь
+// Windows прописные принимает любые. Свой список на язык: там - сокращение из списка (kShortEn, kShortRu), набранное - не
+// слово своего языка (словарь, и строчными) и не из своих списков. ...Keep - что набирают нарочно и что не
+// переводить ("ru" - не "кг", "cv" - не "см", "CIF" - не "США", "DC" - не "вс"). Без цифр: "А4" - формат листа, не F4.
+inline constexpr const wchar_t* kShortEn[] = {
+	L"usb", L"pdf", L"api", L"crm", L"sku", L"vpn", L"dns", L"mit", L"ui", L"ux", L"url", L"uri", L"html", L"css", L"json",
+	L"xml", L"yaml", L"sql", L"http", L"https", L"ftp", L"sftp", L"ssh", L"ssl", L"tls", L"tcp", L"udp", L"ip", L"vps",
+	L"cpu", L"gpu", L"ram", L"ssd", L"hdd", L"nvme", L"bios", L"uefi", L"os", L"ios", L"lan", L"wan", L"wifi", L"nfc",
+	L"gps", L"seo", L"smm", L"cms", L"sdk", L"ide", L"gui", L"cli", L"pc", L"tv", L"hd", L"led", L"lcd", L"oled", L"rgb",
+	L"hdmi", L"dvd", L"faq", L"ceo", L"cfo", L"cto", L"hr", L"pr", L"qa", L"mvp", L"saas", L"ai", L"ml", L"gpt", L"llm",
+	L"ocr", L"docx", L"xlsx", L"pptx", L"csv", L"txt", L"jpg", L"jpeg", L"png", L"gif", L"svg", L"wav", L"zip", L"rar",
+	L"exe", L"dll", L"msi", L"iso", L"pls", L"plz", L"thx", L"thnx", L"btw", L"tbh", L"idk", L"imo", L"imho", L"lmk",
+	L"brb", L"omg", L"msg", L"npm", L"src", L"cmd", L"ls", L"pwd", L"sudo", L"env", L"js", L"ts", L"py", L"cpp", L"php",
+	L"db", L"ctrl", L"alt", L"esc", L"del", L"ins", L"pgup", L"pgdn", L"prtsc", L"fn", L"ghz", L"mhz", L"khz", L"kb",
+	L"mb", L"gb", L"tb", L"px", L"dpi", L"fps", L"rpm", L"wb", L"ym", L"ozon" };
+inline constexpr const wchar_t* kShortEnKeep[] = {
+	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"it", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
+	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd" };
+inline constexpr const wchar_t* kShortRu[] = {
+	L"инн", L"ооо", L"оао", L"зао", L"пао", L"ип", L"ндс", L"ндфл", L"усн", L"огрн", L"огрнип", L"кпп", L"бик", L"снилс",
+	L"упд", L"ттн", L"эдо", L"дрр", L"фнс", L"пфр", L"сфр", L"фсс", L"мвд", L"гибдд", L"жкх", L"рф", L"ссср", L"сша",
+	L"ес", L"еаэс", L"оон", L"мкад", L"тц", L"цб", L"сбп", L"сдэк", L"ржд", L"вуз", L"сми", L"чп", L"тв", L"пк", L"гост",
+	L"нк", L"тк", L"лк", L"кп", L"см", L"мм", L"км", L"кг", L"мг", L"шт", L"млн", L"млрд", L"тчк", L"зпт", L"спб", L"пн",
+	L"вт", L"чт", L"пт", L"вс", L"кв", L"стр", L"вкл", L"мгц", L"ггц", L"кгц", L"мб", L"гб", L"кб", L"тб" };
+inline constexpr const wchar_t* kShortRuKeep[] = { L"рк" };
+
+// Знаки по краям сняты: открывающие в начале, знаки после слова в конце ("«ЗВА»," - ЗВА).
+inline std::wstring Bare(const std::wstring& s) {
+	size_t b = 0, e = s.size();
+	while (b < e && wcschr(kLeadSigns, s[b])) b++;
+	while (e > b && wcschr(kTrailSigns, s[e - 1])) e--;
+	return s.substr(b, e - b);
+}
+
+// В списке языка (keepToo - и в keep); слово - строчными, без знаков по краям.
+inline bool InShortList(const std::wstring& word, const std::wstring& language, bool keepToo) {
+	if (word.empty() || language.size() < 2) return false;
+	auto has = [&](const auto& list) { return std::ranges::any_of(list, [&](const wchar_t* w) { return word == w; }); };
+	const std::wstring code = Lower(language.substr(0, 2));
+	if (code == L"en") return has(kShortEn) || (keepToo && has(kShortEnKeep));
+	if (code == L"ru") return has(kShortRu) || (keepToo && has(kShortRuKeep));
+	return false;
+}
+
+// Там - сокращение из списка, набранное - ничто своего языка: переключать без словаря ("ГЫИ" - USB, "BYY" - ИНН, "Секд" -
+// Ctrl, "зды" - pls). spellTyped - словарь своего языка и для прописных (SpellCheck::CheckAnyCaseEvenCaps).
+inline bool KnownShort(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                       const std::wstring& thereLanguage, auto&& spellTyped) {
+	if (typed.size() != there.size()) return false;
+	for (wchar_t c : there)
+		if (iswdigit(c)) return false;
+	const std::wstring t = Bare(typed), a = Lower(Bare(there));
+	if (t.empty() || !InShortList(a, thereLanguage, false) || InShortList(Lower(t), typedLanguage, true)) return false;
+	// Знак после него там - из набранной буквы ("зню" - py.: опечатка в "знаю"): так - от трёх букв ("ЗВАб" - PDF,).
+	if (a.size() < 3)
+		for (size_t i = 0; i < there.size(); i++)
+			if (TwoCaps::IsLetter(typed[i]) && !TwoCaps::IsLetter(there[i])) return false;
+	return spellTyped(t) != SpellCheck::Result::Word;
+}
+
 // Почему слово не трогаем; nullptr - можно спрашивать словари. typed - как набрано, there - те же клавиши в другой
 // раскладке; minLetters - 2, после щелчка или стрелок в том же окне 4 (перед словом в поле не буква - 2).
 inline const char* Skip(const std::wstring& typed, const std::wstring& there, size_t minLetters,
                         const std::vector<std::wstring>& exceptions) {
 	const Part t = Letters(typed), a = Letters(there);
-	if (a.core.empty() || (a.inner && !SameHyphens(typed, there, a))) return "not one word in the other layout";
+	if (a.core.empty() || (a.inner && !SameHyphens(typed, there, a) && !Apostrophes(typed, there, a)))
+		return "not one word in the other layout";
 	if (a.core.size() < minLetters) return "too short";
 	if (a.core.size() > 30) return "too long";
 	for (wchar_t c : typed)
@@ -335,7 +418,7 @@ inline const char* Skip(const std::wstring& typed, const std::wstring& there, si
 	if (script == TwoCaps::Script::Other) return "not letters";
 	bool vowel = false;
 	for (wchar_t c : a.core) {
-		if (c == L'-') continue; // дефис слова через дефис (SameHyphens)
+		if (c == L'-' || c == L'\'' || c == L'’') continue; // дефис (SameHyphens), апостроф (Apostrophes)
 		if (TwoCaps::ScriptOf(c) != script) return "mixed letters";
 		vowel = vowel || IsVowel(c);
 	}
@@ -401,12 +484,50 @@ inline bool OneEditApart(const std::wstring& x, const std::wstring& y) {
 // "каша" (английское слово в русской раскладке) почти всегда на одну букву от какой-нибудь краткой русской формы
 // ("еруку" - There - от "ерку"), и проверка теряла бы их десятками (tools/test_autoswitch.cmd), а английская "каша"
 // (русское слово в английской раскладке) на английское слово похожа редко.
+// Соседние клавиши латинской раскладки (QWERTY): ряды сдвинуты - клавиша верхнего ряда над двумя клавишами нижнего.
+inline bool NearKeys(wchar_t x, wchar_t y) {
+	static const wchar_t* const rows[] = { L"qwertyuiop", L"asdfghjkl", L"zxcvbnm" };
+	int rx = -1, cx = -1, ry = -1, cy = -1;
+	for (int r = 0; r < 3; r++) {
+		if (const wchar_t* p = wcschr(rows[r], x); p && x) rx = r, cx = (int)(p - rows[r]);
+		if (const wchar_t* p = wcschr(rows[r], y); p && y) ry = r, cy = (int)(p - rows[r]);
+	}
+	if (rx < 0 || ry < 0) return false;
+	if (rx == ry) return cx - cy == 1 || cy - cx == 1;
+	if (rx - ry != 1 && ry - rx != 1) return false;
+	const int upper = rx < ry ? cx : cy, lower = rx < ry ? cy : cx;
+	return lower == upper || lower == upper - 1;
+}
+
+// Правка на одну букву (OneEditApart), какую делают пальцы: пропущенная буква и две переставленные - любые; другая
+// буква - соседняя клавиша; лишняя - соседняя с буквой рядом или та же ещё раз. Строчными.
+inline bool FingerSlip(const std::wstring& typed, const std::wstring& word) {
+	const size_t n = typed.size(), m = word.size();
+	size_t i = 0;
+	while (i < n && i < m && typed[i] == word[i]) i++;
+	if (n == m) {
+		if (i == n) return true;
+		if (typed.compare(i + 1, std::wstring::npos, word, i + 1, std::wstring::npos) == 0)
+			return NearKeys(typed[i], word[i]); // другая буква
+		return true; // переставлены
+	}
+	if (n + 1 == m) return true; // пропущена
+	const wchar_t extra = typed[i];
+	return (i > 0 && (extra == typed[i - 1] || NearKeys(extra, typed[i - 1]))) ||
+		(i + 1 < n && (extra == typed[i + 1] || NearKeys(extra, typed[i + 1])));
+}
+
+// Похожесть на опечатку - только такая, какую делают пальцы (FingerSlip; Дмитрий, 15.10.2026: частые слова не
+// переключались - "jlby" - один, "levf." - думаю, "afqk" - файл, "jabct" - офисе: словарь предлагал слово на одну
+// правку, но другая буква в нём - далеко от набранной). Первая буква - та же или соседняя клавиша ("dtyle" - style).
 inline bool LooksLikeTypo(const std::wstring& word, const std::vector<std::wstring>& suggestions) {
 	if (word.size() < 4 || TwoCaps::ScriptOf(word[0]) != TwoCaps::Script::Latin) return false;
 	const std::wstring w = Lower(word);
 	for (const auto& s : suggestions) {
 		const std::wstring l = Lower(s);
-		if (!l.empty() && l.front() == w.front() && l.back() == w.back() && OneEditApart(w, l)) return true;
+		if (l.empty() || l.back() != w.back() || !OneEditApart(w, l) || !FingerSlip(w, l)) continue;
+		if (l.front() == w.front() || (l.size() == w.size() && w.compare(1, std::wstring::npos, l, 1, std::wstring::npos) == 0))
+			return true;
 	}
 	return false;
 }
@@ -439,6 +560,25 @@ inline bool TypoThere(const Part& t, const Part& a, bool typedHasSigns, auto&& s
 	return true;
 }
 
+// Слова слитно, каждое с заглавной (Дмитрий, 15.10.2026: "СфзыДщсл" - CapsLock, "КгыеВуыл" - RustDesk, "ТгьДщсл" -
+// NumLock): словарь знает только части. Две-три части от двух букв, только буквы, каждая - слово (spellThere); новая
+// часть - с заглавной после строчной ("camelCase" - тоже; "HTMLParser" - одна часть, не слово).
+inline bool CamelWords(const std::wstring& core, auto&& spellThere) {
+	std::vector<std::wstring> parts;
+	size_t from = 0;
+	for (size_t i = 1; i <= core.size(); i++)
+		if (i == core.size() || (TwoCaps::IsUpper(core[i]) && !TwoCaps::IsUpper(core[i - 1]))) {
+			parts.push_back(core.substr(from, i - from));
+			from = i;
+		}
+	if (parts.size() < 2 || parts.size() > 3) return false;
+	for (const auto& p : parts) {
+		if (p.size() < 2 || !std::ranges::all_of(p, [](wchar_t c) { return TwoCaps::IsLetter(c); })) return false;
+		if (spellThere(p) != SpellCheck::Result::Word) return false;
+	}
+	return true;
+}
+
 // Переключать ли (после Skip). spellTyped / spellThere - словарь языка набранного / другой раскладки
 // (SpellCheck::Result по слову). Набранное должно быть точно не словом: со знаком внутри ("j,]`v" - "объём") или из
 // одной буквы среди знаков (",s" - "бы") - не слово; иначе спрашиваем словарь (знаки по краям - знаки: "it." - слово
@@ -464,8 +604,10 @@ inline const char* DecideWhy(const std::wstring& typed, const std::wstring& ther
 	}
 	const auto inOther = spellThere(a.core);
 	if (inOther == SpellCheck::Result::Unknown) return "no dictionary of the other layout";
-	if (inOther == SpellCheck::Result::NotWord)
+	if (inOther == SpellCheck::Result::NotWord) {
+		if (CamelWords(a.core, spellThere)) return nullptr;
 		return TypoThere(t, a, innerSign, spellTyped, suggestTyped, suggestThere) ? nullptr : "not a word in the other layout";
+	}
 	if (!innerSign && !signFirst && LooksLikeTypo(t.core, suggestTyped(t.core))) return "looks like a typo";
 	return nullptr;
 }

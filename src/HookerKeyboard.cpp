@@ -365,7 +365,11 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			// ушли бы заново, отправленными (их не принимают некоторые игры и программы). Кроме ДВух ЗАглавных не
 			// латиницей: латинские (ILogger) и i там - имена, движок их не трогает (IsCodeEditor), а русские исправляет.
 			auto autoswitchHere = [&] { return !cfg->IsAutoSwitchOffTop(); };
-			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB) {
+			// "+" после слова (Shift и "=", "+" цифрового блока) - тоже конец слова: им пишут сочетания клавиш ("Секд+А" -
+			// Ctrl+F; Дмитрий, 15.10.2026). Слово проверяется, как перед Enter: "+" ждёт и уходит потом - уже в другой
+			// раскладке, и буква за ним набирается в ней. Знак "+" в обеих раскладках тот же - он и движку граница слова.
+			const bool plus = vkCode == VK_ADD || (vkCode == VK_OEM_PLUS && curk.HasMod(VK_SHIFT));
+			if (vkCode == VK_SPACE || vkCode == VK_RETURN || vkCode == VK_TAB || plus) {
 				const auto end = KeyHold::EndWord();
 				// Модификатор вместе с ней - сочетание, не конец слова; кроме Shift+Enter (новая строка в мессенджерах) и
 				// Ctrl+Enter (отправить): модификатор движок на время исправления отпускает и нажимает снова
@@ -383,7 +387,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				// Пробел с ещё нажатым Shift - слово ПРОПИСНЫМИ набирали с Shift и отпустили его чуть позже пробела (Дмитрий,
 				// 11.10.2026, "ЗИМА DJPVTPLBZ": само переключилось один раз из многих - когда Shift отпустил раньше). Shift
 				// движок не отпускает: Shift+Backspace стирает как Backspace, а слово печатается готовыми символами.
-				const bool shiftSpace = vkCode == VK_SPACE && mods == 1 && curk.HasMod(VK_SHIFT);
+				const bool shiftSpace = (vkCode == VK_SPACE || plus) && mods == 1 && curk.HasMod(VK_SHIFT);
 				// Слово до четырёх клавиш с I в начале, в английской раскладке, - может быть i, i'm, i've (fix_lone_i): решает
 				// движок. В других раскладках и другие короткие слова не держим: движок i там не исправляет, а держать
 				// после каждого короткого слова - лишние отправленные заново нажатия.
@@ -395,8 +399,8 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				if (check && vkCode != VK_SPACE) {
 					// Enter или Tab сразу после такого слова: они действуют сразу (сообщение уходит, курсор в другое
 					// поле), поэтому ждут сами - сначала исправляется слово, потом клавиша уходит в программу вместе
-					// с придержанными.
-					LOG_ANY("hold: Enter / Tab waits for the word check");
+					// с придержанными. "+" - так же.
+					LOG_ANY("hold: Enter / Tab / + waits for the word check");
 					const unsigned id = KeyHold::Start();
 					KeyHold::Hold(*k, true);
 					held_event = true;

@@ -209,6 +209,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Чтобы не отвлекал от текста", "So that it does not distract from the text" },
         { "Флаг на указателе мыши", "Flag on the mouse pointer" },
         { "Вид флага на указателе", "Look of the flag on the pointer" },
+        { "Прозрачность флага на указателе", "Transparency of the flag on the pointer" },
         { "Над текстом указатель мыши показывает флаг раскладки, после смены раскладки или всё время",
           "Over text the mouse pointer shows the flag of the layout, after a change of layout or all the time" },
         { "Нет", "None" },

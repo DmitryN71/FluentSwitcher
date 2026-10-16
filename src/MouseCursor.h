@@ -152,25 +152,36 @@ inline Box Drawn(const Picture& p) {
 	return b;
 }
 
-// Флаг - левым верхним углом к правому нижнему углу нарисованного: справа под палочкой, не на тексте справа от неё
-// (Дмитрий, 16.10.2026: "левый верхний угол - на уровне нижнего края курсора").
-inline int FlagLeft(const Picture& p) { return Drawn(p).right + 1; }
-inline int FlagTop(const Picture& p) { return Drawn(p).bottom + 1; }
-// Сторона квадрата флага: девять десятых высоты палочки, кратно 4 (картинки флагов - 16, 20, 24... точек: без
-// уменьшения флаг не мылится), чтобы поместился справа и снизу (флаг в квадрате - высотой в три четверти); меньше 12 -
-// сколько есть.
-inline int FlagSize(const Picture& p) {
+// Где флаг. Левым верхним углом - к правому нижнему углу нарисованного: справа под палочкой, не на тексте справа от
+// неё (Дмитрий, 16.10.2026: "левый верхний угол - на уровне нижнего края курсора"). Места снизу мало (палочка - посередине
+// картинки, как в beam_r.cur из Windows\Cursors: на 32 точках флаг вышел бы в 9) - справа от палочки, низом к её нижней
+// перекладине. Сторона квадрата флага: девять десятых высоты палочки, кратно 4 (картинки флагов - 16, 20, 24... точек:
+// без уменьшения флаг не мылится), чтобы поместился (флаг в квадрате - высотой в три четверти); меньше 12 - сколько есть.
+struct Placement {
+	int size = 0;
+	int left = 0;
+	bool below = true; // под палочкой; иначе - справа, низом к её низу
+};
+inline Placement Place(const Picture& p) {
+	Placement pl;
 	const Box b = Drawn(p);
-	if (b.right < 0) return 0;
-	const int roomX = p.w - (b.right + 1), roomY = (int)((p.h - (b.bottom + 1)) / 0.75);
+	if (b.right < 0) return pl;
+	pl.left = b.right + 1;
+	const int roomX = p.w - pl.left, roomY = (int)((p.h - (b.bottom + 1)) / 0.75);
 	const int want = (int)std::lround((b.bottom - b.top + 1) * 0.9 / 4.0) * 4;
-	const int size = (std::min)({ want, roomX / 4 * 4, roomY / 4 * 4 });
-	return size >= 12 ? size : (std::min)({ roomX, roomY, 12 });
+	pl.size = (std::min)({ want, roomX / 4 * 4, roomY / 4 * 4 });
+	if (pl.size >= 12) return pl;
+	pl.below = false;
+	pl.size = (std::min)(want, roomX / 4 * 4);
+	if (pl.size < 12) pl.size = (std::min)(roomX, 12);
+	return pl;
 }
+inline int FlagSize(const Picture& p) { return Place(p).size; }
 
-// Указатель base (ARGB - Argb) с флагом flag (квадрат size x size, 0xAARRGGBB; флаг в нём - видимой частью) справа
-// под палочкой. nullptr - не вышло.
-inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, int size) {
+// Указатель base (ARGB - Argb) с флагом flag (квадрат size x size, 0xAARRGGBB; флаг в нём - видимой частью) - где
+// Place; opacity - непрозрачность флага в процентах. nullptr - не вышло.
+inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, int size, int opacity = 100) {
+	opacity = (std::max)(0, (std::min)(100, opacity));
 	const int w = base.w, h = base.h;
 	if (!base.alpha) return nullptr;
 	if (w <= 0 || h <= 0 || size <= 0 || flag.size() != (size_t)size * size) return nullptr;
@@ -184,8 +195,10 @@ inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, i
 	if (bottom < 0) return nullptr;
 	const Box drawn = Drawn(base);
 	if (drawn.right < 0) return nullptr;
-	const int fx = drawn.right + 1;
-	const int fy = drawn.bottom + 1 - top; // верх видимого флага - сразу под палочкой
+	const Placement pl = Place(base);
+	const int fx = pl.left;
+	// Верх видимого флага - сразу под палочкой; или его низ - у её низа.
+	const int fy = pl.below ? drawn.bottom + 1 - top : drawn.bottom - bottom;
 	auto color = base.color;
 	auto andMask = base.andMask;
 	for (int y = top; y <= bottom; y++) {
@@ -193,7 +206,7 @@ inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, i
 			const int X = fx + x, Y = fy + y;
 			if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
 			const uint32_t s = flag[(size_t)y * size + x];
-			const uint32_t sa = s >> 24;
+			const uint32_t sa = (s >> 24) * (uint32_t)opacity / 100;
 			const size_t i = (size_t)Y * w + X;
 			// Прозрачность указателя - обычная (не умноженная на цвет): смешать.
 			const uint32_t d = color[i], da = d >> 24;

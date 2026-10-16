@@ -376,6 +376,11 @@ void StartGui() {
 				return 0;
 			}
 
+			if (msg == WM_ForegroundChanged) {
+				mouseFlag.OnWindow();
+				return 0;
+			}
+
 			if (msg == WM_ToggleAutoswitch) {
 				// Автопереключение вкл./выкл. (форум, 09.10.2026, AlexPORTrb): движку - сразу, в файл - только это поле (как
 				// выученные слова - saveMerged). Сочетанием (wParam) - уведомлением у значка, его не видно иначе; из меню у

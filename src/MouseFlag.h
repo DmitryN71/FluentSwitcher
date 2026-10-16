@@ -42,12 +42,22 @@ public:
 		}
 		const std::wstring id = Utils::GetNameForHKL_simple(m_lay);
 		const std::string look = cfg->mouse_flag_set.empty() ? cfg->caret_flag_set : cfg->mouse_flag_set;
-		const std::wstring key = id + L"|" + StrUtils::Convert(look) + (cfg->useBritishFlag ? L"|gb" : L"");
-		if (!m_applied || key != m_key) Apply(id, look, key);
+		const int opacity = std::clamp(cfg->mouse_flag_opacity, 10, 100);
+		const std::wstring key = id + L"|" + StrUtils::Convert(look) + (cfg->useBritishFlag ? L"|gb" : L"") + L"|" +
+			std::to_wstring(opacity);
+		if (!m_applied || key != m_key) Apply(id, look, opacity, key);
 		if (mode == 2 && m_applied)
 			StartTimer((UINT)std::clamp(cfg->caret_flag_brief_ms, 500, 30000));
 		else
 			StopTimer();
+	}
+
+	// Окно впереди сменилось (WM_ForegroundChanged): "ненадолго" - показать и там, как флаг у текстового курсора; раскладка
+	// - того окна (WM_LayNotif приходит, только когда она другая).
+	void OnWindow() {
+		if (conf_get_unsafe()->mouse_flag != 2) return;
+		if (HKL lay = ForegroundLayout()) m_lay = lay;
+		OnLayout(0);
 	}
 
 	// Раз в 2 с (окно движка служебное, WM_SETTINGCHANGE до него не доходит): в параметрах Windows сменили схему, размер или
@@ -127,7 +137,7 @@ private:
 	}
 
 	// Указатель-текст Windows с флагом раскладки id вида look. nullptr - не вышло.
-	HCURSOR Make(const std::wstring& id, const std::string& look) {
+	HCURSOR Make(const std::wstring& id, const std::string& look, int opacity) {
 		if (!m_baseOk) {
 			MouseCursor::Picture windows;
 			if (!MouseCursor::Capture(LoadCursorW(nullptr, IDC_IBEAM), windows)) return nullptr;
@@ -142,16 +152,16 @@ private:
 		// 16.10.2026: "шрифт очень некрасивый"); флаги - своего размера, точка в точку.
 		auto img = IconMgr::Inst().GetImage(id.c_str(), LetterIcons::Is(look) ? size * 2 : size, false, look);
 		if (!img || !img->IsOk()) return nullptr;
-		return MouseCursor::Compose(m_base, MouseCursor::Scaled(img->data, img->width, img->height, size), size);
+		return MouseCursor::Compose(m_base, MouseCursor::Scaled(img->data, img->width, img->height, size), size, opacity);
 	}
 
-	void Apply(const std::wstring& id, const std::string& look, const std::wstring& key) {
+	void Apply(const std::wstring& id, const std::string& look, int opacity, const std::wstring& key) {
 		// Основа - указатель Windows, не наш с прежним флагом: подменённый вернуть, прежде чем снимать.
 		if (!m_baseOk && m_applied) {
 			SystemParametersInfoW(SPI_SETCURSORS, 0, nullptr, 0);
 			m_applied = false;
 		}
-		HCURSOR cursor = Make(id, look);
+		HCURSOR cursor = Make(id, look, opacity);
 		if (!cursor) {
 			LOG_ANY(L"mouse flag: no picture for {}", LogPlain(id));
 			Restore();

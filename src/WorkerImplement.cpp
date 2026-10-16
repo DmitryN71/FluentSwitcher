@@ -1289,6 +1289,9 @@ void WorkerImplement::CliboardChanged() {
 
 void WorkerImplement::ChangeForeground(HWND hwnd) {
     LOG_ANY(L"Now foreground hwnd={}", (void*)hwnd);
+    // Флаг на указателе мыши "ненадолго" - и после смены окна, как флаг у текстового курсора (Дмитрий, 16.10.2026: "сразу
+    // после запуска Блокнота или Word он не появляется, нужно сначала переключить раскладку").
+    PostMessage(g_guiHandle, WM_ForegroundChanged, 0, 0);
     m_autoWord = {}; // другое окно: своя раскладка, свой курсор
     m_autoSwitched = {};
     m_twoCaps = {};

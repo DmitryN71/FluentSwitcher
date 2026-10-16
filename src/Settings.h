@@ -266,6 +266,7 @@ public:
 	// текстового курсора.
 	int mouse_flag = 0;
 	string mouse_flag_set;
+	int mouse_flag_opacity = 100; // непрозрачность флага на указателе, в процентах (как caret_flag_opacity)
 
     std::vector< CHotKeySet> hotkeysList;
     std::vector< RunProgramInfo> run_programs;

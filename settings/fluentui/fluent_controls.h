@@ -31,6 +31,10 @@ public:
     bool IsOn() const { return m_on; }
     void SetOn(bool on); // no onChange
     bool AcceptsFocus() const override { return true; }
+    // Disabled (Enable(false), or a window it is in): pale, on or off as it was; clicks and Space do nothing.
+
+protected:
+    void DoEnable(bool enable) override;
 
 private:
     void Toggle();
@@ -48,6 +52,10 @@ public:
     NumberField(wxWindow* parent, int value);
     // 0 when the box is empty or holds something else.
     int Value() const;
+    // Disabled (Enable(false), or a window it is in): the box and its number pale, no typing.
+
+protected:
+    void DoEnable(bool enable) override;
 
 private:
     void LayoutText();
@@ -114,6 +122,12 @@ wxStaticText* AddSettingsCard(wxWindow* page, wxSizer* column, const wxString& t
 
 // A card's description gets a new text: wrapped like the first one, so the card keeps its width.
 void SetCardDescription(wxStaticText* label, const wxString& text);
+
+// A whole card usable or not, as Windows 11 shows a setting that depends on another one: its title
+// and description pale, its control disabled (pale too, and it takes no clicks or keys); enabled
+// again, the texts get back the colours they had. card: what AddSettingsCard made, the parent of its
+// control (control->GetParent()) or of its description.
+void EnableSettingsCard(wxWindow* card, bool enable);
 
 // The sections on the left of a settings window, as in Windows 11's own settings: an icon and a
 // name; the section shown has a fill and the accent "pill". Actions (open a folder, quit) sit at the

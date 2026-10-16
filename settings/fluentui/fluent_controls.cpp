@@ -16,6 +16,13 @@ const char* const kDismiss =
 
 // The width a card's description wraps to: beside its control, or above one that is below it.
 const int kDescription = 300, kDescriptionBelow = 480; // DIPs
+
+// A text of a disabled card: its colour from before, given back when the card is enabled again.
+struct ColourBefore : wxClientData
+{
+    explicit ColourBefore(const wxColour& c) : colour(c) {}
+    wxColour colour;
+};
 }
 
 wxStaticText* FluentText(wxWindow* parent, const wxString& s, int points, const wxColour& colour, bool bold)
@@ -63,6 +70,13 @@ void ToggleSwitch::SetOn(bool on)
     }
 }
 
+// Enabled or disabled, by itself or with a window it is in.
+void ToggleSwitch::DoEnable(bool enable)
+{
+    wxPanel::DoEnable(enable);
+    Refresh();
+}
+
 void ToggleSwitch::Toggle()
 {
     m_on = !m_on;
@@ -80,15 +94,25 @@ void ToggleSwitch::OnPaint(wxPaintEvent&)
     const wxSize size = GetClientSize();
     const int w = FromDIP(40), h = FromDIP(20);
     const wxRect track((size.x - w) / 2, (size.y - h) / 2, w, h);
+    const int d = FromDIP(m_on ? 12 : 10);
+    const int cx = m_on ? track.GetRight() - FromDIP(9) : track.x + FromDIP(10);
+    const int cy = track.y + h / 2;
+    if (!IsUsable(this)) // its own state or that of a window it is in: pale, on or off as it was
+    {
+        const wxColour pale = DisabledText(back);
+        if (m_on)
+            FillRound(dc, track, h / 2.0, pale);
+        else
+            FillRound(dc, track, h / 2.0, back, &pale);
+        FillRound(dc, wxRect(cx - d / 2, cy - d / 2, d, d), d / 2.0, m_on ? back : pale);
+        return;
+    }
     if (ShowsFocus(this)) // around the track, in the margin left for it
         DrawFocusRing(this, dc, wxRect(track).Inflate(FromDIP(2)), h / 2.0 + FromDIP(2));
     if (m_on)
         FillRound(dc, track, h / 2.0, g.accent);
     else
         FillRound(dc, track, h / 2.0, back, &g.text2);
-    const int d = FromDIP(m_on ? 12 : 10);
-    const int cx = m_on ? track.GetRight() - FromDIP(9) : track.x + FromDIP(10);
-    const int cy = track.y + h / 2;
     const wxColour knob = m_on ? (g.dark ? wxColour(0, 0, 0) : wxColour(255, 255, 255)) : g.text2;
     FillRound(dc, wxRect(cx - d / 2, cy - d / 2, d, d), d / 2.0, knob);
 }
@@ -119,6 +143,18 @@ NumberField::NumberField(wxWindow* parent, int value) : wxPanel(parent)
     Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) { m_text->SetFocus(); });
 }
 
+// Enabled or disabled, by itself or with a window it is in: the box is the colour of the card then,
+// and its number pale.
+void NumberField::DoEnable(bool enable)
+{
+    wxPanel::DoEnable(enable);
+    const wxColour back = GetParent()->GetBackgroundColour();
+    m_text->SetBackgroundColour(enable ? g.input : back);
+    m_text->SetForegroundColour(enable ? g.text : DisabledText(back));
+    m_text->Refresh();
+    Refresh();
+}
+
 int NumberField::Value() const
 {
     long v = 0;
@@ -138,6 +174,12 @@ void NumberField::OnPaint(wxPaintEvent&)
     dc.SetBackground(wxBrush(GetParent()->GetBackgroundColour()));
     dc.Clear();
     const wxRect box(GetClientSize());
+    if (!IsUsable(this)) // its own state or that of a window it is in
+    {
+        const wxColour back = GetParent()->GetBackgroundColour(), pale = Mix(DisabledText(back), back, 0.5);
+        FillRound(dc, box, FromDIP(4), back, &pale);
+        return;
+    }
     const bool focus = FindFocus() == m_text;
     const wxColour idle = Mix(g.text2, g.input, 0.5);
     FillInput(dc, box, FromDIP(4), g.input, focus ? &g.accent : &idle, focus ? FromDIP(2) : 1);
@@ -338,6 +380,35 @@ wxStaticText* AddSettingsCard(wxWindow* page, wxSizer* column, const wxString& t
 void SetCardDescription(wxStaticText* label, const wxString& text)
 {
     SetWrappedLabel(label, text, label->FromDIP(kDescription));
+}
+
+void EnableSettingsCard(wxWindow* card, bool enable)
+{
+    if (!card)
+        return;
+    for (wxWindow* child : card->GetChildren())
+    {
+        wxStaticText* label = wxDynamicCast(child, wxStaticText);
+        if (!label) // the control (a composite one is disabled with all it holds)
+        {
+            child->Enable(enable);
+            continue;
+        }
+        ColourBefore* before = static_cast<ColourBefore*>(label->GetClientObject());
+        if (!enable)
+        {
+            if (!before) // disabled twice: the colour of the first time stays
+                label->SetClientObject(new ColourBefore(label->GetForegroundColour()));
+            label->SetForegroundColour(DisabledText(card->GetBackgroundColour()));
+        }
+        else if (before)
+        {
+            label->SetForegroundColour(before->colour);
+            label->SetClientObject(nullptr); // deletes it
+        }
+        label->Refresh();
+    }
+    card->Refresh(); // its children too: a control inside a disabled one draws pale (IsUsable)
 }
 
 // ---------------------------------------------------------------------------------------------

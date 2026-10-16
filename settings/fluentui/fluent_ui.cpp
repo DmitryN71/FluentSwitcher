@@ -367,6 +367,19 @@ void FluentButton::SetText(const wxString& label)
     Refresh();
 }
 
+wxColour DisabledText(const wxColour& back)
+{
+    return Mix(g.text2, back, 0.55);
+}
+
+bool IsUsable(const wxWindow* w)
+{
+    for (; w && !w->IsTopLevel(); w = w->GetParent())
+        if (!w->IsThisEnabled())
+            return false;
+    return true;
+}
+
 bool FluentButton::Enable(bool enable)
 {
     if (!wxPanel::Enable(enable))
@@ -383,7 +396,7 @@ void FluentButton::OnPaint(wxPaintEvent&)
     dc.SetBackground(wxBrush(GetParent()->GetBackgroundColour()));
     dc.Clear();
     wxColour fill, text = g.text;
-    if (!IsThisEnabled())
+    if (!IsUsable(this)) // its own state or that of a window it is in
     {
         fill = m_accent ? Mix(g.accent, g.bg, 0.45) : g.control;
         text = m_accent ? Mix(g.onAccent, fill, 0.6) : Mix(g.text2, g.control, 0.55);
@@ -397,7 +410,7 @@ void FluentButton::OnPaint(wxPaintEvent&)
         fill = m_pressed ? g.controlPressed : m_hover ? g.controlHover : g.control;
     const wxRect r(GetClientSize());
     FillRound(dc, r, FromDIP(4), fill, m_accent ? nullptr : &g.border);
-    if (ShowsFocus(this))
+    if (IsUsable(this) && ShowsFocus(this)) // a window disabled with the focus keeps it, unseen
         DrawFocusRing(this, dc, r, FromDIP(4));
     dc.SetFont(UiFont(10));
     dc.SetTextForeground(text);
@@ -413,22 +426,36 @@ void FluentButton::OnPaint(wxPaintEvent&)
 
 bool AskFluent(wxWindow* parent, const wxString& text, const wxString& yes, const wxString& no)
 {
+    // As Windows 11's ContentDialog: the text on the card colour; under it a band of the window colour
+    // where the buttons share the width (one button alone: the right half).
     wxDialog dialog(parent, wxID_ANY, wxTheApp ? wxTheApp->GetAppDisplayName() : wxString());
     dialog.SetBackgroundColour(g.bg);
-    ApplyDwm(&dialog, false, &g.bg);
-    const int pad = dialog.FromDIP(20);
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    wxStaticText* label = new wxStaticText(&dialog, wxID_ANY, text);
+    ApplyDwm(&dialog, false, &g.card);
+    const int pad = dialog.FromDIP(20), gap = dialog.FromDIP(8);
+    wxPanel* content = new wxPanel(&dialog);
+    content->SetBackgroundColour(g.card);
+    wxStaticText* label = new wxStaticText(content, wxID_ANY, text);
     label->SetFont(UiFont(10));
     label->SetForegroundColour(g.text);
+    label->SetBackgroundColour(g.card);
     label->Wrap(dialog.FromDIP(380));
-    sizer->Add(label, 0, wxALL, pad);
+    wxBoxSizer* inside = new wxBoxSizer(wxVERTICAL);
+    inside->Add(label, 0, wxALL, pad + gap);
+    content->SetSizer(inside);
+    wxPanel* footer = new wxPanel(&dialog);
+    footer->SetBackgroundColour(g.bg);
     wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
-    buttons->AddStretchSpacer();
-    buttons->Add(new FluentButton(&dialog, wxID_OK, yes, true));
-    if (!no.empty()) // without it: a message with one button
-        buttons->Add(new FluentButton(&dialog, wxID_CANCEL, no), 0, wxLEFT, dialog.FromDIP(8));
-    sizer->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, pad);
+    if (no.empty())
+        buttons->AddStretchSpacer(1);
+    buttons->Add(new FluentButton(footer, wxID_OK, yes, true), 1, wxEXPAND);
+    if (!no.empty())
+        buttons->Add(new FluentButton(footer, wxID_CANCEL, no), 1, wxEXPAND | wxLEFT, gap);
+    wxBoxSizer* band = new wxBoxSizer(wxVERTICAL);
+    band->Add(buttons, 0, wxEXPAND | wxALL, pad);
+    footer->SetSizer(band);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    sizer->Add(content, 1, wxEXPAND);
+    sizer->Add(footer, 0, wxEXPAND);
     dialog.SetSizerAndFit(sizer);
     dialog.Bind(wxEVT_CHAR_HOOK, [&dialog](wxKeyEvent& e) {
         if (e.GetKeyCode() == WXK_ESCAPE)
@@ -640,6 +667,15 @@ FluentChoice::FluentChoice(wxWindow* parent, const wxArrayString& items, int sel
     });
 }
 
+// Enabled or disabled, by itself or with a window it is in.
+void FluentChoice::DoEnable(bool enable)
+{
+    wxPanel::DoEnable(enable);
+    if (!enable)
+        m_hover = false; // a disabled window gets no "mouse left" to clear it
+    Refresh();
+}
+
 void FluentChoice::SetSelection(int selection)
 {
     m_selection = selection;
@@ -708,12 +744,14 @@ void FluentChoice::OnPaint(wxPaintEvent&)
     dc.SetBackground(wxBrush(GetParent()->GetBackgroundColour()));
     dc.Clear();
     const wxRect r(GetClientSize());
-    FillRound(dc, r, FromDIP(4), m_hover ? g.controlHover : g.control, &g.border);
-    if (ShowsFocus(this))
+    const bool on = IsUsable(this); // its own state or that of a window it is in
+    const wxColour pale = DisabledText(g.control);
+    FillRound(dc, r, FromDIP(4), on && m_hover ? g.controlHover : g.control, &g.border);
+    if (on && ShowsFocus(this))
         DrawFocusRing(this, dc, r, FromDIP(4));
 
     dc.SetFont(UiFont(10));
-    dc.SetTextForeground(g.text);
+    dc.SetTextForeground(on ? g.text : pale);
     const wxString text = m_selection >= 0 && m_selection < (int)m_items.size() ? m_items[m_selection] : wxString();
     int x = FromDIP(11);
     if (m_selection >= 0 && m_selection < (int)m_swatches.size())
@@ -726,7 +764,7 @@ void FluentChoice::OnPaint(wxPaintEvent&)
     if (gc)
     {
         const double cx = r.GetRight() - FromDIP(16), cy = r.height / 2.0, s = FromDIP(4);
-        gc->SetPen(wxPen(g.text2, wxMax(1, FromDIP(1))));
+        gc->SetPen(wxPen(on ? g.text2 : pale, wxMax(1, FromDIP(1))));
         wxPoint2DDouble points[] = { { cx - s, cy - s / 2 }, { cx, cy + s / 2 }, { cx + s, cy - s / 2 } };
         gc->StrokeLines(3, points);
     }

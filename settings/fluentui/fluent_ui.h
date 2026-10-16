@@ -72,6 +72,15 @@ void FillInput(wxDC& dc, const wxRect& r, double radius, const wxColour& fill, c
 // k of colour a, the rest of b.
 wxColour Mix(const wxColour& a, const wxColour& b, double k);
 
+// The text (and lines) of something that cannot be used now, on the colour `back`: pale, in the
+// dark and the light theme alike.
+wxColour DisabledText(const wxColour& back);
+
+// `w` and every window it is in are enabled, up to its top-level window (not included): a modal
+// dialog disables the window under it, and that must not draw it all pale. The controls here draw
+// themselves pale when this is false.
+bool IsUsable(const wxWindow* w);
+
 // A Windows 11 button: rounded, filled; `accent` = the blue one for the main action.
 // A click sends wxEVT_BUTTON with its id, like a wxButton, so wxID_OK / wxID_CANCEL end a dialog.
 class FluentButton : public wxPanel
@@ -87,7 +96,8 @@ public:
     FluentButton(wxWindow* parent, wxWindowID id, const char* iconPath, const char* tooltip)
         : FluentButton(parent, id, iconPath, wxString(tooltip)) {}
     bool AcceptsFocus() const override { return true; }
-    bool Enable(bool enable = true) override; // an unavailable button is drawn pale
+    // An unavailable button is drawn pale; so is one in a window that is disabled (EnableSettingsCard).
+    bool Enable(bool enable = true) override;
     // A new label; the button grows for a longer one and never shrinks, so a label that comes and
     // goes ("Apply" / "Saved") does not move its neighbours once both have been set.
     void SetText(const wxString& label);
@@ -121,11 +131,16 @@ public:
     int GetSelection() const { return m_selection; }
     void SetSelection(int selection);
     bool AcceptsFocus() const override { return true; }
+    // Disabled (Enable(false), or a window it is in, see EnableSettingsCard): pale text and chevron,
+    // no hover, no focus ring; it does not open (Windows sends a disabled window no clicks or keys).
     // A dot of colour before each item (the accent colours); an invalid colour: no dot.
     void SetSwatches(const std::vector<wxColour>& swatches);
     // A popup of the owner's opened from this control (a ColourGrid for "Custom colour...") takes its keys
     // while it is open: keys(code) true when taken. nullptr when it has closed.
     void SetPopupKeys(std::function<bool(int key)> keys) { m_popupKey = std::move(keys); }
+
+protected:
+    void DoEnable(bool enable) override;
 
 private:
     void OnPaint(wxPaintEvent&);

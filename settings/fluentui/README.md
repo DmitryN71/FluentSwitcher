@@ -9,7 +9,7 @@ the window frame, icons, and the controls of a settings window. MIT license, © 
 | File | What is in it |
 |---|---|
 | `fluent_ui.h/.cpp` | `Theme g` and `MakeTheme` (dark / light, accent), `IsWindows11`, `UiFont`, `ApplyDwm` (caption color, round corners), `Svg` and `FluentIcon`, `FillRound` / `FillInput` / `Mix`, the keyboard focus ring (`SetKeyboardCues`, `ShowsFocus`, `DrawFocusRing`), `SetWrappedLabel`, `FluentButton`, `FluentChoice` (drop-down list), `AskFluent` (a question box) |
-| `fluent_controls.h/.cpp` | `ToggleSwitch`, `NumberField`, `HotkeyView` (the look of a hotkey field) with `NoteLine` / `SetNoteLine` (the line under it), `Card`, `NewSettingsPage`, `AddSettingsCard`, `SetCardDescription`, `SectionNav` (the sections on the left), `ColourGrid` (the 48 accent colors of Windows), `FluentText`, `WarningColour` |
+| `fluent_controls.h/.cpp` | `ToggleSwitch`, `NumberField`, `HotkeyView` (the look of a hotkey field) with `NoteLine` / `SetNoteLine` (the line under it), `Card`, `NewSettingsPage`, `AddSettingsCard`, `SetCardDescription`, `EnableSettingsCard`, `SectionNav` (the sections on the left), `ColourGrid` (the 48 accent colors of Windows), `FluentText`, `WarningColour` |
 | `LICENSE-FluentUI-System-Icons.txt` | Microsoft's MIT license for the icon paths (`FluentIcon` draws the "d" of an icon from github.com/microsoft/fluentui-system-icons; `HotkeyView` has the "dismiss" one built in) |
 
 Nothing in here has texts of its own: every label is given by the caller.
@@ -81,6 +81,26 @@ sizer->Add(right, 1, wxEXPAND | wxLEFT, FromDIP(20));
 SetSizer(sizer);
 nav->onSelect = [&](int section) { /* show that page, hide the others, set the title */ };
 ```
+
+## A setting that depends on another
+
+As in Windows 11, a card whose setting means nothing while another one is off can be shown pale:
+`EnableSettingsCard(card, false)` greys its title and description and disables its control (a
+`FluentChoice`, `ToggleSwitch`, `NumberField` or `FluentButton` draws itself pale and takes no clicks
+or keys, also inside a panel of its own); `EnableSettingsCard(card, true)` gives everything back. The
+card is the parent of the control (`control->GetParent()`) or of the description that
+`AddSettingsCard` returns.
+
+```cpp
+ToggleSwitch* flag = nullptr;
+FluentChoice* style = nullptr;
+AddSettingsCard(page, column, "Show the flag", "...", [&](wxWindow* card) { return flag = new ToggleSwitch(card, true); });
+AddSettingsCard(page, column, "Flag style", "...", [&](wxWindow* card) { return style = new FluentChoice(card, items, 0); });
+flag->onChange = [&] { EnableSettingsCard(style->GetParent(), flag->IsOn()); };
+EnableSettingsCard(style->GetParent(), flag->IsOn()); // as it starts
+```
+
+The pale colour is `DisabledText(back)` (fluent_ui.h), for drawing controls of your own the same way.
 
 ## A hotkey field
 

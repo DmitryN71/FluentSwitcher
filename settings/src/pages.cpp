@@ -1870,28 +1870,55 @@ void SettingsFrame::BuildCaretFlag()
 {
     // The flag at the text cursor (the engine's CaretFlag.h), with its own look.
     Section(kIconFlags, T("Флаг у курсора"));
-    Numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
-            { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") });
-    Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"), "caret_flag_brief_ms",
-            2000, { 1000, 2000, 3000, 5000, 10000 }, { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"),
-            T("10 секунд") });
-    FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на тёмной плашке"), "caret_flag_set", false);
-    Numbers(T("Где показывать"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
-            { 0, 1 }, { T("Под курсором"), T("Над курсором") });
-    Numbers(T("Размер"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"), "caret_flag_size", 20,
-            { 16, 20, 24, 32 }, { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") });
-    Numbers(T("Прозрачность"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
-            { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
-            T("Максимальная") });
+    FluentChoice* caret = static_cast<FluentChoice*>(
+        Numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
+                { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
+    wxWindow* brief = Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"),
+                              "caret_flag_brief_ms", 2000, { 1000, 2000, 3000, 5000, 10000 },
+                              { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
+    const std::vector<wxWindow*> caretRows = {
+        FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на тёмной плашке"), "caret_flag_set", false),
+        Numbers(T("Где показывать"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
+                { 0, 1 }, { T("Под курсором"), T("Над курсором") }),
+        Numbers(T("Размер"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"), "caret_flag_size", 20,
+                { 16, 20, 24, 32 }, { T("Маленький"), T("Обычный"), T("Крупный"), T("Очень крупный") }),
+        Numbers(T("Прозрачность"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
+                { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
+                T("Максимальная") }),
+    };
     // The flag on the mouse pointer over text (the engine's MouseFlag.h; Dmitry, 16.10.2026).
-    Numbers(T("Флаг на указателе мыши"),
-            T("Над текстом указатель мыши показывает флаг раскладки, после смены раскладки или всё время"),
-            "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") });
-    FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на тёмной плашке"), "mouse_flag_set", false,
-             "caret_flag_set");
-    Numbers(T("Прозрачность флага на указателе"), T("Чтобы не отвлекал от текста"), "mouse_flag_opacity", 100,
-            { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
-            T("Максимальная") });
+    FluentChoice* mouse = static_cast<FluentChoice*>(
+        Numbers(T("Флаг на указателе мыши"),
+                T("Над текстом указатель мыши показывает флаг раскладки: всё время или ненадолго – после смены "
+                  "раскладки или окна"),
+                "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
+    const std::vector<wxWindow*> mouseRows = {
+        FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на тёмной плашке"), "mouse_flag_set",
+                 false, "caret_flag_set"),
+        Numbers(T("Прозрачность флага на указателе"), T("Чтобы не отвлекал от текста"), "mouse_flag_opacity", 100,
+                { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
+                T("Максимальная") }),
+    };
+    // Pale while they mean nothing, as Windows 11 shows them (Dmitry, 16.10.2026: "если флаг не показываем, то и
+    // настройки прозрачности и типа флагов ... должны быть grayed out"): a flag's own rows while it is not shown; "for a
+    // moment" while neither flag shows for a moment - the pointer's takes that time too.
+    const auto pale = [this, brief, caretRows, mouseRows] {
+        const int caretMode = m_edit.GetInt("caret_flag", 1), mouseMode = m_edit.GetInt("mouse_flag", 0);
+        for (wxWindow* row : caretRows)
+            EnableSettingsCard(row->GetParent(), caretMode != 0);
+        for (wxWindow* row : mouseRows)
+            EnableSettingsCard(row->GetParent(), mouseMode != 0);
+        EnableSettingsCard(brief->GetParent(), caretMode == 2 || mouseMode == 2);
+    };
+    caret->onChange = [pale, save = caret->onChange] {
+        save(); // caret_flag, and Save / Apply light up
+        pale();
+    };
+    mouse->onChange = [pale, save = mouse->onChange] {
+        save();
+        pale();
+    };
+    pale();
     FinishPage();
 }
 

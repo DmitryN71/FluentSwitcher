@@ -3,6 +3,7 @@
 
 #include "TrayIcon.h"
 #include "CaretFlag.h"
+#include "MouseFlag.h"
 #include "LayoutSound.h"
 #include "SettingsIpc.h"
 #include "Update.h"
@@ -25,6 +26,7 @@ void StartGui() {
 
 	TrayIcon trayIcon;
 	CaretFlag caretFlag;
+	MouseFlag mouseFlag; // уходит при выходе из цикла сообщений - указатель Windows возвращается
 	LayoutSound layoutSound;
 
 	// Счёт до трёх - отмены ДВух ЗАглавных и автопереключения, исправления вручную: на третий раз слово уходит в список
@@ -146,6 +148,7 @@ void StartGui() {
 	// Буквы вместо флага - цвета текста панели задач: сменилась её тема (светлая / тёмная) - перерисовать значок.
 	// Окна движка служебные (HWND_MESSAGE), WM_SETTINGCHANGE до них не доходит - смотрим раз в 2 с.
 	timer.CycleTimer([&, dark = FluentMenu::TaskbarDark()]() mutable {
+		mouseFlag.Watch(); // и указатели Windows: сменили схему, размер, цвет
 		const bool now = FluentMenu::TaskbarDark();
 		if (now == dark) return;
 		dark = now;
@@ -411,6 +414,7 @@ void StartGui() {
 				}
 				trayIcon.Update((HKL)wParam);
 				caretFlag.OnLayout((HKL)wParam);
+				mouseFlag.OnLayout((HKL)wParam);
 				if (wParam)
 					layoutSound.OnLayout((HKL)wParam, lParam != 0, conf_get_unsafe()->IsSkipProgramTop());
 				else

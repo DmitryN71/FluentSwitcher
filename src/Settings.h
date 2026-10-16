@@ -258,6 +258,8 @@ public:
 	int caret_flag_place = 0;
 	int caret_flag_opacity = 60;
 	int caret_flag_brief_ms = 2000;
+	// Флаг раскладки на указателе мыши над текстом (MouseFlag.h): подменённый указатель-текст Windows.
+	bool mouse_flag = false;
 
     std::vector< CHotKeySet> hotkeysList;
     std::vector< RunProgramInfo> run_programs;

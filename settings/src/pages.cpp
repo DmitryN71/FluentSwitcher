@@ -1882,6 +1882,10 @@ void SettingsFrame::BuildCaretFlag()
     Numbers(T("Прозрачность"), T("Чтобы не отвлекал от текста"), "caret_flag_opacity", 60,
             { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
             T("Максимальная") });
+    // The flag on the mouse pointer over text (the engine's MouseFlag.h; Dmitry, 16.10.2026).
+    Toggle(T("Флаг на указателе мыши"),
+           T("Над текстом указатель мыши показывает флаг раскладки – того же вида, что у текстового курсора"),
+           "mouse_flag", false);
     FinishPage();
 }
 

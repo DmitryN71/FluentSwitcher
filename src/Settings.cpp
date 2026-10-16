@@ -150,7 +150,8 @@ namespace nlohmann {
 			caret_flag_size,
 			caret_flag_place,
 			caret_flag_opacity,
-			caret_flag_brief_ms
+			caret_flag_brief_ms,
+			mouse_flag
 			//,inject_delay_after_lang_ms
 		)
 }

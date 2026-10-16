@@ -2,6 +2,7 @@
 #include "TrayIcon.h"
 #include "SwAutostart.h"
 #include "SettingsIpc.h"
+#include "MouseFlag.h"
 
 namespace {
 // Полный путь exe процесса pid (пусто - не узнать).
@@ -76,6 +77,7 @@ bool RunningCopy() {
 // к этому exe (копию в другой папке и её автозапуск не трогаем). Задачу с правами администратора без них
 // не убрать: тогда эта же команда с правами (Windows спросит).
 int CleanupAutostart() {
+	MouseFlag::RestoreLeftover(); // флаг на указателе мыши остался от аварийного выхода - вернуть указатель Windows
 	COM::CAutoCOMInitialize com;
 	IFS_LOG(com.Init());
 	std::wstring exe;

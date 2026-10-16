@@ -239,6 +239,10 @@ class WorkerImplement {
     void CaretMoved() {
         m_autoWord.moved = true;
         m_autoWord.boundary = -1; // новое место - спросить поле заново
+        // Стирание и отмены были там, откуда ушли: слово здесь новое (Дмитрий, 16.10.2026: стёр Backspace слово с пробелом в
+        // одном поле письма, щёлкнул в «Копию» - там "шкштф" (irina) не переключилось: "Backspace past the word"
+        // держалось до пробела).
+        m_autoWord.backspace = m_autoWord.undone = m_autoWord.twoCapsUndone = false;
         if (m_autoSwitched.early) m_autoSwitched = {}; // слово, переключённое посреди, осталось позади
     }
     // Граница слова (пробел, Enter, Tab): приметы слова сначала, раскладка - как сейчас.

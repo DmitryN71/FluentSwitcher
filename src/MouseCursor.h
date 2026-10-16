@@ -89,6 +89,43 @@ inline std::vector<uint32_t> Scaled(const unsigned char* rgba, int sw, int sh, i
 	return out;
 }
 
+// Указатель - в цвет с прозрачностью (ARGB), как стрелка Windows. Указатель с маской (палочка Windows - одноцветная и
+// инвертирует фон под собой) Windows рисует с цветными точками не везде верно: флаг на нём был кашей (Дмитрий,
+// 16.10.2026, 1.5.14-test1: "американский можно различить, российский - прямоугольник, с переливом и буквы - mojibake").
+// Инвертирующие точки - чёрные, вокруг них - белая кайма: видно и на светлом, и на тёмном; чёрные и белые - как были.
+inline Picture Argb(const Picture& src) {
+	if (src.alpha) return src;
+	Picture p = src;
+	const int w = p.w, h = p.h;
+	const size_t n = (size_t)w * h;
+	std::vector<uint8_t> invert(n);
+	for (size_t i = 0; i < n; i++) {
+		const uint32_t c = src.color[i] & 0xFFFFFF;
+		if (!src.andMask[i]) p.color[i] = 0xFF000000 | c; // своя точка: чёрная, белая, цветная
+		else if (c) {
+			p.color[i] = 0xFF000000; // инвертирующая - чёрной
+			invert[i] = 1;
+		}
+		else p.color[i] = 0; // прозрачная
+	}
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++) {
+			const size_t i = (size_t)y * w + x;
+			if (p.color[i] >> 24) continue;
+			bool edge = false;
+			for (int dy = -1; dy <= 1 && !edge; dy++)
+				for (int dx = -1; dx <= 1 && !edge; dx++) {
+					const int X = x + dx, Y = y + dy;
+					edge = X >= 0 && Y >= 0 && X < w && Y < h && invert[(size_t)Y * w + X];
+				}
+			if (edge) p.color[i] = 0xFFFFFFFF;
+		}
+	for (size_t i = 0; i < n; i++) p.andMask[i] = (p.color[i] >> 24) == 0;
+	p.mono = false;
+	p.alpha = true;
+	return p;
+}
+
 // Где на картинке указателя нарисовано что-то (включительно): палочка у указателя Windows - не посередине, на 32 точках -
 // слева сверху (горячая точка 8, 9).
 struct Box {
@@ -122,10 +159,11 @@ inline int FlagSize(const Picture& p) {
 	return size >= 12 ? size : (std::min)(room, 12);
 }
 
-// Указатель base с флагом flag (квадрат size x size, 0xAARRGGBB; флаг в нём - видимой частью) справа от палочки, у её
-// нижней перекладины. nullptr - не вышло.
+// Указатель base (ARGB - Argb) с флагом flag (квадрат size x size, 0xAARRGGBB; флаг в нём - видимой частью) справа от
+// палочки, у её нижней перекладины. nullptr - не вышло.
 inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, int size) {
 	const int w = base.w, h = base.h;
+	if (!base.alpha) return nullptr;
 	if (w <= 0 || h <= 0 || size <= 0 || flag.size() != (size_t)size * size) return nullptr;
 	int top = size, bottom = -1;
 	for (int y = 0; y < size; y++)
@@ -148,22 +186,16 @@ inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, i
 			const uint32_t s = flag[(size_t)y * size + x];
 			const uint32_t sa = s >> 24;
 			const size_t i = (size_t)Y * w + X;
-			if (base.alpha) {
-				// Прозрачность указателя - обычная (не умноженная на цвет): смешать.
-				const uint32_t d = color[i], da = d >> 24;
-				const uint32_t oa = sa + da * (255 - sa) / 255;
-				if (!oa) continue;
-				auto mix = [&](int shift) {
-					const uint32_t sc = (s >> shift) & 0xFF, dc = (d >> shift) & 0xFF;
-					return ((sc * sa + dc * da * (255 - sa) / 255) / oa) << shift;
-				};
-				color[i] = (oa << 24) | mix(16) | mix(8) | mix(0);
-				andMask[i] = 0;
-			}
-			else if (sa >= 128) {
-				color[i] = s & 0x00FFFFFF; // без прозрачности: Windows рисует по маске, а не по альфе
-				andMask[i] = 0;
-			}
+			// Прозрачность указателя - обычная (не умноженная на цвет): смешать.
+			const uint32_t d = color[i], da = d >> 24;
+			const uint32_t oa = sa + da * (255 - sa) / 255;
+			if (!oa) continue;
+			auto mix = [&](int shift) {
+				const uint32_t sc = (s >> shift) & 0xFF, dc = (d >> shift) & 0xFF;
+				return ((sc * sa + dc * da * (255 - sa) / 255) / oa) << shift;
+			};
+			color[i] = (oa << 24) | mix(16) | mix(8) | mix(0);
+			andMask[i] = 0;
 		}
 	}
 	HDC dc = GetDC(nullptr);

@@ -50,7 +50,7 @@ free and open source under GPL-3.0.
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
   a mouse click; a flag (regular or waving) or the letters on a dark badge, below or above the cursor, four sizes, transparency. In
   browsers only in text fields. Set apart from the tray icon.
-- **A flag on the mouse pointer** (if you like): over text the text pointer shows the flag of the layout, the same
+- **A flag on the mouse pointer** (if you like, always or for a moment): over text the pointer shows the flag of the layout, the same
   look - Windows draws it itself, with no work on every move of the mouse.
 - **A tray icon**: flags for 74 languages (Flagpack, each size on the screen's pixels), regular or waving – with folds and a shadow, the British flag for English
   if you like, the letters EN, RU in the taskbar's text color or the app's icon; it can be hidden. A click and a

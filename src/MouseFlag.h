@@ -15,27 +15,38 @@
 class MouseFlag {
 public:
 	MouseFlag() {
+		s_instance = this;
 		RestoreLeftover();
 		m_signature = Signature();
 		OnLayout(0);
 	}
-	~MouseFlag() { Restore(); }
+	~MouseFlag() {
+		StopTimer();
+		Restore();
+		s_instance = nullptr;
+	}
 	MouseFlag(const MouseFlag&) = delete;
 	MouseFlag& operator=(const MouseFlag&) = delete;
 
-	// Раскладка сменилась; 0 - та же (настройки перечитаны, FluentSwitcher включили или выключили).
+	// Раскладка сменилась; 0 - та же (настройки перечитаны, FluentSwitcher включили или выключили). "Ненадолго" - на
+	// caret_flag_brief_ms, как флаг у текстового курсора (Дмитрий, 16.10.2026: "почему он не прячется по таймауту?").
 	void OnLayout(HKL lay) {
 		if (lay) m_lay = lay;
 		if (!m_lay) m_lay = ForegroundLayout();
 		auto cfg = conf_get_unsafe();
-		if (!cfg->mouse_flag || !g_enabled.IsEnabled() || !m_lay) {
+		const int mode = cfg->mouse_flag;
+		if (!mode || !g_enabled.IsEnabled() || !m_lay) {
+			StopTimer();
 			Restore();
 			return;
 		}
 		const std::wstring id = Utils::GetNameForHKL_simple(m_lay);
 		const std::wstring key = id + L"|" + StrUtils::Convert(cfg->caret_flag_set) + (cfg->useBritishFlag ? L"|gb" : L"");
-		if (m_applied && key == m_key) return;
-		Apply(id, key);
+		if (!m_applied || key != m_key) Apply(id, key);
+		if (mode == 2 && m_applied)
+			StartTimer((UINT)std::clamp(cfg->caret_flag_brief_ms, 500, 30000));
+		else
+			StopTimer();
 	}
 
 	// Раз в 2 с (окно движка служебное, WM_SETTINGCHANGE до него не доходит): в параметрах Windows сменили схему, размер или
@@ -98,13 +109,31 @@ private:
 		return s;
 	}
 
+	// "Ненадолго" прошло - указатель Windows обратно. Таймер потока (окно движка служебное): его WM_TIMER разбирает цикл
+	// сообщений gui2/main.cpp.
+	static void CALLBACK OnTimer(HWND, UINT, UINT_PTR, DWORD) {
+		if (!s_instance) return;
+		s_instance->StopTimer();
+		s_instance->Restore();
+	}
+	void StartTimer(UINT ms) {
+		StopTimer();
+		m_timer = SetTimer(nullptr, 0, ms, OnTimer);
+	}
+	void StopTimer() {
+		if (m_timer) KillTimer(nullptr, m_timer);
+		m_timer = 0;
+	}
+
 	// Указатель-текст Windows с флагом раскладки id. nullptr - не вышло.
 	HCURSOR Make(const std::wstring& id) {
 		if (!m_baseOk) {
-			if (!MouseCursor::Capture(LoadCursorW(nullptr, IDC_IBEAM), m_base)) return nullptr;
+			MouseCursor::Picture windows;
+			if (!MouseCursor::Capture(LoadCursorW(nullptr, IDC_IBEAM), windows)) return nullptr;
+			LOG_ANY("mouse flag: the text pointer of Windows {}x{}, {}", windows.w, windows.h,
+			        windows.mono ? "one color" : windows.alpha ? "with alpha" : "colors");
+			m_base = MouseCursor::Argb(windows); // в цвет с прозрачностью: так Windows рисует флаг верно
 			m_baseOk = true;
-			LOG_ANY("mouse flag: the text pointer of Windows {}x{}, {}", m_base.w, m_base.h,
-			        m_base.mono ? "one color" : m_base.alpha ? "with alpha" : "colors");
 		}
 		const int size = MouseCursor::FlagSize(m_base);
 		if (size < 6) return nullptr;
@@ -155,6 +184,8 @@ private:
 	bool m_applied = false; // указатель-текст сейчас наш
 	std::wstring m_key;     // с каким флагом
 	std::wstring m_signature;
-	MouseCursor::Picture m_base;
+	MouseCursor::Picture m_base; // указатель-текст Windows, в цвете с прозрачностью (MouseCursor::Argb)
 	bool m_baseOk = false;
+	UINT_PTR m_timer = 0;        // "ненадолго"
+	inline static MouseFlag* s_instance = nullptr;
 };

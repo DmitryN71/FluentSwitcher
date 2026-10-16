@@ -179,10 +179,11 @@ public:
 		return std::make_shared<Images::ImageIcon::element_type>(); // empty
 	}
 
-	// Картинка флага (RGBA) для флажка у текстового курсора, его набора (caret_flag_set): ближайшего к size размера
-	// (поровну - больший). Пусто - флага нет. Не кэшируется: флажок у курсора держит свою последнюю картинку сам.
-	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false) {
-		const string set = conf_get_unsafe()->caret_flag_set;
+	// Картинка флага (RGBA) для флажка у текстового курсора, его набора (caret_flag_set; или набора look - флаг на указателе
+	// мыши, MouseFlag.h): ближайшего к size размера (поровну - больший). Пусто - флага нет. Не кэшируется: флажок держит
+	// свою последнюю картинку сам.
+	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false, string look = {}) {
+		const string set = look.empty() ? conf_get_unsafe()->caret_flag_set : look;
 		if (LetterIcons::Is(set)) { // буквы на плашке, высотой в три четверти размера
 			return ToImage(LetterIcons::Render(LetterIcons::Text(contry_id), size, (int)std::lround(size * 0.75),
 			                                   LetterIcons::Style::Badge, true, is_gray));

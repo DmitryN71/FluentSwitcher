@@ -1226,7 +1226,8 @@ wxWindow* SettingsFrame::Numbers(const wxString& title, const wxString& descript
     return Choice(title, description, names, at, [this, key, numbers](int i) { m_edit.SetInt(key, numbers[i]); });
 }
 
-wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon)
+wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon,
+                                  const char* inherit)
 {
     // The sets: the folders in "flags" next to the program - Flagpack (regular flags), Waving (the same with folds and a
     // shadow, as Punto's glossy ones; tools\make_flagpack_flags.py), or a folder of the user's own. Glossy, Fluent,
@@ -1257,12 +1258,12 @@ wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& descrip
         values.Add("Application Icon");
         names.Add(T("Значок приложения"));
     }
-    // As the engine reads the file (Settings.h, NormalizeFlags): the flag at the cursor without a look of its own - as
-    // the tray icon; the framed letters (gone) - letters; a set that is gone, and the tray hidden the old way
-    // ("Nothing") - the flags.
+    // As the engine reads the file (Settings.h, NormalizeFlags): a flag without a look of its own - as the one it follows
+    // (inherit: the flag at the cursor - as the tray icon, the flag on the mouse pointer - as the flag at the cursor); the
+    // framed letters (gone) - letters; a set that is gone, and the tray hidden the old way ("Nothing") - the flags.
     wxString now = m_edit.GetString(key, wxString());
     if (!appIcon && now.empty())
-        now = m_edit.GetString("flagsSet", "Flagpack");
+        now = m_edit.GetString(inherit, m_edit.GetString("flagsSet", "Flagpack"));
     if (now == "LettersFramed")
         now = "Letters";
     if (values.Index(now) == wxNOT_FOUND)
@@ -1884,8 +1885,10 @@ void SettingsFrame::BuildCaretFlag()
             T("Максимальная") });
     // The flag on the mouse pointer over text (the engine's MouseFlag.h; Dmitry, 16.10.2026).
     Numbers(T("Флаг на указателе мыши"),
-            T("Над текстом указатель мыши показывает флаг раскладки – того же вида, что у текстового курсора"),
+            T("Над текстом указатель мыши показывает флаг раскладки, после смены раскладки или всё время"),
             "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") });
+    FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на тёмной плашке"), "mouse_flag_set", false,
+             "caret_flag_set");
     FinishPage();
 }
 

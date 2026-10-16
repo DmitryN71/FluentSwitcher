@@ -151,7 +151,8 @@ namespace nlohmann {
 			caret_flag_place,
 			caret_flag_opacity,
 			caret_flag_brief_ms,
-			mouse_flag
+			mouse_flag,
+			mouse_flag_set
 			//,inject_delay_after_lang_ms
 		)
 }

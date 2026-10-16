@@ -94,6 +94,8 @@ public:
         if (!hadCaretSet) caret_flag_set = flagsSet;
         caret_flag_set = renamed(caret_flag_set);
         if (caret_flag_set == showFlags_AppIcon || caret_flag_set == showFlags_Nothing) caret_flag_set = flags_Default;
+        if (!mouse_flag_set.empty()) mouse_flag_set = renamed(mouse_flag_set); // пусто - как у текстового курсора
+        if (mouse_flag_set == showFlags_AppIcon || mouse_flag_set == showFlags_Nothing) mouse_flag_set = flags_Default;
     }
     // Программа впереди - из autoswitch_off: автопереключения там нет (WorkerImplement: AutoSwitchLastWord, AutoSwitchEarly;
     // IsCodeEditor - без записи в журнал: то же слово его уже записало).
@@ -259,8 +261,11 @@ public:
 	int caret_flag_opacity = 60;
 	int caret_flag_brief_ms = 2000;
 	// Флаг раскладки на указателе мыши над текстом (MouseFlag.h): подменённый указатель-текст Windows. Как caret_flag:
-	// 0 - нет, 1 - всегда, 2 - ненадолго после смены раскладки (caret_flag_brief_ms).
+	// 0 - нет, 1 - всегда, 2 - ненадолго после смены раскладки (caret_flag_brief_ms). Вид - свой (папка или "Letters",
+	// как caret_flag_set; Дмитрий, 16.10.2026: "кто-нибудь захочет у каретки флаги, а у курсора - буквы"), пусто - как у
+	// текстового курсора.
 	int mouse_flag = 0;
+	string mouse_flag_set;
 
     std::vector< CHotKeySet> hotkeysList;
     std::vector< RunProgramInfo> run_programs;

@@ -62,13 +62,19 @@ inline bool Capture(HCURSOR cursor, Picture& out) {
 	return true;
 }
 
-// Картинка RGBA (rgba, sw x sh) - в size x size, усреднением с весом прозрачности. 0xAARRGGBB.
+// Картинка RGBA (rgba, sw x sh) - в квадрат size x size без растяжения: по пропорции, посередине (буквы на плашке -
+// 16 x 12: растянутые в квадрат, они выходили некрасивыми; Дмитрий, 16.10.2026). Усреднением с весом прозрачности;
+// того же размера - точка в точку. 0xAARRGGBB.
 inline std::vector<uint32_t> Scaled(const unsigned char* rgba, int sw, int sh, int size) {
 	std::vector<uint32_t> out((size_t)size * size);
-	for (int y = 0; y < size; y++) {
-		for (int x = 0; x < size; x++) {
-			const int x0 = x * sw / size, x1 = (std::max)(x0 + 1, (x + 1) * sw / size);
-			const int y0 = y * sh / size, y1 = (std::max)(y0 + 1, (y + 1) * sh / size);
+	if (sw <= 0 || sh <= 0 || size <= 0) return out;
+	const int dw = sw >= sh ? size : (std::max)(1, (int)std::lround((double)size * sw / sh));
+	const int dh = sw >= sh ? (std::max)(1, (int)std::lround((double)size * sh / sw)) : size;
+	const int ox = (size - dw) / 2, oy = (size - dh) / 2;
+	for (int y = 0; y < dh; y++) {
+		for (int x = 0; x < dw; x++) {
+			const int x0 = x * sw / dw, x1 = (std::max)(x0 + 1, (x + 1) * sw / dw);
+			const int y0 = y * sh / dh, y1 = (std::max)(y0 + 1, (y + 1) * sh / dh);
 			double r = 0, g = 0, b = 0, a = 0;
 			int n = 0;
 			for (int yy = y0; yy < y1 && yy < sh; yy++)
@@ -82,7 +88,7 @@ inline std::vector<uint32_t> Scaled(const unsigned char* rgba, int sw, int sh, i
 				}
 			if (!n || a <= 0) continue;
 			const uint32_t A = (uint32_t)std::lround(a / n * 255);
-			out[(size_t)y * size + x] = (A << 24) | ((uint32_t)std::lround(r / a) << 16) |
+			out[(size_t)(oy + y) * size + ox + x] = (A << 24) | ((uint32_t)std::lround(r / a) << 16) |
 				((uint32_t)std::lround(g / a) << 8) | (uint32_t)std::lround(b / a);
 		}
 	}
@@ -146,21 +152,24 @@ inline Box Drawn(const Picture& p) {
 	return b;
 }
 
-// Флаг - вплотную справа от нарисованного, низом к его низу (нижней перекладине палочки).
-inline int FlagLeft(const Picture& p) { return Drawn(p).right + 2; }
+// Флаг - левым верхним углом к правому нижнему углу нарисованного: справа под палочкой, не на тексте справа от неё
+// (Дмитрий, 16.10.2026: "левый верхний угол - на уровне нижнего края курсора").
+inline int FlagLeft(const Picture& p) { return Drawn(p).right + 1; }
+inline int FlagTop(const Picture& p) { return Drawn(p).bottom + 1; }
 // Сторона квадрата флага: девять десятых высоты палочки, кратно 4 (картинки флагов - 16, 20, 24... точек: без
-// уменьшения флаг не мылится), не шире места справа; меньше 12 - сколько есть.
+// уменьшения флаг не мылится), чтобы поместился справа и снизу (флаг в квадрате - высотой в три четверти); меньше 12 -
+// сколько есть.
 inline int FlagSize(const Picture& p) {
 	const Box b = Drawn(p);
 	if (b.right < 0) return 0;
-	const int room = p.w - (b.right + 2);
+	const int roomX = p.w - (b.right + 1), roomY = (int)((p.h - (b.bottom + 1)) / 0.75);
 	const int want = (int)std::lround((b.bottom - b.top + 1) * 0.9 / 4.0) * 4;
-	const int size = (std::min)(want, room / 4 * 4);
-	return size >= 12 ? size : (std::min)(room, 12);
+	const int size = (std::min)({ want, roomX / 4 * 4, roomY / 4 * 4 });
+	return size >= 12 ? size : (std::min)({ roomX, roomY, 12 });
 }
 
-// Указатель base (ARGB - Argb) с флагом flag (квадрат size x size, 0xAARRGGBB; флаг в нём - видимой частью) справа от
-// палочки, у её нижней перекладины. nullptr - не вышло.
+// Указатель base (ARGB - Argb) с флагом flag (квадрат size x size, 0xAARRGGBB; флаг в нём - видимой частью) справа
+// под палочкой. nullptr - не вышло.
 inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, int size) {
 	const int w = base.w, h = base.h;
 	if (!base.alpha) return nullptr;
@@ -175,8 +184,8 @@ inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, i
 	if (bottom < 0) return nullptr;
 	const Box drawn = Drawn(base);
 	if (drawn.right < 0) return nullptr;
-	const int fx = drawn.right + 2;
-	const int fy = drawn.bottom - bottom; // низ видимого флага - у низа палочки
+	const int fx = drawn.right + 1;
+	const int fy = drawn.bottom + 1 - top; // верх видимого флага - сразу под палочкой
 	auto color = base.color;
 	auto andMask = base.andMask;
 	for (int y = top; y <= bottom; y++) {

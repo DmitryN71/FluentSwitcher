@@ -210,9 +210,10 @@ const std::unordered_map<std::string, const char*>& English()
         { "Флаг на указателе мыши", "Flag on the mouse pointer" },
         { "Вид флага на указателе", "Look of the flag on the pointer" },
         { "Прозрачность флага на указателе", "Transparency of the flag on the pointer" },
-        { "Над текстом указатель мыши показывает флаг раскладки: всё время или ненадолго – после смены раскладки или окна",
+        { "Над текстом указатель мыши показывает флаг раскладки: всё время или ненадолго – после смены раскладки, окна или "
+          "поля ввода",
           "Over text the mouse pointer shows the flag of the layout: all the time or for a moment – after a change of the "
-          "layout or the window" },
+          "layout, the window or the input field" },
         { "Нет", "None" },
         { "Ничего", "Nothing" },
         { "Исправлять ДВе ЗАглавные", "Fix TWo INitial CApitals" },

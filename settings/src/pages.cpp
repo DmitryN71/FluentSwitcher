@@ -1890,7 +1890,7 @@ void SettingsFrame::BuildCaretFlag()
     FluentChoice* mouse = static_cast<FluentChoice*>(
         Numbers(T("Флаг на указателе мыши"),
                 T("Над текстом указатель мыши показывает флаг раскладки: всё время или ненадолго – после смены "
-                  "раскладки или окна"),
+                  "раскладки, окна или поля ввода"),
                 "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
     const std::vector<wxWindow*> mouseRows = {
         FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на тёмной плашке"), "mouse_flag_set",

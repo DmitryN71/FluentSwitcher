@@ -23,6 +23,7 @@ public:
 	}
 	~MouseFlag() {
 		StopTimer();
+		HookFocus(false);
 		Restore();
 		s_instance = nullptr;
 	}
@@ -38,9 +39,11 @@ public:
 		const int mode = cfg->mouse_flag;
 		if (!mode || !g_enabled.IsEnabled() || !m_lay) {
 			StopTimer();
+			HookFocus(false);
 			Restore();
 			return;
 		}
+		HookFocus(mode == 2);
 		const std::wstring id = Utils::GetNameForHKL_simple(m_lay);
 		const std::string look = cfg->mouse_flag_set.empty() ? cfg->caret_flag_set : cfg->mouse_flag_set;
 		const int opacity = std::clamp(cfg->mouse_flag_opacity, 10, 100);
@@ -53,8 +56,8 @@ public:
 			StopTimer();
 	}
 
-	// Окно впереди сменилось (WM_ForegroundChanged): "ненадолго" - показать и там, как флаг у текстового курсора; раскладка
-	// - того окна (WM_LayNotif приходит, только когда она другая).
+	// Окно впереди сменилось (WM_ForegroundChanged) или в нём - поле ввода (OnFocus): "ненадолго" - показать и там, как флаг
+	// у текстового курсора; раскладка - того окна (WM_LayNotif приходит, только когда она другая).
 	void OnWindow() {
 		if (conf_get_unsafe()->mouse_flag != 2) return;
 		if (HKL lay = ForegroundLayout()) m_lay = lay;
@@ -137,6 +140,25 @@ private:
 		m_timer = 0;
 	}
 
+	// "Ненадолго" - и после смены поля в том же окне (Дмитрий, 17.10.2026: "хожу по разным полям в одном окне браузера" -
+	// флаг не появлялся): фокус перешёл (EVENT_OBJECT_FOCUS; вкладка браузера - тоже). Клик внутри того же поля фокус не
+	// меняет - флаг не показывается. Свой перехват: у флага у текстового курсора он есть, только пока тот включён. Без
+	// внедрения в чужие процессы: Windows присылает событие циклу сообщений этого потока.
+	void HookFocus(bool on) {
+		if (on == (m_focusHook != nullptr)) return;
+		if (on) {
+			m_focusHook = SetWinEventHook(EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, nullptr, OnFocus, 0, 0,
+			                              WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+			if (!m_focusHook) LOG_WARN("mouse flag: SetWinEventHook failed {}", GetLastError());
+		} else {
+			UnhookWinEvent(m_focusHook);
+			m_focusHook = nullptr;
+		}
+	}
+	static void CALLBACK OnFocus(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD) {
+		if (s_instance) s_instance->OnWindow();
+	}
+
 	// Указатель-текст Windows с флагом раскладки id вида look. nullptr - не вышло.
 	HCURSOR Make(const std::wstring& id, const std::string& look, int opacity) {
 		if (!m_baseOk) {
@@ -201,5 +223,6 @@ private:
 	MouseCursor::Picture m_base; // указатель-текст Windows, в цвете с прозрачностью (MouseCursor::Argb)
 	bool m_baseOk = false;
 	UINT_PTR m_timer = 0;        // "ненадолго"
+	HWINEVENTHOOK m_focusHook = nullptr; // "ненадолго": смена поля
 	inline static MouseFlag* s_instance = nullptr;
 };

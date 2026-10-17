@@ -4,7 +4,7 @@
 // переключение - <ru-ru>.wav, <ru>.wav, иначе switch.wav (свой звук языка - по желанию); исправление - fix.wav.
 // Любой можно заменить своим WAV. Громкость - уровнем самих отсчётов (PCM 8/16 бит), другие форматы - как есть.
 // Звук идёт в Bluetooth-наушники или через удалённый рабочий стол - сначала тишина (SlowStart): в наушники - sound_bluetooth_ms
-// (0,2 с по умолчанию), через удалённый стол - 0,2 с.
+// (0,2 с по умолчанию) и 0,5 с после звука (kTailMs), через удалённый стол - 0,2 с.
 #pragma once
 
 #include <mmsystem.h>
@@ -34,6 +34,11 @@ public:
 	// пропадал целиком - значит, теряется больше 0,125 с). Наушникам, которым её мало (WinnyS, 13.10.2026: отчёт - тишина
 	// была, щелчка не слышно), - больше: sound_bluetooth_ms, окно настроек, «Звуки».
 	static constexpr int kWakeMs = 200;
+	// И после звука в наушники - тишина: звук кончился - Windows закрывает вывод, и то, что ещё шло по Bluetooth (это
+	// десятые доли секунды), пропадает. Щелчок в 40 мс и звук исправления в 125 мс пропадали целиком при любой паузе перед
+	// ними, а chord.wav и notify.wav Windows (0,6 и 1,3 с) с той же паузой 0,2 с слышно (форум, WinnyS, 17.10.2026:
+	// «Поменял сами файлы – поставил штатные chord.wav и notify.wav из винды… Проблема исчезла»).
+	static constexpr int kTailMs = 500;
 	static const wchar_t* SlowStart() {
 		if (GetSystemMetrics(SM_REMOTESESSION)) return L"a remote session";
 		static const PROPERTYKEY kEnumerator = { { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 24 };
@@ -64,8 +69,8 @@ public:
 		return bluetooth ? L"Bluetooth" : nullptr;
 	}
 
-	// Тот же WAV (PCM) с тишиной ms в начале; не PCM или не разобрать - пусто.
-	static std::vector<char> WithSilence(const std::vector<char>& wav, int ms) {
+	// Тот же WAV (PCM) с тишиной ms в начале и tailMs в конце; не PCM или не разобрать - пусто.
+	static std::vector<char> WithSilence(const std::vector<char>& wav, int ms, int tailMs = 0) {
 		if (wav.size() < 12 || memcmp(wav.data(), "RIFF", 4) != 0 || memcmp(wav.data() + 8, "WAVE", 4) != 0) return {};
 		WORD format = 0, block = 0, bits = 0;
 		DWORD rate = 0;
@@ -86,7 +91,8 @@ public:
 			else if (memcmp(wav.data() + at, "data", 4) == 0) {
 				if (!fmt || format != WAVE_FORMAT_PCM || !block || (bits != 8 && bits != 16)) return {};
 				const DWORD silence = (DWORD)((ULONGLONG)rate * ms / 1000) * block;
-				const DWORD data = size + silence;
+				const DWORD tail = (DWORD)((ULONGLONG)rate * tailMs / 1000) * block;
+				const DWORD data = size + silence + tail;
 				std::vector<char> res;
 				auto put = [&](const void* p, size_t n) { res.insert(res.end(), (const char*)p, (const char*)p + n); };
 				const DWORD riff = (DWORD)(4 + 8 + fmtSize + (fmtSize & 1) + 8 + data);
@@ -97,6 +103,7 @@ public:
 				put("data", 4); put(&data, 4);
 				res.insert(res.end(), silence, bits == 8 ? (char)0x80 : (char)0);
 				put(wav.data() + body, size);
+				res.insert(res.end(), tail, bits == 8 ? (char)0x80 : (char)0);
 				return res;
 			}
 			at = body + size + (size & 1);
@@ -235,13 +242,15 @@ private:
 			}
 			if (slow) {
 				if (Remote(slow)) Soften(wav);
-				if (auto padded = WithSilence(wav, wake); wake > 0 && !padded.empty()) wav = std::move(padded);
+				const int tail = Remote(slow) ? 0 : kTailMs; // через удалённый стол конец не терялся
+				if (auto padded = WithSilence(wav, wake, tail); (wake > 0 || tail > 0) && !padded.empty())
+					wav = std::move(padded);
 			}
 			it = m_cache.emplace(key, std::move(wav)).first;
 		}
 		if (slow) {
 			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({}){}", path, volume, wake, slow,
-			        Remote(slow) ? L", softened" : L"");
+			        Remote(slow) ? L", softened" : std::format(L", {} ms after", kTailMs));
 		}
 		else {
 			LOG_ANY(L"sound: {} at {}%", path, volume);

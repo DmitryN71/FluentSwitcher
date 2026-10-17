@@ -99,6 +99,9 @@ inline std::vector<uint32_t> Scaled(const unsigned char* rgba, int sw, int sh, i
 // инвертирует фон под собой) Windows рисует с цветными точками не везде верно: флаг на нём был кашей (Дмитрий,
 // 16.10.2026, 1.5.14-test1: "американский можно различить, российский - прямоугольник, с переливом и буквы - mojibake").
 // Инвертирующие точки - чёрные, вокруг них - белая кайма: видно и на светлом, и на тёмном; чёрные и белые - как были.
+// Кайма - наполовину прозрачная: непрозрачная на светлом цветном фоне выглядела подсветкой вокруг палочки (форум,
+// 16.10.2026, WinnyS; Дмитрий, 17.10.2026, по картинке вариантов: «Да, согласен!»).
+inline constexpr uint32_t kRim = 0x80FFFFFF;
 inline Picture Argb(const Picture& src) {
 	if (src.alpha) return src;
 	Picture p = src;
@@ -124,7 +127,7 @@ inline Picture Argb(const Picture& src) {
 					const int X = x + dx, Y = y + dy;
 					edge = X >= 0 && Y >= 0 && X < w && Y < h && invert[(size_t)Y * w + X];
 				}
-			if (edge) p.color[i] = 0xFFFFFFFF;
+			if (edge) p.color[i] = kRim;
 		}
 	for (size_t i = 0; i < n; i++) p.andMask[i] = (p.color[i] >> 24) == 0;
 	p.mono = false;

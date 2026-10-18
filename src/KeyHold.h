@@ -423,6 +423,9 @@ inline UINT lastLetter = 0;    // клавиша последней буквы �
 inline UINT firstKeys[2] = {}; // клавиши первых двух букв (i, 'i - fix_lone_i)
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, буква с AltGr, автоповтор, другая клавиша - не наш случай
+// Слово начинается цифрами ("4звф" - 4pda): проверит движок в конце (переключает такие только из "Переключать всегда"),
+// посреди слова - нет.
+inline bool digitsFirst = false;
 // Набрано с CapsLock (ПРОПИСНЫМИ): слово проверит автопереключение (от четырёх букв - AutoSwitch::CapsWord, посреди слова -
 // с пятой: kCapsEarlyMin), а ДВе ЗАглавные и i - нет: регистр там от CapsLock, а не от Shift (форум, gutasiho, 11.10.2026:
 // "ЗИМА ВОЗМЕЗДИЯ").
@@ -455,6 +458,7 @@ inline void ResetWord() {
 	lastLetter = 0;
 	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
+	digitsFirst = false;
 	capsLock = false;
 	earlyDone = false;
 	number = 0;
@@ -554,7 +558,13 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		return true;
 	}
 	if (vk >= '0' && vk <= '9') {
-		if (!shift) broken = true; // цифра; с Shift - знак ( «"!), он по краям слова не мешает
+		// Цифра; с Shift - знак ( «"!), он по краям слова не мешает. Цифры впереди букв - часть слова ("4звф" - 4pda;
+		// Дмитрий, 18.10.2026: такое слово не проверялось вовсе, и "Переключать всегда" не помогал): само его движок не
+		// переключит (AutoSwitch::Skip - "digits"), из списка - да. Цифра после букв ("тщ5", пароли, коды) - не наш случай.
+		if (!shift) {
+			if (word.empty()) digitsFirst = true;
+			else broken = true;
+		}
 		return false;
 	}
 	// Insert: с Shift - вставка из буфера, дальше слово заново (то самое "Здуфыу" - файл вставили Shift+Insert); один - режим
@@ -574,7 +584,7 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 // Буква, после которой движок может переключить посреди слова (AutoSwitch::DecideEarly): с четвёртой по восьмую
 // (AutoSwitch::kEarlyMin, kEarlyMax), пока он не сказал, что в этом слове больше нечего.
 inline bool EarlyPoint() {
-	return !broken && !earlyDone && word.size() >= 4 && word.size() <= 8;
+	return !broken && !digitsFirst && !earlyDone && word.size() >= 4 && word.size() <= 8;
 }
 
 // Первые n клавиш слова могут быть ДВумя ЗАглавными: две заглавные, потом строчная (от трёх; дальше не смотрим: знак с
@@ -586,7 +596,8 @@ inline bool TwoCapsShape(size_t n) {
 // Конец слова (пробел, Enter, Tab): каким оно было. Слово на этом кончается.
 struct WordEnd {
 	bool twoCaps = false; // могло подойти под ДВе ЗАглавные (две заглавные, потом строчные)
-	bool letters = false; // буквы без цифр и команд - его проверит автопереключение (и одну: список "Переключать всегда")
+	bool letters = false; // буквы без команд, цифры - только впереди: его проверит автопереключение (и одну: список
+	                      // "Переключать всегда")
 	bool loneI = false;   // может быть i, i'm, i've, i'll, i'd ('i - с кавычкой): до четырёх клавиш, первая буква -
 	                      // строчная i, за ней не буква (in, is, it, if - слова, их не держим)
 	bool number = false;  // число с . и , на клавишах, что в этой раскладке буквы ("1ю5ю3"): движок поправит знаки

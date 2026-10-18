@@ -838,7 +838,8 @@ std::optional<WorkerImplement::HandFix> WorkerImplement::TakeHandFix() {
 
 // Слово, которое автопереключение не тронуло, исправили вручную: в счёт "Переключать всегда" (на третий раз - туда,
 // gui2/main.cpp) - в нужном виде, строчными. Не в счёт:
-//   - одна буква, знак внутри (кроме дефисов на тех же клавишах: "у-Куышвутсн" - e-Residency) или цифры (адрес, код);
+//   - одна буква, знак внутри (кроме дефисов на тех же клавишах: "у-Куышвутсн" - e-Residency) или цифры (адрес, код) -
+//     кроме цифр впереди трёх и больше букв: "4звф" - 4pda (Дмитрий, 18.10.2026), в список - с ними;
 //   - набранное - слово своего языка (или словаря нет): "Переключать всегда" обходит словарь, и выученное "ты" (из
 //     "ns") переключало бы каждое английское ns; набранное ПРОПИСНЫМИ словарь проверяет строчными и с заглавной
 //     ("DC{D-DLY{-DDW" - ВСХВ-ВДНХ-ВВЦ, Maz на форуме, 10.10: как набрано, он пропускает любые прописные);
@@ -849,9 +850,14 @@ std::wstring WorkerImplement::LearnableFix(const HandFix& fix) {
     if (!fix.undoneAgain.empty()) return {};
     const auto part = AutoSwitch::Letters(fix.fixed);
     const std::wstring word = AutoSwitch::Lower(part.core);
-    const std::wstring typedCore = AutoSwitch::Letters(fix.typed).core, typed = AutoSwitch::Lower(typedCore);
+    const auto typedPart = AutoSwitch::Letters(fix.typed);
+    const std::wstring typedCore = typedPart.core, typed = AutoSwitch::Lower(typedCore);
+    const auto digit = [](wchar_t c) { return iswdigit(c) != 0; };
+    const std::wstring lead = fix.typed.substr(0, typedPart.begin);
+    const bool digitsLead = !lead.empty() && std::ranges::all_of(lead, digit) &&
+        !std::ranges::any_of(fix.typed.substr(typedPart.begin), digit) && word.size() >= 3;
     if (word.size() < 2 || (part.inner && !AutoSwitch::HyphensKept(fix.typed, fix.fixed, part)) ||
-        std::ranges::any_of(fix.typed, [](wchar_t c) { return iswdigit(c) != 0; }))
+        (std::ranges::any_of(fix.typed, digit) && !digitsLead))
         return {};
     if (SpellCheck::CheckAnyCaseEvenCaps(typedCore, fix.lang) != SpellCheck::Result::NotWord) return {};
     for (const auto& [was, became] : m_recentSwitches)
@@ -859,7 +865,7 @@ std::wstring WorkerImplement::LearnableFix(const HandFix& fix) {
     if (AutoSwitch::Excepted(fix.typed, fix.fixed, AutoSwitchExceptions()) ||
         AutoSwitch::Forced(fix.typed, fix.fixed, AutoSwitchForced()))
         return {};
-    return word;
+    return digitsLead ? lead + word : word;
 }
 
 void WorkerImplement::HandFixDone(const HandFix& fix) {

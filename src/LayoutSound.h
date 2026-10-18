@@ -248,9 +248,13 @@ private:
 			}
 			it = m_cache.emplace(key, std::move(wav)).first;
 		}
-		if (slow) {
-			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({}){}", path, volume, wake, slow,
-			        Remote(slow) ? L", softened" : std::format(L", {} ms after", kTailMs));
+		// Пояснения - строками в самом вызове: в отчёте для разработчика (безопасный журнал) собранные на ходу строки
+		// скрываются (ревью 18.10.2026).
+		if (slow && Remote(slow)) {
+			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({}), softened", path, volume, wake, slow);
+		}
+		else if (slow) {
+			LOG_ANY(L"sound: {} at {}%, {} ms of silence first ({}), {} ms after", path, volume, wake, slow, kTailMs);
 		}
 		else {
 			LOG_ANY(L"sound: {} at {}%", path, volume);

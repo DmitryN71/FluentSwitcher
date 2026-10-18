@@ -85,7 +85,7 @@ nav->onSelect = [&](int section) { /* show that page, hide the others, set the t
 ## A setting that depends on another
 
 As in Windows 11, a card whose setting means nothing while another one is off can be shown pale:
-`EnableSettingsCard(card, false)` greys its title and description and disables its control (a
+`EnableSettingsCard(card, false)` grays its title and description and disables its control (a
 `FluentChoice`, `ToggleSwitch`, `NumberField` or `FluentButton` draws itself pale and takes no clicks
 or keys, also inside a panel of its own); `EnableSettingsCard(card, true)` gives everything back. The
 card is the parent of the control (`control->GetParent()`) or of the description that
@@ -100,7 +100,7 @@ flag->onChange = [&] { EnableSettingsCard(style->GetParent(), flag->IsOn()); };
 EnableSettingsCard(style->GetParent(), flag->IsOn()); // as it starts
 ```
 
-The pale colour is `DisabledText(back)` (fluent_ui.h), for drawing controls of your own the same way.
+The pale color is `DisabledText(back)` (fluent_ui.h), for drawing controls of your own the same way.
 
 ## A hotkey field
 
@@ -108,7 +108,7 @@ The pale colour is `DisabledText(back)` (fluent_ui.h), for drawing controls of y
 
 - `onRecord` comes on a click;
 - bind `wxEVT_CHAR_HOOK` for the keys;
-- `SetText(text, grey)` shows the hotkey, or a grey placeholder while there is none or while recording;
+- `SetText(text, grey)` shows the hotkey, or a gray placeholder while there is none or while recording;
 - `SetRecording(true)` draws the accent frame;
 - `SetClearable(true, tooltip)` shows the cross, and `onClear` comes when it is clicked.
 

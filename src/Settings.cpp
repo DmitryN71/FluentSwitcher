@@ -88,74 +88,88 @@ namespace nlohmann {
 	)
 
 
-		NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
-			ProgramConfig,
-			isMonitorAdmin,
-			force_DbgMode,
-			fClipboardClearFormat,
-			disableAccessebility,
-			flagsSet,
-			tray_icon,
-			caret_flag_set,
-			disableInPrograms,
-			autoswitch_console,
-			autoswitch_off,
-			logLevel,
-			//SkipAllInjectKeys,
-			SkipLowLevelInjectKeys,
-			AlternativeLayoutChange,
-			config_version,
-			layouts_info,
-			fixRAlt,
-			fixRAlt_lay_,
-			run_programs,
-			separate_ext_mode,
-			quick_press_ms,
-			win_hotkey_cycle_lang,
-			theme,
-			ui_skin,
-			ui_theme,
-			record_sides,
-			check_updates,
-			tray_click,
-			tray_double_click,
-			sound_switch,
-			sound_fix,
-			sound_bluetooth_ms,
-			translit_table,
-			two_caps,
-			fix_lone_i,
-			two_caps_exceptions,
-			two_caps_undo,
-			autoswitch,
-			autoswitch_early,
-			autoswitch_exceptions,
-			autoswitch_undo,
-			autoswitch_force,
-			autoswitch_fix,
-			learned,
-			autoswitch_journal,
-			gui_lang,
-			ShowLangsInTrayMenu,
-			ShowReminderInTrayMenu,
-			useBritishFlag,
-			treat_as_letters,
-			retype_keys,
-			work_in_remote,
-			settings_window,
-			enabled,
-			capslock_off,
-			retype_delay_ms,
-			caret_flag,
-			caret_flag_size,
-			caret_flag_place,
-			caret_flag_opacity,
-			caret_flag_brief_ms,
-			mouse_flag,
-			mouse_flag_set,
-			mouse_flag_opacity
-			//,inject_delay_after_lang_ms
-		)
+	// ProgramConfig - как NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT, но двумя списками: макрос берёт тип и не больше
+	// 63 полей, с полями указателя мыши (1.5.14) список дошёл до предела (ревью 18.10.2026). Новое поле - в любой из
+	// двух списков (до 63 в каждом); в файле порядок тот же - по алфавиту.
+#define FS_PROGRAM_CONFIG_FIELDS_1 \
+		isMonitorAdmin, \
+		force_DbgMode, \
+		fClipboardClearFormat, \
+		disableAccessebility, \
+		flagsSet, \
+		tray_icon, \
+		caret_flag_set, \
+		disableInPrograms, \
+		autoswitch_console, \
+		autoswitch_off, \
+		logLevel, \
+		SkipLowLevelInjectKeys, \
+		AlternativeLayoutChange, \
+		config_version, \
+		layouts_info, \
+		fixRAlt, \
+		fixRAlt_lay_, \
+		run_programs, \
+		separate_ext_mode, \
+		quick_press_ms, \
+		win_hotkey_cycle_lang, \
+		theme, \
+		ui_skin, \
+		ui_theme, \
+		record_sides, \
+		check_updates, \
+		tray_click, \
+		tray_double_click, \
+		sound_switch, \
+		sound_fix, \
+		sound_bluetooth_ms, \
+		translit_table
+#define FS_PROGRAM_CONFIG_FIELDS_2 \
+		two_caps, \
+		fix_lone_i, \
+		two_caps_exceptions, \
+		two_caps_undo, \
+		autoswitch, \
+		autoswitch_early, \
+		autoswitch_exceptions, \
+		autoswitch_undo, \
+		autoswitch_force, \
+		autoswitch_fix, \
+		learned, \
+		autoswitch_journal, \
+		gui_lang, \
+		ShowLangsInTrayMenu, \
+		ShowReminderInTrayMenu, \
+		useBritishFlag, \
+		treat_as_letters, \
+		retype_keys, \
+		work_in_remote, \
+		settings_window, \
+		enabled, \
+		capslock_off, \
+		retype_delay_ms, \
+		caret_flag, \
+		caret_flag_size, \
+		caret_flag_place, \
+		caret_flag_opacity, \
+		caret_flag_brief_ms, \
+		mouse_flag, \
+		mouse_flag_set, \
+		mouse_flag_opacity
+	//,inject_delay_after_lang_ms
+	template<typename BasicJsonType, nlohmann::detail::enable_if_t<nlohmann::detail::is_basic_json<BasicJsonType>::value, int> = 0>
+	void to_json(BasicJsonType& nlohmann_json_j, const ProgramConfig& nlohmann_json_t) {
+		NLOHMANN_JSON_EXPAND(NLOHMANN_JSON_PASTE(NLOHMANN_JSON_TO, FS_PROGRAM_CONFIG_FIELDS_1))
+		NLOHMANN_JSON_EXPAND(NLOHMANN_JSON_PASTE(NLOHMANN_JSON_TO, FS_PROGRAM_CONFIG_FIELDS_2))
+	}
+	template<typename BasicJsonType, nlohmann::detail::enable_if_t<nlohmann::detail::is_basic_json<BasicJsonType>::value, int> = 0>
+	void from_json(const BasicJsonType& nlohmann_json_j, ProgramConfig& nlohmann_json_t) {
+		const ProgramConfig nlohmann_json_default_obj{};
+		NLOHMANN_JSON_EXPAND(NLOHMANN_JSON_PASTE(NLOHMANN_JSON_FROM_WITH_DEFAULT, FS_PROGRAM_CONFIG_FIELDS_1))
+		NLOHMANN_JSON_EXPAND(NLOHMANN_JSON_PASTE(NLOHMANN_JSON_FROM_WITH_DEFAULT, FS_PROGRAM_CONFIG_FIELDS_2))
+	}
+#undef FS_PROGRAM_CONFIG_FIELDS_1
+#undef FS_PROGRAM_CONFIG_FIELDS_2
 }
 
 namespace cfg_details {

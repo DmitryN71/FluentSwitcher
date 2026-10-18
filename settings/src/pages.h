@@ -38,10 +38,11 @@ private:
     // A choice of numbers: each item is a number in the file; a number that is not in the list shows as the nearest.
     wxWindow* Numbers(const wxString& title, const wxString& description, const char* key, int def,
                       const std::vector<int>& numbers, const wxArrayString& names);
-    // The look of the tray icon or the flag at the text cursor (key: flagsSet, caret_flag_set): the flag sets (the
-    // folders in "flags" next to the program), the letters, for the tray also the app's icon.
+    // The look of the tray icon or a flag (key: flagsSet, caret_flag_set, mouse_flag_set): the flag sets (the folders
+    // in "flags" next to the program), the letters, for the tray also the app's icon. follow - the name of a first item
+    // with the empty value: "as the one it follows" (the flag on the mouse pointer - as the flag at the cursor).
     wxWindow* FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon,
-                       const char* inherit = "flagsSet");
+                       const char* inherit = "flagsSet", const wxString& follow = wxString());
     // A card with a list of words (the lists of the automatic switch, the exceptions of ДВе ЗАглавные): what it is for
     // and how many words it has; "Изменить…" opens the list in a window of its own (wordlist.h). key - the array in the
     // file; help - the text of that window; tip - the details, the tooltip of the title; defaults - the list while the

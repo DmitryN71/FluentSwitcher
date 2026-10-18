@@ -432,7 +432,10 @@ bool AskFluent(wxWindow* parent, const wxString& text, const wxString& yes, cons
     dialog.SetBackgroundColour(g.bg);
     ApplyDwm(&dialog, false, &g.card);
     const int pad = dialog.FromDIP(20), gap = dialog.FromDIP(8);
+    // Neither panel takes the focus itself: the one of the text has nothing to focus, and a panel
+    // like that would get it (wx 3.3), leaving Space and the focus ring with no button.
     wxPanel* content = new wxPanel(&dialog);
+    content->SetCanFocus(false);
     content->SetBackgroundColour(g.card);
     wxStaticText* label = new wxStaticText(content, wxID_ANY, text);
     label->SetFont(UiFont(10));
@@ -443,11 +446,13 @@ bool AskFluent(wxWindow* parent, const wxString& text, const wxString& yes, cons
     inside->Add(label, 0, wxALL, pad + gap);
     content->SetSizer(inside);
     wxPanel* footer = new wxPanel(&dialog);
+    footer->SetCanFocus(false);
     footer->SetBackgroundColour(g.bg);
     wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
     if (no.empty())
         buttons->AddStretchSpacer(1);
-    buttons->Add(new FluentButton(footer, wxID_OK, yes, true), 1, wxEXPAND);
+    FluentButton* primary = new FluentButton(footer, wxID_OK, yes, true);
+    buttons->Add(primary, 1, wxEXPAND);
     if (!no.empty())
         buttons->Add(new FluentButton(footer, wxID_CANCEL, no), 1, wxEXPAND | wxLEFT, gap);
     wxBoxSizer* band = new wxBoxSizer(wxVERTICAL);
@@ -466,6 +471,7 @@ bool AskFluent(wxWindow* parent, const wxString& text, const wxString& yes, cons
             e.Skip();
     });
     dialog.CentreOnParent();
+    dialog.CallAfter([primary] { primary->SetFocus(); }); // once it shows: Space presses the main button
     return dialog.ShowModal() == wxID_OK;
 }
 

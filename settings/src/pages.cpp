@@ -1227,7 +1227,7 @@ wxWindow* SettingsFrame::Numbers(const wxString& title, const wxString& descript
 }
 
 wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon,
-                                  const char* inherit)
+                                  const char* inherit, const wxString& follow)
 {
     // The sets: the folders in "flags" next to the program - Flagpack (regular flags), Waving (the same with folds and a
     // shadow, as Punto's glossy ones; tools\make_flagpack_flags.py), or a folder of the user's own. Glossy, Fluent,
@@ -1258,11 +1258,19 @@ wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& descrip
         values.Add("Application Icon");
         names.Add(T("Значок приложения"));
     }
-    // As the engine reads the file (Settings.h, NormalizeFlags): a flag without a look of its own - as the one it follows
-    // (inherit: the flag at the cursor - as the tray icon, the flag on the mouse pointer - as the flag at the cursor); the
-    // framed letters (gone) - letters; a set that is gone, and the tray hidden the old way ("Nothing") - the flags.
+    // The flag on the mouse pointer: an empty look follows the flag at the cursor as long as it is empty (MouseFlag.h) -
+    // its own item. A copy of the other look shown in its place went stale when that look changed, and picking it did
+    // nothing (review 18.10.2026).
+    if (!follow.empty())
+    {
+        values.Insert(wxString(), 0);
+        names.Insert(follow, 0);
+    }
+    // As the engine reads the file (Settings.h, NormalizeFlags): the flag at the cursor without a look of its own - as
+    // the tray icon (inherit; the engine soon writes it into the file); the framed letters (gone) - letters; a set that
+    // is gone, and the tray hidden the old way ("Nothing") - the flags.
     wxString now = m_edit.GetString(key, wxString());
-    if (!appIcon && now.empty())
+    if (!appIcon && now.empty() && follow.empty())
         now = m_edit.GetString(inherit, m_edit.GetString("flagsSet", "Flagpack"));
     if (now == "LettersFramed")
         now = "Letters";
@@ -1894,7 +1902,7 @@ void SettingsFrame::BuildCaretFlag()
                 "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
     const std::vector<wxWindow*> mouseRows = {
         FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на тёмной плашке"), "mouse_flag_set",
-                 false, "caret_flag_set"),
+                 false, "caret_flag_set", T("Как у текстового курсора")),
         Numbers(T("Прозрачность флага на указателе"), T("Чтобы не отвлекал от текста"), "mouse_flag_opacity", 100,
                 { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
                 T("Максимальная") }),

@@ -417,8 +417,19 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				const bool command = curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN);
 				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold(),
 					curk.HasMod(VK_CONTROL) && curk.HasMod(VK_MENU));
-				early = letter && cfg->autoswitch && cfg->autoswitch_early && g_enabled.IsEnabled() &&
-					KeyHold::CanStart() && KeyHold::EarlyPoint();
+				// Слова "Переключать всегда" - клавишами (KeyHold::SetForced), заново при новых настройках (там и выученные).
+				static std::shared_ptr<const ProgramConfig> forcedFrom;
+				if (forcedFrom != cfg) {
+					forcedFrom = cfg;
+					std::vector<std::wstring> words;
+					for (const auto& e : cfg->autoswitch_force) words.push_back(StrUtils::Convert(e));
+					std::vector<HKL> lays;
+					for (HKL l : cfg->layouts_info.EnabledLayouts()) lays.push_back(l);
+					KeyHold::SetForced(words, lays);
+				}
+				// Слово "Переключать всегда" набрано целиком - и без "Не ждать конца слова", с любой буквы (KeyHold::ForcedPoint).
+				early = letter && cfg->autoswitch && g_enabled.IsEnabled() && KeyHold::CanStart() &&
+					((cfg->autoswitch_early && KeyHold::EarlyPoint()) || KeyHold::ForcedPoint());
 				if (early && !autoswitchHere()) {
 					KeyHold::earlyDone = true; // "Без автопереключения": посреди этого слова решать нечего - не спрашивать снова
 					early = false;

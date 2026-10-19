@@ -860,9 +860,12 @@ inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring
 		const size_t last = s.find_last_not_of(L" \t");
 		return last != std::wstring::npos && wcschr(L".!?…", s[last]) != nullptr;
 	};
+	// Английское I - всегда заглавное, это не обозначение: и после слова своего языка ("так Ш цфы" - "так I was":
+	// оставалось "так Ш was"; Дмитрий, 19.10.2026).
 	auto letterThere = [&](const RetroWord& w, bool sentenceStart) {
 		const Part t = Letters(w.typed), a = Letters(w.there);
-		return t.core.size() == 1 && a.core.size() == 1 && (sentenceStart || !TwoCaps::IsUpper(t.core[0])) &&
+		const bool pronounI = a.core == L"I" && ShortWords::Is(otherLang, L"en");
+		return t.core.size() == 1 && a.core.size() == 1 && (sentenceStart || pronounI || !TwoCaps::IsUpper(t.core[0])) &&
 			!ShortWords::OneLetter(Lower(t.core), typedLang) && ShortWords::OneLetter(Lower(a.core), otherLang);
 	};
 	size_t count = 0;

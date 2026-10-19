@@ -44,6 +44,8 @@
 #include "RemoteDesktop.h"
 
 #include <deque>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace KeyHold {
@@ -421,6 +423,11 @@ inline void AfterKey() {
 inline std::vector<bool> word; // true - заглавная
 inline UINT lastLetter = 0;    // клавиша последней буквы слова
 inline UINT firstKeys[2] = {}; // клавиши первых двух букв (i, 'i - fix_lone_i)
+inline std::wstring keys;      // клавиши слова (буквы и цифры впереди) - сравнить со словами "Переключать всегда"
+// Слова "Переключать всегда" клавишами (SetForced): набраны целиком - движок переключит сразу, без пробела и с любой
+// буквы, а не с четвёртой (Дмитрий, 19.10.2026: "Разве не логичнее их сразу переключать, после ввода последнего
+// символа?"). Только поток хука.
+inline std::unordered_set<std::wstring> forced;
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, буква с AltGr, автоповтор, другая клавиша - не наш случай
 // Слово начинается цифрами ("4звф" - 4pda): проверит движок в конце (переключает такие только из "Переключать всегда"),
@@ -455,6 +462,7 @@ inline bool SignKey(UINT vk, bool shift) {
 
 inline void ResetWord() {
 	word.clear();
+	keys.clear();
 	lastLetter = 0;
 	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
@@ -540,6 +548,7 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 			word.pop_back();
 			earlyDone = false;
 		}
+		if (!keys.empty()) keys.pop_back();
 		if (word.size() < 2) firstKeys[1] = 0;
 		if (word.empty()) firstKeys[0] = 0;
 		return false;
@@ -552,6 +561,7 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 	}
 	if (IsLetterKey(vk)) {
 		word.push_back(shift);
+		keys.push_back((wchar_t)vk);
 		lastLetter = vk;
 		if (word.size() <= 2) firstKeys[word.size() - 1] = vk;
 		letterAt = now();
@@ -562,7 +572,10 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		// Дмитрий, 18.10.2026: такое слово не проверялось вовсе, и "Переключать всегда" не помогал): само его движок не
 		// переключит (AutoSwitch::Skip - "digits"), из списка - да. Цифра после букв ("тщ5", пароли, коды) - не наш случай.
 		if (!shift) {
-			if (word.empty()) digitsFirst = true;
+			if (word.empty()) {
+				digitsFirst = true;
+				keys.push_back((wchar_t)vk);
+			}
 			else broken = true;
 		}
 		return false;
@@ -579,6 +592,30 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 	}
 	broken = true;
 	return false;
+}
+
+// Слова "Переключать всегда" - клавишами в раскладках layouts (в той, где слово набирается: mofii - английская, грок -
+// русская); регистр не важен - Shift не в счёт.
+inline void SetForced(const std::vector<std::wstring>& words, const std::vector<HKL>& layouts) {
+	forced.clear();
+	for (const auto& w : words) {
+		for (HKL lay : layouts) {
+			std::wstring k;
+			for (wchar_t c : w) {
+				const SHORT s = VkKeyScanExW(c, lay);
+				if (s == -1 || (HIBYTE(s) & ~1)) { // нет такой клавиши или она с Ctrl, Alt
+					k.clear();
+					break;
+				}
+				k.push_back((wchar_t)LOBYTE(s));
+			}
+			if (!k.empty()) forced.insert(k);
+		}
+	}
+}
+// Набрано слово "Переключать всегда" целиком (клавишами): спросить движок сейчас.
+inline bool ForcedPoint() {
+	return !broken && !forced.empty() && forced.contains(keys);
 }
 
 // Буква, после которой движок может переключить посреди слова (AutoSwitch::DecideEarly): с четвёртой по восьмую

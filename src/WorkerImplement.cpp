@@ -643,7 +643,8 @@ void WorkerImplement::AutoSwitchEarly() {
         if (KeyHold::Allowed(m_holdId)) KeyHold::earlyDone = true; // запоздалый ответ - уже не об этом слове
         LOG_ANY("autoswitch early: not in this word, {}", why);
     };
-    if (!cfg->autoswitch || !cfg->autoswitch_early || !KeyHold::Allowed(m_holdId)) return never("off or too late");
+    // Без "Не ждать конца слова" сюда приходит только слово "Переключать всегда", набранное целиком (KeyHold::ForcedPoint).
+    if (!cfg->autoswitch || !KeyHold::Allowed(m_holdId)) return never("off or too late");
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return never("a password, a console or an excluded program");
     if (m_autoWord.backspace) return never("Backspace past the word or in what was switched in it");
@@ -711,6 +712,7 @@ void WorkerImplement::AutoSwitchEarly() {
         const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
             !AutoSwitch::Excepted(typed, there, exceptions) && !WordStart::Typed(AutoSwitch::Letters(typed).core, lang);
         auto verdict = forcedWhole ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
+            : !cfg->autoswitch_early ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Never, "a word of Always switch only" }
             : AutoSwitch::DecideEarly(typed, there, minLetters, exceptions,
                                       [&](const std::wstring& w) { return WordStart::Typed(w, lang); }, thereStarts);
         // "Не в этом слове" (заглавная внутри, аббревиатура) - но там начало слова из "Переключать всегда": ждать его
@@ -759,7 +761,8 @@ void WorkerImplement::AutoSwitchEarly() {
 
 void WorkerImplement::WarmUpEarly() {
     GETCONF;
-    if (!cfg->autoswitch || !cfg->autoswitch_early) return;
+    // Начала слов нужны и словам "Переключать всегда", набранным целиком (AutoSwitchEarly: "реез" - начало "реестр").
+    if (!cfg->autoswitch || (!cfg->autoswitch_early && cfg->autoswitch_force.empty())) return;
     for (HKL l : cfg->layouts_info.EnabledLayouts()) WordStart::Available(Utils::GetNameForHKL_simple(l));
 }
 

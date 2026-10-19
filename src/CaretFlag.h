@@ -1052,7 +1052,10 @@ private:
 		}
 		if (!res.ok) {
 			const char* why = *res.how ? res.how : "no caret (system caret, MSAA, UI Automation)";
-			if (Reporting()) Report(std::string("hidden - ") + why + Where(m_askedFg));
+			// Браузер: и что он сказал о фокусе - строка выше бывает только при смене и в отчёт, начатый позже, не попадала
+			// (Firefox 158, отчёт 19.10.2026: "not a text field" - и ничего о поле).
+			if (Reporting())
+				Report(std::string("hidden - ") + why + Where(m_askedFg), m_askedBrowser ? " | " + res.detail : std::string());
 			// Браузер: поле могло ещё ехать на место (открывается с анимацией), а Chromium - только включать
 			// специальные возможности. Ещё две попытки.
 			if (m_askedBrowser && m_retry < 2) {

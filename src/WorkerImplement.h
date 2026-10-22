@@ -140,6 +140,8 @@ class WorkerImplement {
     static std::vector<std::wstring> TwoCapsExceptions();
     // ДВе ЗАглавные и при переводе раскладки: "LDe[" -> "ДВух" -> "Двух" - вторые буквы без Shift.
     static void FixTwoCapsInKeys(TKeyRevert& keys, HKL lay);
+    // i -> I и при переводе раскладки (fix_lone_i): "ш цшдд" -> "I will" - Shift у i.
+    static void LoneIInKeys(TKeyRevert& keys, HKL lay);
     // "Исправить последнее слово" сразу после такого исправления: вернуть слово и запомнить его в исключениях.
     bool UndoTwoCaps();
     // Отмена сейчас сработала бы (слово исправлено только что, дальше не печатали).

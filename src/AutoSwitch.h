@@ -19,6 +19,8 @@
 //     стёр больше этого слова или то, что движок в нём уже переключил (WorkerImplement, KEYTYPE_BACKSPACE).
 //   - слова из списка "Переключать всегда" (autoswitch_force, в нужном виде: the, a) переключаются и без словаря, и
 //     одной буквой: "еру" (для словаря - русское слово) станет the, "ф" - a.
+//   - то, чего в русском не бывает (Ы, Ь в начале; ПРОПИСНЫЕ с Ы, Ь, Й, Щ - NotRussian), - тоже без словаря: "Ыфин" -
+//     Saby, "АИЩ" - FBO.
 // Знаки по краям ("vs/" -> "мы.", "[jxe" -> "хочу") не мешают: проверяется буквенная часть, а перепечатываются
 // все клавиши слова.
 // Проверено на текстах проекта и README LangBar++ (tools/test_autoswitch.cmd, 04.10.2026): из 15 тысяч слов, набранных
@@ -357,7 +359,7 @@ inline constexpr const wchar_t* kShortEn[] = {
 	L"exe", L"dll", L"msi", L"iso", L"pls", L"plz", L"thx", L"thnx", L"btw", L"tbh", L"idk", L"imo", L"imho", L"lmk",
 	L"brb", L"omg", L"msg", L"npm", L"src", L"cmd", L"ls", L"pwd", L"sudo", L"env", L"js", L"ts", L"py", L"cpp", L"php",
 	L"db", L"ctrl", L"alt", L"esc", L"del", L"ins", L"pgup", L"pgdn", L"prtsc", L"fn", L"ghz", L"mhz", L"khz", L"kb",
-	L"mb", L"gb", L"tb", L"px", L"dpi", L"fps", L"rpm", L"wb", L"ym", L"ozon" };
+	L"mb", L"gb", L"tb", L"px", L"dpi", L"fps", L"rpm", L"wb", L"ym", L"ozon", L"fbo", L"fbs", L"dbs", L"rfbs" };
 inline constexpr const wchar_t* kShortEnKeep[] = {
 	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"it", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
 	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd" };
@@ -530,6 +532,58 @@ inline bool LooksLikeTypo(const std::wstring& word, const std::vector<std::wstri
 			return true;
 	}
 	return false;
+}
+
+// ----- Не может быть русским -----
+// Набрано в русской раскладке то, чего в русском не бывает, а в английской - латиница: переключать без словаря
+// (Дмитрий, 22.10.2026: "Ыфин" - Saby, "АИЩ", "АИЫ" - FBO, FBS не переключались: английский словарь названий не знает,
+// а прописные Skip считает аббревиатурой).
+//   - Ы, Ь, Ъ в начале: так русские слова не начинаются, а это клавиши S, M ("Ыфин" - Saby, "Ылнзу" - Skype, "Ьшкщ" -
+//     Miro); там - с гласной;
+//   - ПРОПИСНЫМИ, до пяти букв, и среди них Ы, Ь, Ъ, Й, Щ: буквы аббревиатуры - начала слов, а с них русские слова не
+//     начинаются почти никогда ("ЫЛГ" - SKU, "ЫЬЫ" - SMS, "КЩШ" - ROI, "АИЩ" - FBO); гласная там не нужна.
+// От трёх букв, буква в букву (после них там можно знак после слова: "Ыфинб" - "Saby,"); набранное - не слово словаря и
+// не из своих списков (spellTyped - и для прописных, SpellCheck::CheckAnyCaseEvenCaps: "ЩИТ", "ЙОГА", "МЫЛО" - слова).
+// Не трогает: повтор в начале ("ыыы", "ыых" - смех; прописными - три одинаковых), "ыгы" (там sus). Ъ там - "]", не
+// буква: такое слово отсеется само. И опечатку в первой букве своего слова: Ы на S - рядом с Ф, Ь на M - рядом с Т
+// ("ыунт" - не "seyn", а "фунт" с опечаткой).
+inline constexpr size_t kNotRussianCapsMax = 5;
+inline bool NotRussian(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                       const std::wstring& thereLanguage, auto&& spellTyped) {
+	if (typed.size() != there.size() || !ShortWords::Is(typedLanguage, L"ru") || !ShortWords::Is(thereLanguage, L"en"))
+		return false;
+	for (wchar_t c : typed)
+		if (iswdigit(c)) return false;
+	const Part t = Letters(typed), a = Letters(there);
+	if (t.inner || a.inner || a.core.size() < 3 || a.begin != t.begin || a.end > t.end) return false;
+	for (size_t i = a.end; i < t.end; i++)
+		if (!wcschr(kTrailSigns, there[i])) return false;
+	bool vowel = false;
+	for (wchar_t c : a.core) {
+		if (TwoCaps::ScriptOf(c) != TwoCaps::Script::Latin) return false;
+		vowel = vowel || IsVowel(c);
+	}
+	const std::wstring word = typed.substr(t.begin, a.core.size()); // буквы, которые там - буквы
+	const std::wstring l = Lower(word);
+	const bool caps = AllUpper(word);
+	const bool first = wcschr(L"ыьъ", l[0]) != nullptr && vowel;
+	const bool inCaps = caps && word.size() <= kNotRussianCapsMax && l.find_first_of(L"ыьъйщ") != std::wstring::npos;
+	if (!first && !inCaps) return false;
+	if (l[0] == l[1] && (!caps || l[1] == l[2])) return false;
+	if (l == L"ыгы" || l == L"ыгыгы" || InShortList(l, typedLanguage, true)) return false;
+	if (spellTyped(word) == SpellCheck::Result::Word) return false;
+	if (inCaps) return true;
+	// Опечатка в первой букве - соседняя клавиша: "ыунт" - "фунт" (S рядом с A), "ьуман" - "туман" (M рядом с N):
+	// с соседней буквой впереди - слово своего языка, не трогать.
+	static const wchar_t* const kKeys = L"qwertyuiopasdfghjklzxcvbnm", *const kRussian = L"йцукенгшщзфывапролдячсмить";
+	for (const wchar_t* k = kKeys; *k; k++) {
+		if (!NearKeys(TwoCaps::ToLower(a.core[0]), *k)) continue;
+		std::wstring guess = word;
+		guess[0] = TwoCaps::IsUpper(word[0]) ? (wchar_t)(UINT_PTR)CharUpperW((LPWSTR)(UINT_PTR)kRussian[k - kKeys])
+		                                    : kRussian[k - kKeys];
+		if (spellTyped(guess) == SpellCheck::Result::Word) return false;
+	}
+	return true;
 }
 
 // В другой раскладке - слово с опечаткой ("нфдлштп" - "yalking": словарь предлагает talking, walking) - переключить

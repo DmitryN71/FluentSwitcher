@@ -130,6 +130,20 @@ inline bool Typed(const std::wstring& letters, const std::wstring& language) {
 	return false;
 }
 
+// То же для набранного ПРОПИСНЫМИ - как с заглавной: словарь Windows прописные принимает любые ("АИЩ" для него
+// слово), и выученные в "Переключать всегда" FBO, FBS ("АИЩ", "АИЫ") ждали пробела (Дмитрий, 22.10.2026).
+inline bool TypedEvenCaps(const std::wstring& letters, const std::wstring& language) {
+	size_t upper = 0;
+	for (wchar_t c : letters) {
+		if (IsCharLowerW(c)) return Typed(letters, language);
+		if (IsCharUpperW(c)) upper++;
+	}
+	if (upper < 2) return Typed(letters, language);
+	std::wstring title = Lower(letters);
+	title[0] = letters[0];
+	return Typed(title, language);
+}
+
 // Те же клавиши в другой раскладке - начало частого слова её языка; от четырёх букв - и слово из словаря.
 inline bool There(const std::wstring& letters, const std::wstring& language) {
 	if (!Available(language)) return false;

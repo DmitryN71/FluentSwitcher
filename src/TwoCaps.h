@@ -172,4 +172,23 @@ inline std::wstring FixText(const std::wstring& text, const std::vector<std::wst
 	return out;
 }
 
+// Весь текст: английское i отдельным словом - I в каждом слове между пробелами (LoneI). Перевод раскладки: короткое
+// слово переводится вместе со словом после него теми же клавишами, без Shift, - "ш цшдд" было "i will" (Дмитрий,
+// 22.10.2026). Длина та же.
+inline std::wstring LoneIText(const std::wstring& text, const std::vector<std::wstring>& exceptions) {
+	std::wstring out = text;
+	size_t at = 0;
+	while (at < out.size()) {
+		while (at < out.size() && iswspace(out[at])) at++;
+		size_t end = at;
+		while (end < out.size() && !iswspace(out[end])) end++;
+		if (end > at) {
+			const Fix fix = LoneI(out.substr(at, end - at), exceptions);
+			if (!fix.tail.empty()) out[at + fix.from] = L'I';
+		}
+		at = end;
+	}
+	return out;
+}
+
 }

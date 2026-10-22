@@ -461,24 +461,33 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
     const auto forced = AutoSwitchForced();
     // После щелчка или стрелок в том же окне могли дописывать середину слова: короткие куски (там меньше четырёх букв) не
     // трогаем - если только перед словом в поле не пробел, начало строки или знак (Дмитрий 06.10: щёлкнул в поле ответа,
-    // набрал "nj - "Это" ждало соседа). Поле спрашиваем раз за слово и только о коротком.
+    // набрал "nj - "Это" ждало соседа). Поле спрашиваем раз за слово и только когда нужно: о коротком и о том, что не
+    // может быть русским (AutoSwitch::NotRussian).
     int boundary = -2;
-    auto minLetters = [&](const std::wstring& there) -> size_t {
-        if (!m_autoWord.moved) return 2;
-        const size_t n = AutoSwitch::Letters(there).core.size();
-        if (n < 2 || n >= 4) return 4;
+    auto afterBoundary = [&] {
+        if (!m_autoWord.moved) return true;
         if (boundary == -2) {
             boundary = StartedAfterBoundary(typed);
             LOG_ANY(L"autoswitch: {} after a click or arrows, before it in the field: {}", typed,
                     boundary == 1 ? L"not a letter" : boundary == 0 ? L"a letter" : L"unknown");
         }
-        return boundary == 1 ? 2 : 4;
+        return boundary == 1;
+    };
+    auto minLetters = [&](const std::wstring& there) -> size_t {
+        if (!m_autoWord.moved) return 2;
+        const size_t n = AutoSwitch::Letters(there).core.size();
+        if (n < 2 || n >= 4) return 4;
+        return afterBoundary() ? 2 : 4;
     };
     auto dictionary = [](HKL l) {
         return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); };
     };
     auto suggestions = [](HKL l) {
         return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::Suggest(w, lang); };
+    };
+    // Словарь своего языка и для прописных (словарь Windows прописные принимает любые).
+    auto spellEvenCaps = [lang = Utils::GetNameForHKL_simple(lay)](const std::wstring& w) {
+        return SpellCheck::CheckAnyCaseEvenCaps(w, lang);
     };
     // Слово перед этим - контекст коротких слов (AutoSwitch.h); слова перед ним - их переводят вместе с этим.
     bool fixedBefore = false;
@@ -523,9 +532,14 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         // И сокращение из встроенного списка, которое словарь не решит: "ГЫИ" - USB, "BYY" - ИНН, "Секд" - Ctrl, "зды" - pls
         // (AutoSwitch::KnownShort).
         const bool known = !address && AutoSwitch::KnownShort(typed, there, Utils::GetNameForHKL_simple(lay),
-            Utils::GetNameForHKL_simple(other),
-            [lang = Utils::GetNameForHKL_simple(lay)](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); });
-        const bool force = (address || known || AutoSwitch::Forced(typed, there, forced)) &&
+            Utils::GetNameForHKL_simple(other), spellEvenCaps);
+        // И то, чего в русском не бывает, а там латиница: Ы, Ь в начале ("Ыфин" - Saby), прописные с Ы, Ь, Й, Щ
+        // ("АИЩ" - FBO; AutoSwitch::NotRussian). После щелчка или стрелок - если перед словом в поле не буква: могли дописывать
+        // середину слова.
+        const bool foreign = !address && !known &&
+            AutoSwitch::NotRussian(typed, there, Utils::GetNameForHKL_simple(lay), Utils::GetNameForHKL_simple(other),
+                                   spellEvenCaps) && afterBoundary();
+        const bool force = (address || known || foreign || AutoSwitch::Forced(typed, there, forced)) &&
                            !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
         if (!force) {
@@ -570,7 +584,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
         KeyHold::Claimed claimed{ m_holdId };
         LOG_ANY(L"autoswitch: {} -> {}{}", typed, there,
-                !force ? L"" : address ? L" (an address)" : known ? L" (a known abbreviation)" : L" (switch always)");
+                !force ? L"" : address ? L" (an address)" : known ? L" (a known abbreviation)" :
+                foreign ? L" (not a Russian word)" : L" (switch always)");
         m_autoNo = {};
         // Переводятся те же клавиши, что проверены (слово до пробела), с короткими словами перед ним.
         const size_t total = m_cycleList.Size();
@@ -593,7 +608,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = false;
         RememberSwitch(typed, there);
-        Journal("switched", from, to);
+        Journal("switched", from, to, foreign ? "not a Russian word" : "");
         return true;
     }
     return false;
@@ -708,9 +723,11 @@ void WorkerImplement::AutoSwitchEarly() {
         auto thereStarts = [&](const std::wstring& w) { return WordStart::There(w, otherLang) || forcedStarts(w); };
         // Слово из "Переключать всегда" набрано целиком - сейчас, не дожидаясь пробела, если так не начинается ни одно
         // слово своего языка. Правило ниже смотрит и на букву раньше, а "рее" - начало "реестр": выученное "http"
-        // ("реез") переключалось только на пробеле (Дмитрий 07.10).
+        // ("реез") переключалось только на пробеле (Дмитрий 07.10). Прописные - как с заглавной: "АИЩ" словарь считает
+        // словом, и выученное FBO ждало пробела (Дмитрий, 22.10.2026; WordStart::TypedEvenCaps).
         const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
-            !AutoSwitch::Excepted(typed, there, exceptions) && !WordStart::Typed(AutoSwitch::Letters(typed).core, lang);
+            !AutoSwitch::Excepted(typed, there, exceptions) &&
+            !WordStart::TypedEvenCaps(AutoSwitch::Letters(typed).core, lang);
         auto verdict = forcedWhole ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
             : !cfg->autoswitch_early ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Never, "a word of Always switch only" }
             : AutoSwitch::DecideEarly(typed, there, minLetters, exceptions,
@@ -1093,6 +1110,25 @@ void WorkerImplement::FixTwoCapsInKeys(TKeyRevert& keys, HKL lay) {
         result[i] = fixed[i];
     }
     if (result != text) LOG_ANY(L"two caps in the layout fix: {} -> {}", text, result);
+}
+
+// Английское i отдельным словом в переводимом - I (TwoCaps::LoneIText): короткое слово, переведённое вместе со словом
+// после него, - теми же клавишами, без Shift ("ш цшдд" было "i will"; Дмитрий, 22.10.2026). Как в FixTwoCaps: только в
+// английскую раскладку, не в консоли и не в редакторе кода; с CapsLock регистр значит другое.
+void WorkerImplement::LoneIInKeys(TKeyRevert& keys, HKL lay) {
+    if (!conf_get_unsafe()->fix_lone_i || !Utils::GetNameForHKL_simple(lay).starts_with(L"en")) return;
+    std::wstring text;
+    for (const auto& key : keys) {
+        if (key.is_caps) return;
+        auto c = InputSender::KeyText(key, lay, false);
+        if (c.size() != 1) return; // клавиша = один символ, иначе не сопоставить
+        text += c;
+    }
+    const std::wstring fixed = TwoCaps::LoneIText(text, TwoCapsExceptions());
+    if (fixed == text || IsConsole() || IsCodeEditor()) return;
+    for (size_t i = 0; i < text.size(); i++)
+        if (fixed[i] != text[i]) keys[i].is_shift = true;
+    LOG_ANY(L"i alone in the layout fix: {} -> {}", text, fixed);
 }
 
 bool WorkerImplement::TwoCapsUndoReady() const {
@@ -1727,9 +1763,11 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && target != 0 && conf_get_unsafe()->two_caps && !m_is_last_caps) {
         FixTwoCapsInKeys(ctxRevert.keylist, target);
     }
-    // Буфер слов - как будет на экране: заглавные, исправленные при переводе (здесь и TwoCapsInKeys), - и в нём. Иначе ДВе
-    // ЗАглавные в конце слова исправляли то же слово ещё раз: "ЕРщыую" - "Those." на "ю", и на Enter - перепечатано
-    // снова (Дмитрий 08.10.2026).
+    if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && target != 0 && !m_is_last_caps)
+        LoneIInKeys(ctxRevert.keylist, target);
+    // Буфер слов - как будет на экране: заглавные, исправленные при переводе (здесь и TwoCapsInKeys; i - I), - и в нём.
+    // Иначе ДВе ЗАглавные в конце слова исправляли то же слово ещё раз: "ЕРщыую" - "Those." на "ю", и на Enter -
+    // перепечатано снова (Дмитрий 08.10.2026).
     if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && ctxRevert.bufferBegin != SIZE_MAX)
         m_cycleList.SetShiftFrom(ctxRevert.bufferBegin, ctxRevert.keylist);
 

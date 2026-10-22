@@ -336,6 +336,15 @@ void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL res
     m_cycleList.SetSeparateLast();
 }
 
+// Дмитрий, 22.10.2026: сокращения его шаблонов в FluentClipper начинаются с "\", и "\htrd" на последней букве становилось
+// "\рекв" ("рекв" - начало "реквизит"): черта одинакова в раскладках, буфер считает её границей слова, а слово после неё -
+// обычным. Последнюю букву FluentClipper не получал (её держал хук, вместо неё напечатано своё) - шаблон не раскрывался.
+bool WorkerImplement::AfterBackslash(size_t wordBegin, const std::wstring& typed, HKL lay) const {
+    if (typed.starts_with(L'\\')) return true;
+    return wordBegin > 0 && wordBegin <= m_cycleList.Size() &&
+        InputSender::KeyText(m_cycleList.KeyAt(wordBegin - 1), lay, false) == L"\\";
+}
+
 bool WorkerImplement::ByHandAfterOurs(const std::wstring& typed, bool partial) const {
     if (!m_autoWord.lay || topWndInfo2.lay == m_autoWord.lay || !m_lastAutoSwitch ||
         GetTickCount64() - m_lastAutoSwitch >= 30000 || m_lastSwitchedTyped.empty())
@@ -457,6 +466,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         typed += c;
     }
     if (ByHandAfterOurs(typed, false)) return no("typed again after the layout was switched back by hand");
+    if (AfterBackslash(m_cycleList.Size() - keys.size() - (afterSpace ? 1 : 0), typed, lay))
+        return no("after a backslash: a template, a path or a command");
     const auto exceptions = AutoSwitchExceptions();
     const auto forced = AutoSwitchForced();
     // После щелчка или стрелок в том же окне могли дописывать середину слова: короткие куски (там меньше четырёх букв) не
@@ -676,6 +687,8 @@ void WorkerImplement::AutoSwitchEarly() {
         typed += c;
     }
     if (ByHandAfterOurs(typed, true)) return never("typed again after the layout was switched back by hand");
+    if (AfterBackslash(m_cycleList.Size() - keys.size(), typed, lay))
+        return never("after a backslash: a template, a path or a command");
     const auto exceptions = AutoSwitchExceptions();
     const auto forced = AutoSwitchForced();
     bool fixedBefore = false;

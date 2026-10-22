@@ -258,6 +258,10 @@ class WorkerImplement {
     // переключила сама, - тем более надо исправить; Дмитрий 06.10: "yt", "тщ" через раз - проверял, переключая
     // раскладку руками между словами).
     bool ByHandAfterOurs(const std::wstring& typed, bool partial) const;
+    // Перед словом - обратная косая черта: сокращение шаблона ("\рекв" в FluentClipper), путь (C:\Users), команда (\frac,
+    // \n). Такое слово автопереключение не трогает. wordBegin - первая клавиша слова в буфере; typed - слово, как набрано
+    // (черта бывает и в нём: где эта клавиша в раскладке - буква, буфер её границей не считает).
+    bool AfterBackslash(size_t wordBegin, const std::wstring& typed, HKL lay) const;
     ULONGLONG m_lastAutoSwitch = 0; // когда FluentSwitcher сам переключил слово (в конце или посреди)
     std::wstring m_lastSwitchedTyped;  // то слово, как его набрали (строчными, только буквы)
     bool m_lastSwitchedEarly = false;  // переключено посреди: в m_lastSwitchedTyped - его начало

@@ -559,6 +559,14 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		broken = true;
 		return false;
 	}
+	// Обратная косая черта (где эта клавиша не буква): за ней - сокращение шаблона ("\рекв" в FluentClipper), путь, команда.
+	// Движок такое слово не трогает (WorkerImplement::AfterBackslash), и держать его клавиши незачем: придержанную букву
+	// FluentClipper получал позже, повтором, и шаблон не раскрывал (Дмитрий, 22.10.2026: "\htrd").
+	if (vk == VK_OEM_5 && !shift && !LetterHere(vk)) {
+		ResetWord();
+		broken = true;
+		return false;
+	}
 	if (IsLetterKey(vk)) {
 		word.push_back(shift);
 		keys.push_back((wchar_t)vk);

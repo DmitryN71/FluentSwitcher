@@ -1653,11 +1653,13 @@ void SettingsFrame::BuildHotkeys()
     {
         HotkeyEditor* editor = nullptr;
         const char* key = action.key;
-        AddSettingsCard(m_page, m_column, T(action.title), T(action.description), [&](wxWindow* card) {
+        wxStaticText* about = AddSettingsCard(m_page, m_column, T(action.title), T(action.description), [&](wxWindow* card) {
             return editor = new HotkeyEditor(card, m_edit.GetHotkeys(key), 2, sides->IsOn());
         }, true);
+        m_doubleWaits.push_back({ about, T(action.description), [editor] { return editor->Value(); } });
         editor->onChange = [this, editor, key] {
             m_edit.SetHotkeys(key, editor->Value());
+            RefreshDoubleWaits();
             Changed();
         };
         editor->sameAs = [this, key](const wxString& one) { return SameHotkey(one, key); };
@@ -1697,6 +1699,7 @@ void SettingsFrame::BuildHotkeys()
         {
             m_edit.SetInt("quick_press_ms", value);
             HotkeyEditor::s_doubleMs = (unsigned long)value;
+            RefreshDoubleWaits();
             Changed();
         }
     };
@@ -1717,6 +1720,105 @@ wxString SettingsFrame::SameHotkey(const wxString& one, const char* except) cons
                 return T("Так же назначено: «") + T(action.title) + T("»");
     }
     return wxString();
+}
+
+namespace
+{
+// One key of a hotkey as the engine compares them (CHotKey::Compare, CompareKeys): "Shift" is either Shift, "LShift"
+// only the left one.
+bool SameKey(const wxString& a, const wxString& b)
+{
+    if (a == b)
+        return true;
+    for (const char* mod : { "Ctrl", "Shift", "Alt", "Win" })
+    {
+        const wxString left = wxString("L") + mod, right = wxString("R") + mod;
+        if ((a == mod && (b == left || b == right)) || (b == mod && (a == left || a == right)))
+            return true;
+    }
+    return false;
+}
+
+// Two hotkeys on the same keys, in any order, "#up" and "#double" aside.
+bool SameKeys(wxString a, wxString b)
+{
+    auto keys = [](wxString one) {
+        one.Replace(" #up", "");
+        one.Replace(" #double", "");
+        std::vector<wxString> list;
+        for (wxString part : wxSplit(one, '+'))
+            if (!part.Trim(true).Trim(false).empty())
+                list.push_back(part);
+        return list;
+    };
+    std::vector<wxString> x = keys(a), y = keys(b);
+    if (x.empty() || x.size() != y.size())
+        return false;
+    for (const wxString& k : x)
+    {
+        const auto it = std::find_if(y.begin(), y.end(), [&](const wxString& m) { return SameKey(k, m); });
+        if (it == y.end())
+            return false;
+        y.erase(it);
+    }
+    return true;
+}
+}
+
+wxString SettingsFrame::DoubleWait(const wxString& stored) const
+{
+    wxArrayString titles;
+    wxString twice;
+    for (const wxString& one : SplitHotkeys(stored))
+    {
+        if (one.Contains("#double"))
+            continue;
+        for (const HotkeyAction& action : HotkeyActions())
+            for (const wxString& other : SplitHotkeys(m_edit.GetHotkeys(action.key)))
+            {
+                if (!other.Contains("#double") || !SameKeys(one, other))
+                    continue;
+                const wxString title = T(action.title);
+                if (titles.Index(title) == wxNOT_FOUND)
+                    titles.Add(title);
+                if (twice.empty())
+                    twice = HotkeyDisplay(other);
+            }
+    }
+    if (titles.empty())
+        return wxString();
+    const int ms = m_edit.GetInt("quick_press_ms", 280);
+    if (titles.size() == 1)
+        return wxString::Format(T("Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – «%s» назначено действию "
+                                  "«%s». Дайте ему другое сочетание, и задержки не будет"), ms, twice, titles[0]);
+    wxString list;
+    for (const wxString& title : titles)
+        list += (list.empty() ? wxString() : T("», «")) + title;
+    return wxString::Format(T("Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – «%s» назначено действиям "
+                              "«%s». Дайте им другие сочетания, и задержки не будет"), ms, twice, list);
+}
+
+void SettingsFrame::RefreshDoubleWaits()
+{
+    for (DoubleWaitCard& card : m_doubleWaits)
+    {
+        const wxString note = DoubleWait(card.hotkeys());
+        if (note == card.shown)
+            continue;
+        card.shown = note;
+        const wxString text = card.about.empty() || note.empty() ? card.about + note : card.about + "\n" + note;
+        SetCardDescription(card.label, text);
+        card.label->Show(!text.empty());
+        card.label->GetParent()->Layout();
+        // The card grows or shrinks: its page lays out again (it may be another page than the one being built).
+        for (wxWindow* w = card.label; w; w = w->GetParent())
+            if (wxScrolledWindow* page = wxDynamicCast(w, wxScrolledWindow))
+            {
+                page->Layout();
+                page->FitInside();
+                break;
+            }
+    }
 }
 
 void SettingsFrame::BuildLayouts()
@@ -1777,6 +1879,7 @@ void SettingsFrame::BuildLayouts()
                             return panel;
                         }, true);
         noText->Hide();
+        m_doubleWaits.push_back({ noText, wxString(), [editor] { return editor->Value(); } });
         if (toggle)
             toggle->onChange = [this, toggle, i] {
                 // At least two stay on: one alone, there is nothing to switch to and nothing to fix into.
@@ -1795,9 +1898,12 @@ void SettingsFrame::BuildLayouts()
             };
         editor->onChange = [this, editor, i] {
             m_edit.Json()["layouts_info"][i]["hotkey"] = ToUtf8(editor->Value());
+            RefreshDoubleWaits();
             Changed();
         };
     }
+    // The hotkeys of both pages are there now: which of them wait for a second press (DoubleWait).
+    RefreshDoubleWaits();
 
     const bool alternative = m_edit.GetBool("AlternativeLayoutChange", false);
     Choice(T("Как переключать раскладку"),

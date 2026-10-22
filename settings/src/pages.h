@@ -95,6 +95,20 @@ private:
     void EndHighlight();
     // A note if another action has the hotkey `one` too.
     wxString SameHotkey(const wxString& one, const char* except) const;
+    // A single press of keys that some action has "twice" too waits for the second press (the engine's quick_press_ms;
+    // init0 on the forum, 22.10.2026: the layout came late, the first letters went in the old one). For the hotkeys
+    // `stored`: why they fire later and how to help it, or empty.
+    wxString DoubleWait(const wxString& stored) const;
+    // The cards of the actions and of the layouts say so in their descriptions, again after every change of a hotkey.
+    void RefreshDoubleWaits();
+    struct DoubleWaitCard
+    {
+        wxStaticText* label;                // the card's description
+        wxString about;                     // its own text; empty - hidden without the note (the layouts)
+        std::function<wxString()> hotkeys;  // the card's hotkeys now
+        wxString shown;                     // the note it shows now
+    };
+    std::vector<DoubleWaitCard> m_doubleWaits;
     void RefreshEngine();
     bool HasChanges() const;
     // The window's place and size from the last time ("settings_window"); false - none or off the screens now.

@@ -549,7 +549,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
         // середину слова.
         const bool foreign = !address && !known &&
             AutoSwitch::NotRussian(typed, there, Utils::GetNameForHKL_simple(lay), Utils::GetNameForHKL_simple(other),
-                                   spellEvenCaps) && afterBoundary();
+                                   spellEvenCaps, suggestions(lay)) && afterBoundary();
         const bool force = (address || known || foreign || AutoSwitch::Forced(typed, there, forced)) &&
                            !AutoSwitch::Excepted(typed, there, exceptions);
         auto shortWord = AutoSwitch::Short::No;
@@ -562,6 +562,12 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
             if (!why)
                 why = AutoSwitch::DecideWhy(typedAs, thereAs, dictionary(lay), dictionary(other), suggestions(lay),
                                             suggestions(other), ShortWords::TrustDictionary(Utils::GetNameForHKL_simple(lay)));
+            // Буква там стала знаком после редкого слова ("Нуцж" - "Yew;"): опечатка в своём слове, а не слово там.
+            auto frequentThere = [lang = Utils::GetNameForHKL_simple(other)](const std::wstring& w) {
+                return w.size() <= 3 ? ShortWords::Frequent(w, lang) : WordStart::IsWord(w, lang, true);
+            };
+            if (!why && AutoSwitch::RareBeforeSign(typedAs, thereAs, frequentThere))
+                why = "a letter is a sign after a rare word there";
             // Частое короткое слово своего языка ("шт", "руб", "ул", "gb") словарь может и не знать: "5 шт" - не "5 in".
             if (!why && AutoSwitch::FrequentAsTyped(typed, Utils::GetNameForHKL_simple(lay)))
                 why = "a frequent short word as typed";
@@ -606,10 +612,12 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace) {
             while (!s.empty() && s.back() == L' ') s.pop_back();
             return s;
         };
-        const std::wstring from = TailText(m_cycleList, first, wordEnd, lay), to = TailText(m_cycleList, first, wordEnd, other);
-        const std::wstring retroFrom = trimmed(TailText(m_cycleList, first, wordBegin, lay)),
-                           retroTo = trimmed(TailText(m_cycleList, first, wordBegin, other));
+        const std::wstring from = TailText(m_cycleList, first, wordEnd, lay);
+        const std::wstring retroFrom = trimmed(TailText(m_cycleList, first, wordBegin, lay));
         if (!SwitchTail(first, other, true)) return true;
+        // В журнал - как на экране (буфер - тоже): перепечатка могла сделать i заглавной, исправить ДВе ЗАглавные.
+        const std::wstring to = TailText(m_cycleList, first, wordEnd, other);
+        const std::wstring retroTo = trimmed(TailText(m_cycleList, first, wordBegin, other));
         m_autoSwitched = { .word = AutoSwitch::Lower(AutoSwitch::Letters(typed).core), .at = GetTickCount64(),
                            .size = m_cycleList.Size(), .typed = from, .there = to, .wordTyped = typed, .wordThere = there,
                            .retroTyped = retroFrom, .retroThere = retroTo, .from = lay, .to = other, .span = total - first,
@@ -767,13 +775,15 @@ void WorkerImplement::AutoSwitchEarly() {
         const size_t begin = tail.empty() ? wordBegin : RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions);
         const std::wstring more = L"\u2026";
         const std::wstring from = TailText(m_cycleList, begin, total, lay) + more;
-        const std::wstring to = TailText(m_cycleList, begin, total, other) + more;
-        std::wstring retroFrom = TailText(m_cycleList, begin, wordBegin, lay), retroTo = TailText(m_cycleList, begin, wordBegin, other);
+        std::wstring retroFrom = TailText(m_cycleList, begin, wordBegin, lay);
         while (!retroFrom.empty() && retroFrom.back() == L' ') retroFrom.pop_back();
-        while (!retroTo.empty() && retroTo.back() == L' ') retroTo.pop_back();
         // Как "Исправить последнее слово", но слово не кончилось: его буквы в буфере остаются одним словом (без
         // SetSeparateLast) - конец слова проверит его целиком, "Исправить последнее слово" вернёт целиком.
         if (!SwitchTail(begin, other, false)) return;
+        // В журнал - как на экране (i заглавная, ДВе ЗАглавные исправлены).
+        const std::wstring to = TailText(m_cycleList, begin, total, other) + more;
+        std::wstring retroTo = TailText(m_cycleList, begin, wordBegin, other);
+        while (!retroTo.empty() && retroTo.back() == L' ') retroTo.pop_back();
         m_autoSwitched = { .word = AutoSwitch::Lower(AutoSwitch::Letters(typed).core), .at = GetTickCount64(),
                            .size = m_cycleList.Size(), .typed = from, .there = to, .wordTyped = typed + more,
                            .wordThere = there + more, .retroTyped = retroFrom, .retroThere = retroTo, .early = true,

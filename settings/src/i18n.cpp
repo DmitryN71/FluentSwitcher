@@ -523,14 +523,13 @@ const std::unordered_map<std::string, const char*>& English()
         { "Интервал двойного нажатия, мс", "Double press interval, ms" },
         { "Два нажатия быстрее этого считаются двойным – для сочетаний «дважды». Обычно 250–350",
           "Two presses faster than this count as a double press – for “twice” hotkeys. Usually 250–350" },
-        { "Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – «%s» назначено действию "
-          "«%s». Дайте ему другое сочетание, и задержки не будет",
-          "Works %d ms later: it waits for a second press, since “%s” is set for “%s”. Give that action another "
-          "hotkey, and the delay is gone" },
-        { "Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – «%s» назначено действиям "
-          "«%s». Дайте им другие сочетания, и задержки не будет",
-          "Works %d ms later: it waits for a second press, since “%s” is set for “%s”. Give those actions other "
-          "hotkeys, and the delay is gone" },
+        { "Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – %s. Смените то сочетание, и "
+          "задержки не будет",
+          "Works %d ms later: it waits for a second press, since %s. Change that hotkey, and the delay is gone" },
+        { "Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – %s. Смените те сочетания, и "
+          "задержки не будет",
+          "Works %d ms later: it waits for a second press, since %s. Change those hotkeys, and the delay is gone" },
+        { "«%s» есть у «%s»", "“%s” is set for “%s”" },
         { "», «", "”, “" },
         { "Журнал отладки", "Debug log" },
         { "До выхода из FluentSwitcher каждое нажатие клавиш пишется в log\\FluentSwitcher.exe.log "

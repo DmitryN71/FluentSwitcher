@@ -21,8 +21,11 @@ free and open source under GPL-3.0.
   "d-nhtnmb[" - "в-третьих". A word in CAPITALS from four letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
   "ЗИМА ВОЗМЕЗДИЯ", in the middle of the word from the fifth letter. A site or mail address typed in the wrong layout too: "еюьу" - "t.me", "нфюкг" - "ya.ru". Frequent
   abbreviations of a built-in list too - "ГЫИ" - "USB", "BYY" - "ИНН", "зды" - "pls", and hotkeys: "Секд+А" - "Ctrl+F".
+  A word with Ы or Ь first - no Russian word begins so - goes without a dictionary too: "Ыфин" - "Saby". In a word with
+  a hyphen where only the part after the hyphen is in the wrong layout, only that part is fixed: "legacy-yfcnhjqrb" -
+  "legacy-настройки", and so does Shift twice.
   English with an apostrophe: "Шэь" - "I'm", "вщтэе" - "don't". Words run together with capitals: "СфзыДщсл" -
-  "CapsLock". Words with digits (with digits in front - only from "Always switch": "7яшз" - 7zip), other abbreviations (NASA, ВДНХ), a word typed again after the layout was switched by
+  "CapsLock". Words with digits (with digits in front - only from "Always switch": "7яшз" - 7zip), other abbreviations (NASA, ВДНХ), a word right after "\" (abbreviations of templates, paths: "\рекв", C:\Users), a word typed again after the layout was switched by
   hand right after a fix, passwords, the console (but for the console apps listed, such as far.exe) and the apps of "No automatic switch in apps" are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word
   you keep fixing by hand goes to "Always switch" the third time, a word with hyphens too (e-Residency, ВСХВ-ВДНХ-ВВЦ), and with digits in front (4pda). A word of "Always switch" is switched as soon as it is typed whole, with no space. The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked. The journal
@@ -92,8 +95,8 @@ free and open source under GPL-3.0.
 - FluentSwitcher turned off (Win + F8, the flag's menu) stays off after a restart too.
 
 The default hotkeys: Shift twice – the last word, or the selected text when no word was typed;
-Shift + CapsLock – several words, Ctrl + CapsLock – all recent text, Win + F8 – on / off, Win + Shift –
-settings. Change them in the settings window, "Hotkeys".
+Shift + CapsLock – several words, Ctrl + CapsLock – all recent text, Win + F8 – on / off. Change them in the
+settings window, "Hotkeys".
 
 ## What is different from SimpleSwitcher
 

@@ -98,8 +98,8 @@ public:
 			FluentMenu::theme = uiTheme == "Light" ? FluentMenu::Theme::Light
 				: uiTheme == "Dark" ? FluentMenu::Theme::Dark : FluentMenu::Theme::Taskbar;
 
-			// "Напоминалки" SimpleSwitcher (ShowReminderInTrayMenu) в FluentSwitcher нет.
-			// Раскладок в меню нет (ShowLangsInTrayMenu не используется): пока меню открыто, активно оно само,
+			// "Напоминалки" SimpleSwitcher в FluentSwitcher нет. Раскладок в меню нет (их настройку SimpleSwitcher,
+			// ShowLangsInTrayMenu, убрали в 1.5.16): пока меню открыто, активно оно само,
 			// и выбранная раскладка доставалась не тому окну - пункты ничего не делали.
 
 			// menu

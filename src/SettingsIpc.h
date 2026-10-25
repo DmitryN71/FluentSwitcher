@@ -163,7 +163,7 @@ namespace SettingsIpc {
 				ReportHeader();
 			}
 			else
-				SetLogLevel_print_info(wParam ? conf_get_unsafe()->logLevel : LOG_LEVEL_DISABLE);
+				SetLogLevel_print_info(wParam ? LOG_LEVEL_3 : LOG_LEVEL_DISABLE);
 			return 1;
 		}
 		if (msg == msgUpdateChecked) {

@@ -415,9 +415,8 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			}
 			else {
 				const bool command = curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN);
-				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold(),
-					curk.HasMod(VK_CONTROL) && curk.HasMod(VK_MENU));
-				// Слова "Переключать всегда" - клавишами (KeyHold::SetForced), заново при новых настройках (там и выученные).
+				// Слова "Переключать всегда" - клавишами (KeyHold::SetForced), и клавиши "\" (SetBackslash), заново при новых
+				// настройках (там и выученные слова, и раскладки) - до Track: черту узнаёт и первое же нажатие.
 				static std::shared_ptr<const ProgramConfig> forcedFrom;
 				if (forcedFrom != cfg) {
 					forcedFrom = cfg;
@@ -426,7 +425,10 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					std::vector<HKL> lays;
 					for (HKL l : cfg->layouts_info.EnabledLayouts()) lays.push_back(l);
 					KeyHold::SetForced(words, lays);
+					KeyHold::SetBackslash(lays);
 				}
+				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold(),
+					curk.HasMod(VK_CONTROL) && curk.HasMod(VK_MENU));
 				// Слово "Переключать всегда" набрано целиком - и без "Не ждать конца слова", с любой буквы (KeyHold::ForcedPoint).
 				early = letter && cfg->autoswitch && g_enabled.IsEnabled() && KeyHold::CanStart() &&
 					((cfg->autoswitch_early && KeyHold::EarlyPoint()) || KeyHold::ForcedPoint());

@@ -5,13 +5,6 @@
 #include "RemoteDesktop.h"
 #include "CanElevate.h"
 
-enum class SeparateExtMode {
-	Disabled = 3,
-	Symbol = 0,
-	PossibleSymb_SeveralW = 1,
-	PossibleSymb_Always = 2,
-};
-
 class ProgramConfig {
 	struct CHotKeySet {
 		HotKeyType hkId = hk_NULL;
@@ -37,10 +30,9 @@ public:
 		add(hk_toUpperSelected);
 		add(hk_InvertCaseSelected);
 		add(hk_ToggleEnabled,true);
-		add(hk_ShowMainWindow,true);
-		// hk_ShowRemainderWnd - "Напоминалка" SimpleSwitcher, в FluentSwitcher её нет.
-		// hk_InsertWithoutFormat ("вставить без оформления") не нужен переключателю раскладки: это есть у
-		// менеджера буфера (FluentClipper: Ctrl+Shift+Insert).
+		// Без сочетания (до 1.5.16 - Win + Shift при отпускании, от SimpleSwitcher): клавиша Copilot - это Win + Shift + F23, и
+		// если F23 забирает другая программа, открывались настройки (форум, Ludens, 23.10.2026). Окно - из меню у часов.
+		add(hk_ShowMainWindow);
 		add(hk_RevertLine);
 		add(hk_ToggleAutoswitch);
 		add(hk_TranslitSelected);
@@ -142,8 +134,6 @@ public:
         return false;
     }
 
-    TLogLevel logLevel = LOG_LEVEL_3;
-
     string config_version;
 
     bool fixRAlt = false;
@@ -153,10 +143,7 @@ public:
     // (CanElevate.h); под обычной - как выключено: без запроса пароля администратора при каждом запуске.
     bool MonitorAdmin() const { return isMonitorAdmin && (Utils::IsSelfElevated() || CanElevateSelf()); }
     bool force_DbgMode              = false;
-    bool fClipboardClearFormat = false;
     bool disableAccessebility    = false;
-	bool ShowLangsInTrayMenu = true;
-	bool ShowReminderInTrayMenu = false;
 	bool ShowRunProgramsInTrayMenu = false;
     static constexpr UStr showFlags_OriginalFlags = "Original Flags";
     static constexpr UStr showFlags_AppIcon = "Application Icon";
@@ -169,15 +156,10 @@ public:
     string flagsSet = flags_Default;
     bool tray_icon = true;
     string caret_flag_set = flags_Default;
-    //bool SkipAllInjectKeys = false;
-    bool SkipLowLevelInjectKeys = false; // с 1.5.0 не действует (HookerKeyboard.cpp): поле остаётся в файле настроек
     bool AlternativeLayoutChange = false;
 	uint32_t quick_press_ms = 280;
-	SeparateExtMode separate_ext_mode = SeparateExtMode::Symbol;
     CHotKey win_hotkey_cycle_lang { VK_LMENU, VK_SHIFT };
-	std::string theme = "Light";
-	string ui_skin = "";
-	// Тема окна настроек: "" - как в Windows, "Light", "Dark" (theme выше - от окна SimpleSwitcher, не используется).
+	// Тема окна настроек: "" - как в Windows, "Light", "Dark".
 	string ui_theme = "";
 	// Окно настроек: записывать левые и правые Ctrl, Shift, Alt, Win по отдельности.
 	bool record_sides = false;
@@ -225,7 +207,6 @@ public:
 	string gui_lang = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? "Russian"
 		: PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_UKRAINIAN ? "Ukrainian" : "English";
 	bool useBritishFlag = false;
-	string treat_as_letters = "_-";
 	// Работать в окнах удалённого рабочего стола и виртуальных машин (RemoteDesktop.h), как везде (до 1.5.0 - так). Выключено
 	// - там молчим, как в disableInPrograms (IsSkipProgramTop): для тех, у кого FluentSwitcher и на том компьютере (Дмитрий
 	// 06.10.2026: слово исправляли обе копии). С 06.10 по 09.10.2026 молчали всегда - форум (Ivan_Strelec): работать

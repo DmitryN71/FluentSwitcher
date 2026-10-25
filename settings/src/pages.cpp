@@ -1602,10 +1602,9 @@ void SettingsFrame::BuildTyping()
 {
     Section(kIconTyping, T("Набор текста"));
 
-    // "Где кончается слово" (separate_ext_mode) is not shown since 1.5.0-rc1 (Дмитрий 08.10.2026: nobody understands
-    // it, and the fixes at punctuation are made for the default): the file keeps its value, and the engine uses it.
-    // So "Считать буквами" (treat_as_letters, "_-") since 1.5.6 (Дмитрий 11.10.2026): its one sensible value is the
-    // default - without "-" the words with hyphens (кто-то, e-mail) fall apart for the automatic switch.
+    // "Где кончается слово" (separate_ext_mode) was not shown since 1.5.0-rc1 (Дмитрий 08.10.2026: nobody understands
+    // it), "Считать буквами" (treat_as_letters, "_-") since 1.5.6 (Дмитрий 11.10.2026: without "-" the words with hyphens
+    // fall apart); in 1.5.16 both left the engine too, with their one sensible values built in.
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
     CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, знака препинания, Enter или Tab"),
@@ -1739,6 +1738,17 @@ bool SameKey(const wxString& a, const wxString& b)
     return false;
 }
 
+// The name of a command (run_programs) as its card shows it.
+wxString CommandTitle(const nlohmann::json& command)
+{
+    const bool snippet = command.value("type", 0) == 1;
+    const wxString cmd = FromUtf8(command.value("cmd", std::string()));
+    wxString title = snippet ? T("Вставить текст") : T("Запустить приложение");
+    if (!cmd.empty())
+        title += ": " + (snippet ? cmd.Left(40) : wxFileName(cmd).GetFullName());
+    return title;
+}
+
 // Two hotkeys on the same keys, in any order, "#up" and "#double" aside.
 bool SameKeys(wxString a, wxString b)
 {
@@ -1767,35 +1777,64 @@ bool SameKeys(wxString a, wxString b)
 
 wxString SettingsFrame::DoubleWait(const wxString& stored) const
 {
-    wxArrayString titles;
-    wxString twice;
+    // The "twice" hotkeys the engine waits for - of the actions, the layouts and the commands (its All_hot_keys), with
+    // their names, as the window has them now.
+    std::vector<std::pair<wxString, wxString>> doubles; // hotkey, name
+    auto add = [&doubles](const wxString& hotkeys, const wxString& name) {
+        for (const wxString& one : SplitHotkeys(hotkeys))
+            if (one.Contains("#double"))
+                doubles.push_back({ one, name });
+    };
+    for (const HotkeyAction& action : HotkeyActions())
+        add(m_edit.GetHotkeys(action.key), T(action.title));
+    const nlohmann::json& file = std::as_const(m_edit).Json();
+    if (const auto it = file.find("layouts_info"); it != file.end() && it->is_array())
+        for (const auto& layout : *it)
+            if (layout.is_object())
+                add(FromUtf8(layout.value("hotkey", std::string())), LayoutName(FromUtf8(layout.value("layout", std::string()))));
+    if (const auto it = file.find("run_programs"); it != file.end() && it->is_array())
+        for (const auto& command : *it)
+            if (command.is_object())
+                add(FromUtf8(command.value("hotkey", std::string())), CommandTitle(command));
+    // Which of them the single hotkeys of the card meet: each "twice" with its own names (two actions on LShift twice and
+    // RShift twice are two keys, not one).
+    std::vector<std::pair<wxString, wxArrayString>> found;
+    size_t names = 0;
     for (const wxString& one : SplitHotkeys(stored))
     {
         if (one.Contains("#double"))
             continue;
-        for (const HotkeyAction& action : HotkeyActions())
-            for (const wxString& other : SplitHotkeys(m_edit.GetHotkeys(action.key)))
+        for (const auto& [other, name] : doubles)
+        {
+            if (!SameKeys(one, other))
+                continue;
+            const wxString twice = HotkeyDisplay(other);
+            auto it = std::find_if(found.begin(), found.end(), [&twice](const auto& f) { return f.first == twice; });
+            if (it == found.end())
+                it = found.insert(found.end(), { twice, wxArrayString() });
+            if (it->second.Index(name) == wxNOT_FOUND)
             {
-                if (!other.Contains("#double") || !SameKeys(one, other))
-                    continue;
-                const wxString title = T(action.title);
-                if (titles.Index(title) == wxNOT_FOUND)
-                    titles.Add(title);
-                if (twice.empty())
-                    twice = HotkeyDisplay(other);
+                it->second.Add(name);
+                names++;
             }
+        }
     }
-    if (titles.empty())
+    if (found.empty())
         return wxString();
+    wxString parts;
+    for (const auto& [twice, list] : found)
+    {
+        wxString joined;
+        for (const wxString& name : list)
+            joined += (joined.empty() ? wxString() : T("», «")) + name;
+        parts += (parts.empty() ? wxString() : wxString("; ")) + wxString::Format(T("«%s» есть у «%s»"), twice, joined);
+    }
     const int ms = m_edit.GetInt("quick_press_ms", 280);
-    if (titles.size() == 1)
-        return wxString::Format(T("Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – «%s» назначено действию "
-                                  "«%s». Дайте ему другое сочетание, и задержки не будет"), ms, twice, titles[0]);
-    wxString list;
-    for (const wxString& title : titles)
-        list += (list.empty() ? wxString() : T("», «")) + title;
-    return wxString::Format(T("Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – «%s» назначено действиям "
-                              "«%s». Дайте им другие сочетания, и задержки не будет"), ms, twice, list);
+    return names == 1
+        ? wxString::Format(T("Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – %s. Смените то сочетание, и "
+                             "задержки не будет"), ms, parts)
+        : wxString::Format(T("Срабатывает на %d мс позже: ждёт, не нажмут ли второй раз, – %s. Смените те сочетания, и "
+                             "задержки не будет"), ms, parts);
 }
 
 void SettingsFrame::RefreshDoubleWaits()
@@ -1807,7 +1846,9 @@ void SettingsFrame::RefreshDoubleWaits()
             continue;
         card.shown = note;
         const wxString text = card.about.empty() || note.empty() ? card.about + note : card.about + "\n" + note;
-        SetCardDescription(card.label, text);
+        // These cards have their control below (AddSettingsCard(..., true)): their text is wrapped wider, as the kit does
+        // it for them (kDescriptionBelow in fluent_controls.cpp); SetCardDescription would wrap it at the narrow width.
+        SetWrappedLabel(card.label, text, card.label->FromDIP(480));
         card.label->Show(!text.empty());
         card.label->GetParent()->Layout();
         // The card grows or shrinks: its page lays out again (it may be another page than the one being built).
@@ -2094,9 +2135,7 @@ void SettingsFrame::FillCommands()
         const auto& command = list[i];
         const bool snippet = command.value("type", 0) == 1;
         const wxString cmd = FromUtf8(command.value("cmd", std::string()));
-        wxString title = snippet ? T("Вставить текст") : T("Запустить приложение");
-        if (!cmd.empty())
-            title += ": " + (snippet ? cmd.Left(40) : wxFileName(cmd).GetFullName());
+        const wxString title = CommandTitle(command);
 
         AddSettingsCard(page, column, title,
                         snippet ? T("Текст печатается туда, где курсор")
@@ -2202,6 +2241,7 @@ void SettingsFrame::FillCommands()
             HotkeyEditor* keys = new HotkeyEditor(panel, FromUtf8(command.value("hotkey", std::string())), 2, false);
             keys->onChange = [this, keys, i] {
                 m_edit.Json()["run_programs"][i]["hotkey"] = ToUtf8(keys->Value());
+                RefreshDoubleWaits(); // a command's "twice" makes the single presses of those keys wait too
                 Changed();
             };
             keysRow->Add(keys, 0, wxALIGN_TOP);

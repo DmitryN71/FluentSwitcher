@@ -99,13 +99,11 @@ inline TKeyType AnalizeTyped(const CHotKey& key, UINT vk, const TScanCode_Ext& s
 		return KEYTYPE_LETTER_OR_SPACE; 
 	}
 
-	if (cfg->separate_ext_mode == SeparateExtMode::Disabled) {
-		return Utils::is_in(curSymbol, '\n', ' ', '\t', '\r') ? KEYTYPE_SPACE : KEYTYPE_LETTER;
-	}
-
 	if (cfg->layouts_info.CntLayoutEnabled() <= 3) {
 
-		auto is_letter = [&cfg](wchar_t c) {return cfg->treat_as_letters.contains(c) || StrUtils::isLetter(c); };
+		// "_" и "-" - части слова (snake_case, "кто-то"); настройки SimpleSwitcher "Считать буквами" (treat_as_letters) и
+		// "Где кончается слово" (separate_ext_mode) убраны в 1.5.16: в окне их не было с 1.5.0, а разумное значение одно.
+		auto is_letter = [](wchar_t c) { return c == L'_' || c == L'-' || StrUtils::isLetter(c); };
 
 		bool have_letter = is_letter(curSymbol);
 		bool have_custom = !have_letter;

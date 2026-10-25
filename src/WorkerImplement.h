@@ -56,9 +56,10 @@ class WorkerImplement {
     void CliboardChanged();
     TStatus GetClipStringCallback();
     void ClipboardClearFormat2() { IFS_LOG(m_clipWorker.ClipboardClearFormat()); }
-    void RevertText(HotKeyType typeRevert, bool no_backs = false, bool always_full_text = false) {
+    // splitHyphen - "Исправить последнее слово" только для части после дефиса (HyphenTailOnly).
+    void RevertText(HotKeyType typeRevert, bool no_backs = false, bool always_full_text = false, bool splitHyphen = false) {
         auto nextLng = getNextLang();
-        auto to_revert = m_cycleList.FillKeyToRevert(typeRevert, always_full_text);
+        auto to_revert = m_cycleList.FillKeyToRevert(typeRevert, always_full_text, splitHyphen);
         if (to_revert.keys.empty()) {
             LOG_ANY(L"nothing to revert. skip");
             return;
@@ -160,8 +161,9 @@ class WorkerImplement {
     } m_twoCaps;
 
     // Автопереключение (AutoSwitch.h): слово перед только что набранным пробелом (afterSpace) или придержанным
-    // Enter / Tab набрано не в той раскладке - перевести, как "Исправить последнее слово". true - перевели.
-    bool AutoSwitchLastWord(bool afterSpace = true);
+    // Enter / Tab набрано не в той раскладке - перевести, как "Исправить последнее слово". true - перевели. atSign -
+    // проверка на знаке после слова, посреди набора (AutoSwitchAtSign): слово, может быть, ещё пишется.
+    bool AutoSwitchLastWord(bool afterSpace = true, bool atSign = false);
     // Посреди слова (с четвёртой буквы; хук придерживает нажатия после неё): переключить уже сейчас, если набранное -
     // не начало слова своего языка, а в другой раскладке - начало (AutoSwitch::DecideEarly). Слово продолжается.
     void AutoSwitchEarly();
@@ -187,7 +189,11 @@ class WorkerImplement {
         std::string why;           // почему автопереключение его не тронуло (для журнала)
         std::wstring undoneAgain;  // исправляют только что отменённое автопереключение: его слово (не в счёт отмен)
     };
-    std::optional<HandFix> TakeHandFix();
+    // tailOnly - исправляют только часть после дефиса (HyphenTailOnly).
+    std::optional<HandFix> TakeHandFix(bool tailOnly = false);
+    // "Исправить последнее слово" в слове через дефис, у которого не в той раскладке только часть после дефиса
+    // ("legacy-yfcnhjqrb" - "legacy-настройки"; Дмитрий, 25.10.2026): исправить её одну (AutoSwitch::HyphenTail).
+    bool HyphenTailOnly();
     void HandFixDone(const HandFix& fix);
     // В счёт "Переключать всегда" (строчными, в нужном виде) - или пусто: не учить (HandFixDone).
     std::wstring LearnableFix(const HandFix& fix);
@@ -259,9 +265,9 @@ class WorkerImplement {
     // раскладку руками между словами).
     bool ByHandAfterOurs(const std::wstring& typed, bool partial) const;
     // Перед словом - обратная косая черта: сокращение шаблона ("\рекв" в FluentClipper), путь (C:\Users), команда (\frac,
-    // \n). Такое слово автопереключение не трогает. wordBegin - первая клавиша слова в буфере; typed - слово, как набрано
-    // (черта бывает и в нём: где эта клавиша в раскладке - буква, буфер её границей не считает).
-    bool AfterBackslash(size_t wordBegin, const std::wstring& typed, HKL lay) const;
+    // \n). Такое слово автопереключение не трогает. wordBegin - первая клавиша слова в буфере. Черта - "\" во всех
+    // включённых раскладках (IsBackslashKey): где эта клавиша - буква (ґ украинской расширенной), это не она.
+    bool AfterBackslash(size_t wordBegin) const;
     ULONGLONG m_lastAutoSwitch = 0; // когда FluentSwitcher сам переключил слово (в конце или посреди)
     std::wstring m_lastSwitchedTyped;  // то слово, как его набрали (строчными, только буквы)
     bool m_lastSwitchedEarly = false;  // переключено посреди: в m_lastSwitchedTyped - его начало

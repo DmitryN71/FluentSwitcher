@@ -49,7 +49,10 @@ private: void ClearGenerated() {
 	iLastCorrected = c_lastCorrectedInf;
 }
 
-private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
+// splitHyphen - дефис делит слова: "Исправить последнее слово" в "legacy-yfcnhjqrb" исправляет только часть после него
+// (WorkerImplement::HyphenTailOnly). Иначе слово через дефис - одно, как было по умолчанию (настройку SimpleSwitcher
+// "Где кончается слово", separate_ext_mode, убрали в 1.5.16).
+private: std::vector<int> GenerateWords(HotKeyType typeRevert, bool splitHyphen) {
 
 	// сначала объеденим все одинаковые сохраняя индексы старта слов.
 
@@ -105,10 +108,7 @@ private: std::vector<int> GenerateWords(HotKeyType typeRevert) {
 
 	std::vector<int> starts; // индексы в zipped, с которых начинаются слова.
 
-	GETCONF;
-	const auto can_separate_posible =
-		(typeRevert == hk_RevertLastWord && cfg->separate_ext_mode == SeparateExtMode::PossibleSymb_Always)
-		|| (typeRevert == hk_RevertSeveralWords && Utils::is_in(cfg->separate_ext_mode, SeparateExtMode::PossibleSymb_SeveralW, SeparateExtMode::PossibleSymb_Always));
+	const bool can_separate_posible = splitHyphen && typeRevert == hk_RevertLastWord;
 
 
 	for (int i = -1; auto & it : zipped) {
@@ -197,7 +197,7 @@ struct RevertKeysData {
 	bool needLanguageChange = false;
 };
 
-public: RevertKeysData FillKeyToRevert(HotKeyType typeRevert, bool always_full_text = false) {
+public: RevertKeysData FillKeyToRevert(HotKeyType typeRevert, bool always_full_text = false, bool splitHyphen = false) {
 
 	RevertKeysData keyList;
 
@@ -206,7 +206,7 @@ public: RevertKeysData FillKeyToRevert(HotKeyType typeRevert, bool always_full_t
 		return keyList;
 	}
 
-	auto words = GenerateWords(typeRevert);
+	auto words = GenerateWords(typeRevert, splitHyphen);
 
 	if (words.empty()) { // например одни пробелы были введены.
 		return keyList;
@@ -361,6 +361,8 @@ private: TKeyBaseInfo Typed(size_t i) const {
 	key.is_shift = m_symbolList[i].typedShift;
 	return key;
 }
+// Клавиша i, как её набрали (частичная отмена автопереключения: короткие слова - обратно, как набраны).
+public: TKeyBaseInfo TypedAt(size_t i) const { return Typed(i); }
 // Клавиши с begin до конца набранного - как набраны (перевод раскладки: Shift - набранный).
 public: TKeyRevert KeysFrom(size_t begin) const {
 	TKeyRevert keys;

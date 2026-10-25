@@ -43,6 +43,7 @@
 #include "ConsolePrograms.h"
 #include "RemoteDesktop.h"
 
+#include <algorithm>
 #include <deque>
 #include <string>
 #include <unordered_set>
@@ -430,6 +431,15 @@ inline std::wstring keys;      // клавиши слова (буквы и ци�
 inline std::unordered_set<std::wstring> forced;
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, буква с AltGr, автоповтор, другая клавиша - не наш случай
+// Где в слове обратная косая черта (-1 - нет): с неё - сокращение шаблона ("\рекв" в FluentClipper), путь, команда.
+// Клавиши такого слова не держим (Дмитрий, 22.10.2026: придержанную букву FluentClipper получал повтором и шаблон не
+// раскрывал); движок его не трогает (WorkerImplement::AfterBackslash). Черта - в слове, как буква: Backspace её сотрёт,
+// и слово - как было ("ЧТ", "\", Backspace, "о" - ДВе ЗАглавные исправляются; ревью 25.10.2026).
+inline int backslash = -1;
+// Клавиши, что без Shift дают "\" во всех включённых раскладках: и VK_OEM_5, и клавиша у левого Shift на ISO-клавиатуре
+// (VK_OEM_102); а "^" немецкой, "*" французской, "ґ" украинской (расширенной) на месте VK_OEM_5 - нет. Задаёт
+// SetBackslash (HookerKeyboard - вместе с SetForced).
+inline std::vector<UINT> backslashKeys;
 // Слово начинается цифрами ("4звф" - 4pda): проверит движок в конце (переключает такие только из "Переключать всегда"),
 // посреди слова - нет.
 inline bool digitsFirst = false;
@@ -466,6 +476,7 @@ inline void ResetWord() {
 	lastLetter = 0;
 	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
+	backslash = -1;
 	digitsFirst = false;
 	capsLock = false;
 	earlyDone = false;
@@ -549,6 +560,7 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 			earlyDone = false;
 		}
 		if (!keys.empty()) keys.pop_back();
+		if (backslash >= 0 && (int)word.size() <= backslash) backslash = -1; // черту стёрли
 		if (word.size() < 2) firstKeys[1] = 0;
 		if (word.empty()) firstKeys[0] = 0;
 		return false;
@@ -559,12 +571,13 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		broken = true;
 		return false;
 	}
-	// Обратная косая черта (где эта клавиша не буква): за ней - сокращение шаблона ("\рекв" в FluentClipper), путь, команда.
-	// Движок такое слово не трогает (WorkerImplement::AfterBackslash), и держать его клавиши незачем: придержанную букву
-	// FluentClipper получал позже, повтором, и шаблон не раскрывал (Дмитрий, 22.10.2026: "\htrd").
-	if (vk == VK_OEM_5 && !shift && !LetterHere(vk)) {
-		ResetWord();
-		broken = true;
+	// Обратная косая черта (backslashKeys): дальше - не наше слово, пока её не сотрут (backslash).
+	if (!shift && std::ranges::find(backslashKeys, vk) != backslashKeys.end()) {
+		if (backslash < 0) backslash = (int)word.size();
+		word.push_back(false);
+		keys.push_back((wchar_t)vk);
+		lastLetter = vk;
+		letterAt = now();
 		return false;
 	}
 	if (IsLetterKey(vk)) {
@@ -621,21 +634,30 @@ inline void SetForced(const std::vector<std::wstring>& words, const std::vector<
 		}
 	}
 }
+// Клавиши "\" во всех раскладках layouts (backslashKeys).
+inline void SetBackslash(const std::vector<HKL>& layouts) {
+	backslashKeys.clear();
+	for (UINT vk = 0x30; vk <= 0xFE && !layouts.empty(); vk++) {
+		bool all = true;
+		for (HKL lay : layouts) all = all && (MapVirtualKeyExW(vk, MAPVK_VK_TO_CHAR, lay) & 0x7FFF) == L'\\';
+		if (all) backslashKeys.push_back(vk);
+	}
+}
 // Набрано слово "Переключать всегда" целиком (клавишами): спросить движок сейчас.
 inline bool ForcedPoint() {
-	return !broken && !forced.empty() && forced.contains(keys);
+	return !broken && backslash < 0 && !forced.empty() && forced.contains(keys);
 }
 
 // Буква, после которой движок может переключить посреди слова (AutoSwitch::DecideEarly): с четвёртой по восьмую
 // (AutoSwitch::kEarlyMin, kEarlyMax), пока он не сказал, что в этом слове больше нечего.
 inline bool EarlyPoint() {
-	return !broken && !digitsFirst && !earlyDone && word.size() >= 4 && word.size() <= 8;
+	return !broken && backslash < 0 && !digitsFirst && !earlyDone && word.size() >= 4 && word.size() <= 8;
 }
 
 // Первые n клавиш слова могут быть ДВумя ЗАглавными: две заглавные, потом строчная (от трёх; дальше не смотрим: знак с
 // Shift после слова - "ЧТо," в русской раскладке - хук видит как заглавную, и "ЧТо," не проверялось вовсе).
 inline bool TwoCapsShape(size_t n) {
-	return !broken && !capsLock && n >= 3 && n <= word.size() && word[0] && word[1] && !word[2];
+	return !broken && backslash < 0 && !capsLock && n >= 3 && n <= word.size() && word[0] && word[1] && !word[2];
 }
 
 // Конец слова (пробел, Enter, Tab): каким оно было. Слово на этом кончается.
@@ -653,7 +675,7 @@ inline WordEnd EndWord() {
 	WordEnd end;
 	// От трёх букв ("ЧТо", "THe"; какие из них исправлять - решает движок: TwoCaps::Matches).
 	end.twoCaps = TwoCapsShape(word.size());
-	end.letters = !broken && !word.empty();
+	end.letters = !broken && backslash < 0 && !word.empty();
 	auto alpha = [](UINT vk) { return vk >= 'A' && vk <= 'Z'; };
 	end.loneI = end.letters && !capsLock && word.size() <= 4 &&
 		((firstKeys[0] == 'I' && !word[0] && !alpha(firstKeys[1])) ||

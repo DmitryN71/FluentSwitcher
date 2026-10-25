@@ -7,13 +7,12 @@ enum HotKeyType : uint32_t {
 	hk_RevertSelelected,
 	hk_EmulateCapsLock,
 	hk_CycleSwitchLayout,
-	hk_EmulateScrollLock,
 	hk_toUpperSelected,
 	hk_InvertCaseSelected,
 	hk_ToggleEnabled,
 	hk_ShowMainWindow,
-	hk_ShowRemainderWnd,
-	hk_InsertWithoutFormat,
+	// "Нажать ScrollLock", "Напоминалка" и "Вставить без оформления" SimpleSwitcher убраны в 1.5.16: в FluentSwitcher их не
+	// было ни в окне настроек, ни в списке сочетаний (hotkeysList), а вставку без оформления делает FluentClipper.
 	hk_Fix_RAlt,
 	hk_RevertLine, // текст от начала строки до курсора: Shift+Home, дальше как выделенный
 	hk_ToggleAutoswitch, // автопереключение вкл./выкл. (форум, 09.10.2026, AlexPORTrb); по умолчанию - без сочетания
@@ -77,12 +76,6 @@ inline std::generator<CHotKey> GetHk_Defaults(HotKeyType hk) {
 		co_yield CHotKey(VKE_WIN, VK_SHIFT).SetKeyup();
 		co_yield CHotKey(VK_SHIFT).SetDouble();
 		co_return;
-	case hk_ShowRemainderWnd:
-		co_yield CHotKey(VKE_BREAK);
-		co_return;
-	case hk_InsertWithoutFormat:
-		co_yield CHotKey(VK_CONTROL, VK_SHIFT, VKE_V);
-		co_return;
 	case hk_EmulateCapsLock:
 		co_yield CHotKey(VKE_ALT, VK_F24);
 		co_yield CHotKey(VKE_ALT, VKE_CapsLock);
@@ -106,8 +99,6 @@ inline const char* GetGuiTextForHk(HotKeyType hk) {
 	case hk_InvertCaseSelected: return LOC("iNVERT cASE for selected text");
 	case hk_ToggleEnabled: return LOC("Enable/Disable");
 	case hk_ShowMainWindow: return LOC("Show/hide main window");
-	case hk_ShowRemainderWnd: return LOC("Show/hide Reminder");
-	case hk_InsertWithoutFormat: return LOC("Paste text without formatting");
 	case hk_RevertLine: return LOC("Change layout from the start of the line");
 	case hk_ToggleAutoswitch: return LOC("Enable/Disable auto switch");
 	case hk_TranslitSelected: return LOC("Selected text in transliteration");

@@ -137,14 +137,18 @@ inline Fix Analyze(const std::wstring& text, const std::vector<std::wstring>& ex
 	size_t begin = 0, end = text.size();
 	while (begin < end && !IsLetter(text[begin])) begin++;
 	while (end > begin && !IsLetter(text[end - 1])) end--;
-	if (end - begin < 3) return {}; // от трёх букв; сколько нужно для алфавита - Matches
-	for (size_t i = begin; i < end; i++)
-		if (!IsLetter(text[i])) return {}; // знак внутри слова ("ДВ-ух") - не наше
+	// Слово через дефис - по первой части ("ЧТо-то" - "Что-то", "ТЕст-драйв" - "Тест-драйв"; Maz на форуме, 20.10, и
+	// Дмитрий, 25.10.2026: в своей раскладке не исправлялось, его исправлял сам Блокнот). Другой знак внутри - не наше.
+	size_t part = begin;
+	while (part < end && IsLetter(text[part])) part++;
+	for (size_t i = part; i < end; i++)
+		if (!IsLetter(text[i]) && !(text[i] == L'-' && IsLetter(text[i - 1]) && IsLetter(text[i + 1]))) return {};
+	if (part - begin < 3) return {}; // от трёх букв ("ДВ-ух" - нет); сколько нужно для алфавита - Matches
 	for (size_t i = 0; i < begin; i++)
 		if (IsLetter(text[i]) || iswdigit(text[i])) return {};
 	for (size_t i = end; i < text.size(); i++)
 		if (IsLetter(text[i]) || iswdigit(text[i])) return {};
-	const std::wstring word = text.substr(begin, end - begin);
+	const std::wstring word = text.substr(begin, part - begin);
 	if (!Matches(word, exceptions)) return {};
 	Fix fix;
 	fix.from = begin + 1;

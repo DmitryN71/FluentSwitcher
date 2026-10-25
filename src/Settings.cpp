@@ -94,7 +94,6 @@ namespace nlohmann {
 #define FS_PROGRAM_CONFIG_FIELDS_1 \
 		isMonitorAdmin, \
 		force_DbgMode, \
-		fClipboardClearFormat, \
 		disableAccessebility, \
 		flagsSet, \
 		tray_icon, \
@@ -102,19 +101,14 @@ namespace nlohmann {
 		disableInPrograms, \
 		autoswitch_console, \
 		autoswitch_off, \
-		logLevel, \
-		SkipLowLevelInjectKeys, \
 		AlternativeLayoutChange, \
 		config_version, \
 		layouts_info, \
 		fixRAlt, \
 		fixRAlt_lay_, \
 		run_programs, \
-		separate_ext_mode, \
 		quick_press_ms, \
 		win_hotkey_cycle_lang, \
-		theme, \
-		ui_skin, \
 		ui_theme, \
 		record_sides, \
 		check_updates, \
@@ -138,10 +132,7 @@ namespace nlohmann {
 		learned, \
 		autoswitch_journal, \
 		gui_lang, \
-		ShowLangsInTrayMenu, \
-		ShowReminderInTrayMenu, \
 		useBritishFlag, \
-		treat_as_letters, \
 		retype_keys, \
 		work_in_remote, \
 		settings_window, \
@@ -210,7 +201,7 @@ namespace cfg_details {
 			cfg.NormalizeFlags(data.contains("caret_flag_set"));
 
 			if (cfg.force_DbgMode && applyLogLevel) {
-				SetLogLevel_print_info(cfg.logLevel);
+				SetLogLevel_print_info(LOG_LEVEL_3);
 			}
 
 

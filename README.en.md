@@ -37,7 +37,7 @@ free and open source under GPL-3.0.
   "v1.5.4", "мю1ю5ю4" - "v.1.5.4", while Russian abbreviations stay Russian: "пю1ю2" - "п.1.2", "рисю3" - "рис.3",
   "таблю2ю1" - "табл.2.1". "1/5/3" in the English layout is left alone: a date or a fraction. By hand ("Fix the last
   word") a number with signs is fixed whole: "1/2/3" - "1.2.3".
-- **TWo INitial CApitals**: "THis" becomes "This" after a space, punctuation, Enter or Tab (three letters too: "THe" - "The" for frequent English words, "НЕт" - "Нет"). PCs, IDs, GHz, eM, iPhone, and Latin names like ILogger in code editors and apps without the automatic switch, are left alone, and there
+- **TWo INitial CApitals**: "THis" becomes "This" after a space, punctuation, Enter or Tab, and a word with a hyphen right at the hyphen: "SElf-" - "Self-" (three letters too: "THe" - "The" for frequent English words, "НЕт" - "Нет"). PCs, IDs, GHz, eM, iPhone, and Latin names like ILogger in code editors and apps without the automatic switch, are left alone, and there
   are exceptions; fixed by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it.
   A word typed in the other layout ("GJgsnrf") is left to the layout fix, by the Windows dictionaries, and that gives
   "Попытка" at once. Turned on in Typing.

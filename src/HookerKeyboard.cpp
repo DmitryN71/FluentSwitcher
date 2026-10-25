@@ -444,8 +444,13 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				// "Old.", не дожидаясь пробела (Дмитрий 08.10); буква в этой раскладке (ю, б) - не знак, слово продолжается.
 				const bool signKey = !command && g_enabled.IsEnabled() && KeyHold::SignKey(vkCode, curk.HasMod(VK_SHIFT)) &&
 					!KeyHold::broken && KeyHold::CanStart();
-				const bool signCaps = signKey && cfg->two_caps && KeyHold::TwoCapsShape(KeyHold::word.size() - (letter ? 1 : 0)) &&
-					!KeyHold::LetterHere(vkCode);
+				const bool capsShape = cfg->two_caps && KeyHold::TwoCapsShape(KeyHold::word.size() - (letter ? 1 : 0));
+				// Дефис после ДВух ЗАглавных: "ТЕст-" - "Тест-" сразу, не в конце всего слова (Дмитрий, 25.10.2026). Только
+				// они: AutoSwitchAtSign "-" знаком после слова не считает (он такой же в другой раскладке) - слово через дефис
+				// автопереключение решает целиком, в конце.
+				const bool hyphenCaps = capsShape && !command && g_enabled.IsEnabled() && KeyHold::CanStart() &&
+					KeyHold::HyphenKey(vkCode, curk.HasMod(VK_SHIFT));
+				const bool signCaps = (signKey && capsShape && !KeyHold::LetterHere(vkCode)) || hyphenCaps;
 				const bool signAuto = signKey && cfg->autoswitch && KeyHold::word.size() >= 2;
 				sign = (signCaps || signAuto) && canHold() && (autoswitchHere() || (signCaps && !KeyHold::LatinLayout()));
 				hold = early || sign;

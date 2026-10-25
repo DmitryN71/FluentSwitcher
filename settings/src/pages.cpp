@@ -1607,7 +1607,7 @@ void SettingsFrame::BuildTyping()
     // fall apart); in 1.5.16 both left the engine too, with their one sensible values built in.
 
     // ДВе ЗАглавные (the engine's TwoCaps.h): two_caps, and the words to leave alone, two_caps_exceptions.
-    CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, знака препинания, Enter или Tab"),
+    CardTip(Toggle(WithTip(T("Исправлять ДВе ЗАглавные")), T("«ДВух» станет «Двух», «НЕт» – «Нет»: после пробела, знака препинания, Enter или Tab, слово через дефис – уже на дефисе"),
                    "two_caps", false),
             T("PCs, IDs, GHz, МГц, МВт, eM, iPhone и слова из исключений не трогаются; английские из трёх букв – только "
               "частые слова: THe, WAs; в редакторах кода латинские имена (ILogger) тоже. Исправилось зря – сразу нажмите «Исправить последнее слово» (Shift дважды): слово вернётся. "

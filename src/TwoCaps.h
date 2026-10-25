@@ -29,6 +29,8 @@ namespace TwoCaps {
 inline const std::vector<std::wstring>& BuiltIn() {
 	static const std::vector<std::wstring> words = {
 		L"VMware", L"OAuth", L"IPsec", L"DBeaver", L"LTspice", L"KBps", L"MBps", L"GBps", L"TBps", L"ВКонтакте",
+		// Названия программ - и вне редакторов кода (в мессенджере, письме; Дмитрий, 25.10.2026).
+		L"CMake", L"JUnit", L"NUnit", L"KDevelop",
 		// Единицы: мега-, гига-, тера- (кило- - строчная "к": кВт, кГц).
 		L"МГц", L"ГГц", L"ТГц", L"МВт", L"ГВт", L"ТВт", L"МПа", L"ГПа", L"ТПа", L"МДж", L"ГДж", L"ТДж", L"МОм", L"ГОм",
 		// Английские сокращения из трёх букв с "s" и единицы (на случай, если они есть в списке частых слов).

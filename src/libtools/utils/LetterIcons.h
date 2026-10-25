@@ -175,6 +175,7 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 	ComPtr<ID2D1DCRenderTarget> rt;
 	ComPtr<ID2D1SolidColorBrush> brush;
 	RECT rc{ 0, 0, w, h };
+	int shapeH = h; // высота картинки: плашка бывает на точку ниже h (ниже)
 	bool ok = layout && SUCCEEDED(d2d->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(mem, &rc)) &&
 		SUCCEEDED(rt->CreateSolidColorBrush(D2D1::ColorF(0xffffff), &brush));
 	if (ok) {
@@ -195,11 +196,11 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			rt->Clear(D2D1::ColorF(0, 0, 0, 0));
 			rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
 			if (shape && style == Style::Badge) {
-				const float r = h * 0.28f;
+				const float r = shapeH * 0.28f;
 				brush->SetColor(D2D1::ColorF(0x202020));
-				rt->FillRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get());
+				rt->FillRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, shapeH - 0.5f }, r, r }, brush.Get());
 				brush->SetColor(D2D1::ColorF(0xffffff, 0.28f));
-				rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get(), 1.0f);
+				rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, shapeH - 0.5f }, r, r }, brush.Get(), 1.0f);
 			}
 			D2D1_COLOR_F letters = ink;
 			letters.a = shape ? alpha : 1.0f; // одни буквы - чтобы мерить: и у бледных (выключено) там же
@@ -276,7 +277,7 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		// штрихи ложатся на точки чётче всего (больше всего непрозрачных точек: сумма квадратов непрозрачности). Без
 		// этого одни буквы выходили чёткими, а другие, попав между точками, - бледнее и ниже: на 100 % "RU" на строку ниже
 		// "EN" (Maz на форуме, 06.10.2026: "буквы EN визуально больше"). Потом сдвиг на целые точки, чтобы буквы стояли
-		// посередине по высоте (не делится поровну - выше на полточки), и всё начисто.
+		// посередине по высоте, и всё начисто.
 		const float baseY = std::floor(y);
 		double best = -1;
 		float bestY = baseY;
@@ -307,15 +308,27 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		ok = best >= 0;
 		if (ok) {
 			y = bestY;
-			if (bottom >= 0) y += (float)((h - (bottom - top + 1)) / 2 - top);
+			if (bottom >= 0) {
+				const int inkH = bottom - top + 1;
+				// Не делится поровну: на плашке - она на точку ниже, и поля над буквами и под ними равны (Ludens на форуме,
+				// 25.10.2026: "верхнее поле над буквами — три пикселя, нижнее — четыре. Убрать бы снизу один пиксель");
+				// высота одна на размер - у всех раскладок. В трее - буквы выше на полточки.
+				if (style == Style::Badge) {
+					thread_local std::map<std::tuple<int, int, int, long>, int> heights;
+					int& height = heights[key];
+					if (!height) height = (h - inkH) % 2 ? h - 1 : h;
+					shapeH = height;
+				}
+				y += (float)((shapeH - inkH) / 2 - top);
+			}
 			ok = draw(true);
 		}
 	}
 	if (ok) {
 		pic.width = w;
-		pic.height = h;
-		pic.rgba.resize((size_t)w * h * 4);
-		for (int i = 0; i < w * h; i++) {
+		pic.height = shapeH;
+		pic.rgba.resize((size_t)w * shapeH * 4);
+		for (int i = 0; i < w * shapeH; i++) {
 			const unsigned a = px[i * 4 + 3];
 			auto un = [a](unsigned c) { return (unsigned char)(a ? (std::min)(255u, c * 255 / a) : 0); };
 			pic.rgba[i * 4 + 0] = un(px[i * 4 + 2]);

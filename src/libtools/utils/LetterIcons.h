@@ -184,25 +184,28 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		// Сначала одни буквы - со сдвигом на долю точки, при котором их штрихи ложатся на точки чётче всего (больше
 		// всего непрозрачных точек: сумма квадратов непрозрачности). Без этого одни буквы выходили чёткими, а другие,
 		// попав между точками, - бледнее и ниже: на 100 % "RU" на строку ниже "EN" (Maz на форуме, 06.10.2026: "буквы EN
-		// визуально больше"). Потом сдвиг на целые точки, чтобы буквы стояли посередине (не делится поровну - выше и
-		// левее на полточки), и всё начисто.
+		// визуально больше"). Потом сдвиг на целые точки, чтобы буквы стояли посередине (не делится поровну - выше на
+		// полточки; по ширине - см. ниже), и всё начисто.
 		// Сдвиг - по восьмой доле точки, сначала по ширине (вертикальные штрихи), потом по высоте (горизонтальные).
 		const float baseX = std::floor(x), baseY = std::floor(y);
 		double best = -1;
 		float bestX = baseX, bestY = baseY;
 		int top = h, bottom = -1, left = w, right = -1;
+		double massX = w / 2.0; // центр тяжести штрихов по ширине (лучшего сдвига)
 		auto tryAt = [&](float tx, float ty) {
 			x = tx;
 			y = ty;
 			if (!draw(false)) return;
 			// Края букв: верх и низ - по заметным точкам (бледная строка не делает буквы выше), левый и правый - и по
 			// бледным: штрих между точками ("U" на 100 %) - тоже буква, иначе надпись вставала не посередине.
-			double score = 0;
+			double score = 0, ink = 0, inkX = 0;
 			int t = h, b = -1, l = w, r = -1;
 			for (int yy = 0; yy < h; yy++) {
 				for (int xx = 0; xx < w; xx++) {
 					const unsigned a = px[(yy * w + xx) * 4 + 3];
 					score += (double)a * a;
+					ink += a;
+					inkX += a * (xx + 0.5);
 					if (a > 96) {
 						t = (std::min)(t, yy);
 						b = (std::max)(b, yy);
@@ -218,6 +221,7 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 				bestX = tx;
 				bestY = ty;
 				top = t, bottom = b, left = l, right = r;
+				if (ink > 0) massX = inkX / ink;
 			}
 		};
 		for (int i = 0; i < 8; i++) tryAt(baseX + i / 8.0f, baseY);
@@ -229,7 +233,12 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			y = bestY;
 			if (bottom >= 0) {
 				const int inkW = right - left + 1, inkH = bottom - top + 1;
-				x += (float)((w - inkW) / 2 - left);
+				int shiftX = (w - inkW) / 2 - left;
+				// Не делится поровну: лишняя точка - с той стороны, где буквы на глаз встают ровнее, - центр тяжести их
+				// штрихов ближе к середине. Всегда слева - "RU" стояло на точку левее ("R" к тому же тяжелее слева; Ludens
+				// на форуме, 25.10.2026: "RU на прикурсорном флаге по-прежнему слегка смещен влево").
+				if ((w - inkW) % 2 && std::abs(massX + shiftX + 1 - w / 2.0) < std::abs(massX + shiftX - w / 2.0)) shiftX++;
+				x += (float)shiftX;
 				y += (float)((h - inkH) / 2 - top);
 			}
 			ok = draw(true);

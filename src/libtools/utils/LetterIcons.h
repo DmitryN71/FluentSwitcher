@@ -4,8 +4,9 @@
 // у Windows; флажок у текстового курсора - буквы на тёмной плашке со светлой каймой, чтобы их было видно на любом
 // фоне. Рисует
 // Direct2D / DirectWrite в память (без окна), отдаёт RGBA без умножения на альфу - как картинки флагов
-// (IconManager.h). Буквы ставятся посередине по тому, где легли их точки (метрики шрифта не точны, и на мелком
-// значке промах в полточки виден). Только поток интерфейса движка.
+// (IconManager.h). По высоте буквы ставятся посередине по тому, где легли их точки (метрики шрифта не точны, и на
+// мелком значке промах в полточки виден); по ширине их левый край - в одном столбце у всех раскладок. Только поток
+// интерфейса движка.
 
 #include <windows.h>
 #include <d2d1.h>
@@ -14,7 +15,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #pragma comment(lib, "d2d1.lib")
@@ -139,7 +142,32 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		const float width = measure(t, size);
 		if (width > room && width > 0) size *= room / width;
 	}
-	const float tw = measure(text, size);
+	// Чернила надписи по ширине от её начала - по контурам букв (по ширине DirectWrite их здесь не подгоняет к точкам):
+	// левый край и ширина. Коробка - 1000 (measure), выступы - от её краёв.
+	auto inkOf = [&](const std::wstring& t, float& inkLeft, float& inkWidth) {
+		DWRITE_OVERHANG_METRICS o{};
+		if (measure(t, size) <= 0 || FAILED(layout->GetOverhangMetrics(&o))) return false;
+		inkLeft = -o.left;
+		inkWidth = 1000 + o.right + o.left;
+		return inkWidth > 0;
+	};
+	// Левый край букв - в одном столбце у всех раскладок (Дмитрий, 25.10.2026: "ЛЕВАЯ сторона букв R и E всегда с
+	// одинаковым отступом от левого края флажка"): при смене раскладки буквы не прыгают. Раньше каждая надпись
+	// ставилась посередине сама, и то "RU", то "EN" стояло на точку левее (Ludens на форуме, 25.10.2026: "RU на
+	// прикурсорном флаге по-прежнему слегка смещен влево"). Отступ - по частой паре "RU" и "EN", у всех раскладок один,
+	// выбирается ниже, по тому, как легли точки; надписи уже (FR, PL) стоят левее середины, шире (UK) - правее.
+	ComPtr<IDWriteTextLayout> pairLayout[2];
+	float pairLeft[2] = {}, pairWidth = 0;
+	int pairCount = 0;
+	for (const wchar_t* t : { L"RU", L"EN" }) {
+		float l = 0, iw = 0;
+		if (!inkOf(t, l, iw)) break;
+		pairLayout[pairCount] = layout;
+		pairLeft[pairCount++] = l;
+		pairWidth += iw;
+	}
+	float textLeft = 0, textWidth = 0;
+	const bool inked = inkOf(text, textLeft, textWidth); // последней: layout - этой надписи
 
 	// Процессором, как меню у значка (FluentMenu.h): видеокарта ради значка в 32 точки - десятки МБ драйвера в движке.
 	const auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
@@ -158,11 +186,11 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		UINT32 lines = 0;
 		layout->GetLineMetrics(&line, 1, &lines);
 		const float cap = size * capShare;
-		float x = (w - tw) / 2, y = std::round((h + cap) / 2) - line.baseline;
+		float x = 0, y = std::round((h + cap) / 2) - line.baseline;
 
 		D2D1_COLOR_F ink = style == Style::Badge || dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
 		const float alpha = gray ? 0.45f : 1.0f;
-		auto draw = [&](bool shape) {
+		auto draw = [&](bool shape, IDWriteTextLayout* drawn = nullptr) {
 			rt->BeginDraw();
 			rt->Clear(D2D1::ColorF(0, 0, 0, 0));
 			rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
@@ -174,73 +202,112 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 				rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, h - 0.5f }, r, r }, brush.Get(), 1.0f);
 			}
 			D2D1_COLOR_F letters = ink;
-			letters.a = alpha;
+			letters.a = shape ? alpha : 1.0f; // одни буквы - чтобы мерить: и у бледных (выключено) там же
 			brush->SetColor(letters);
-			rt->DrawTextLayout({ x, y }, layout.Get(), brush.Get());
+			rt->DrawTextLayout({ x, y }, drawn ? drawn : layout.Get(), brush.Get());
 			const bool done = SUCCEEDED(rt->EndDraw());
 			GdiFlush(); // точки - в памяти картинки, прежде чем их читать
 			return done;
 		};
-		// Сначала одни буквы - со сдвигом на долю точки, при котором их штрихи ложатся на точки чётче всего (больше
-		// всего непрозрачных точек: сумма квадратов непрозрачности). Без этого одни буквы выходили чёткими, а другие,
-		// попав между точками, - бледнее и ниже: на 100 % "RU" на строку ниже "EN" (Maz на форуме, 06.10.2026: "буквы EN
-		// визуально больше"). Потом сдвиг на целые точки, чтобы буквы стояли посередине (не делится поровну - выше на
-		// полточки; по ширине - см. ниже), и всё начисто.
-		// Сдвиг - по восьмой доле точки, сначала по ширине (вертикальные штрихи), потом по высоте (горизонтальные).
-		const float baseX = std::floor(x), baseY = std::floor(y);
+		// Самая заметная точка каждого столбца - одних букв, нарисованных сейчас.
+		auto columns = [&] {
+			std::vector<unsigned> column(w);
+			for (int yy = 0; yy < h; yy++)
+				for (int xx = 0; xx < w; xx++) column[xx] = (std::max)(column[xx], (unsigned)px[(yy * w + xx) * 4 + 3]);
+			return column;
+		};
+		// x, при котором левый край букв - ровно на столбце m: по контурам (inkLeft) с поправкой на восьмые доли точки -
+		// столбец m заметнее всего, а левее него пусто. Контуры переменного шрифта DirectWrite меряет не точно: "UK"
+		// вставало на полточки левее "RU".
+		auto alignAt = [&](IDWriteTextLayout* drawn, float inkLeft, int m) {
+			float found = m - inkLeft;
+			int strongest = -1;
+			for (int k = -4; k <= 4; k++) {
+				x = m - inkLeft + k / 8.0f;
+				if (!draw(false, drawn)) continue;
+				const auto column = columns();
+				if (m > 0 && column[m - 1] > 12) continue;
+				if ((int)column[m] > strongest) strongest = (int)column[m], found = x;
+			}
+			return found;
+		};
+		// Насколько буквы, нарисованные при этом x, стоят правее середины (минус - левее): по тому, как легли точки, крайний
+		// столбец - по его самой заметной точке, бледный - буквы на глаз начинаются (кончаются) дальше.
+		auto aside = [&](IDWriteTextLayout* drawn) {
+			if (!draw(false, drawn)) return 0.0;
+			const auto column = columns();
+			int l = -1, r = -1;
+			for (int xx = 0; xx < w; xx++)
+				if (column[xx] > 32) {
+					if (l < 0) l = xx;
+					r = xx;
+				}
+			if (l < 0) return 0.0;
+			const double before = l + 1 - column[l] / 255.0, after = w - r - column[r] / 255.0;
+			return (before - after) / 2;
+		};
+		// Отступ слева - из двух ближайших к тому, при котором пара по контурам стоит посередине: тот, при котором дальняя
+		// от середины из двух надписей отходит от неё меньше (по одним контурам "RU" на 125 %, "Крупный" - 30 точек,
+		// уходило вправо почти на точку). Один на размер: запомнен (на поток - рисуют и окно настроек, и флаг на
+		// указателе).
+		thread_local std::map<std::tuple<int, int, int, long>, int> margins;
+		const auto key = std::make_tuple(w, h, (int)style, std::lround(size * 100));
+		int margin = (int)std::lround((w - (inked ? textWidth : 0)) / 2);
+		if (const auto known = margins.find(key); known != margins.end())
+			margin = known->second;
+		else if (pairCount == 2) {
+			const int closest = (int)std::floor((w - pairWidth / 2) / 2);
+			double fewest = 1e9;
+			for (int m : { closest + 1, closest }) { // поровну - правее: "RU" стояло левее
+				double farthest = 0;
+				for (int i = 0; i < 2; i++) {
+					x = alignAt(pairLayout[i].Get(), pairLeft[i], m);
+					farthest = (std::max)(farthest, std::abs(aside(pairLayout[i].Get())));
+				}
+				if (farthest < fewest - 0.01) fewest = farthest, margin = m;
+			}
+			margins[key] = margin;
+		}
+		// Надписи шире не хватает места до правого края (на плашке - до точки перед каймой) - она посередине.
+		if (margin + textWidth > w - (style == Style::Plain ? 0 : stroke + 1)) margin = (int)std::lround((w - textWidth) / 2);
+		x = inked ? alignAt(nullptr, textLeft, margin) : 0;
+		// По ширине левый край букв - ровно на точке отступа (x выше): левый штрих R, E, D, U чёткий и у всех раскладок
+		// в одном столбце. По высоте сначала одни буквы - со сдвигом на восьмую долю точки, при котором горизонтальные
+		// штрихи ложатся на точки чётче всего (больше всего непрозрачных точек: сумма квадратов непрозрачности). Без
+		// этого одни буквы выходили чёткими, а другие, попав между точками, - бледнее и ниже: на 100 % "RU" на строку ниже
+		// "EN" (Maz на форуме, 06.10.2026: "буквы EN визуально больше"). Потом сдвиг на целые точки, чтобы буквы стояли
+		// посередине по высоте (не делится поровну - выше на полточки), и всё начисто.
+		const float baseY = std::floor(y);
 		double best = -1;
-		float bestX = baseX, bestY = baseY;
-		int top = h, bottom = -1, left = w, right = -1;
-		double massX = w / 2.0; // центр тяжести штрихов по ширине (лучшего сдвига)
-		auto tryAt = [&](float tx, float ty) {
-			x = tx;
+		float bestY = baseY;
+		int top = h, bottom = -1;
+		auto tryAt = [&](float ty) {
 			y = ty;
 			if (!draw(false)) return;
-			// Края букв: верх и низ - по заметным точкам (бледная строка не делает буквы выше), левый и правый - и по
-			// бледным: штрих между точками ("U" на 100 %) - тоже буква, иначе надпись вставала не посередине.
-			double score = 0, ink = 0, inkX = 0;
-			int t = h, b = -1, l = w, r = -1;
+			// Верх и низ букв - по заметным точкам: бледная строка не делает буквы выше.
+			double score = 0;
+			int t = h, b = -1;
 			for (int yy = 0; yy < h; yy++) {
 				for (int xx = 0; xx < w; xx++) {
 					const unsigned a = px[(yy * w + xx) * 4 + 3];
 					score += (double)a * a;
-					ink += a;
-					inkX += a * (xx + 0.5);
 					if (a > 96) {
 						t = (std::min)(t, yy);
 						b = (std::max)(b, yy);
-					}
-					if (a > 32) {
-						l = (std::min)(l, xx);
-						r = (std::max)(r, xx);
 					}
 				}
 			}
 			if (score > best) {
 				best = score;
-				bestX = tx;
 				bestY = ty;
-				top = t, bottom = b, left = l, right = r;
-				if (ink > 0) massX = inkX / ink;
+				top = t, bottom = b;
 			}
 		};
-		for (int i = 0; i < 8; i++) tryAt(baseX + i / 8.0f, baseY);
-		const float columnX = bestX;
-		for (int j = 1; j < 8; j++) tryAt(columnX, baseY + j / 8.0f);
+		for (int j = 0; j < 8; j++) tryAt(baseY + j / 8.0f);
 		ok = best >= 0;
 		if (ok) {
-			x = bestX;
 			y = bestY;
-			if (bottom >= 0) {
-				const int inkW = right - left + 1, inkH = bottom - top + 1;
-				int shiftX = (w - inkW) / 2 - left;
-				// Не делится поровну: лишняя точка - с той стороны, где буквы на глаз встают ровнее, - центр тяжести их
-				// штрихов ближе к середине. Всегда слева - "RU" стояло на точку левее ("R" к тому же тяжелее слева; Ludens
-				// на форуме, 25.10.2026: "RU на прикурсорном флаге по-прежнему слегка смещен влево").
-				if ((w - inkW) % 2 && std::abs(massX + shiftX + 1 - w / 2.0) < std::abs(massX + shiftX - w / 2.0)) shiftX++;
-				x += (float)shiftX;
-				y += (float)((h - inkH) / 2 - top);
-			}
+			if (bottom >= 0) y += (float)((h - (bottom - top + 1)) / 2 - top);
 			ok = draw(true);
 		}
 	}

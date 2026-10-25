@@ -1,6 +1,6 @@
-// The settings window: sections on the left, the cards of the section shown on the right, Save /
+// The settings window: sections on the left, the cards of the section shown on the right, OK /
 // Apply / Cancel at the bottom, as in FluentClipper. Changes are kept in a copy of the config until
-// Save or Apply writes SimpleSwitcher.json and tells the engine to read it again.
+// OK or Apply writes FluentSwitcher.json and tells the engine to read it again.
 #pragma once
 
 #include "config.h"
@@ -24,7 +24,7 @@ class SettingsFrame : public wxFrame
 {
 public:
     // folder: where FluentSwitcher.exe and its FluentSwitcher.json are. enginePid: a test engine, 0 = the
-    // one in `folder`. loadError: the config could not be read (shown; Save is off then).
+    // one in `folder`. loadError: the config could not be read (shown; OK and Apply do not save then).
     SettingsFrame(const Config& config, const wxString& folder, unsigned long enginePid, const wxString& loadError,
                   int section = 0);
 

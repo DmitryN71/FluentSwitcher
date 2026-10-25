@@ -976,13 +976,20 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
         }
     };
 
-    // Bottom: a line for messages on the left, Save / Apply / Cancel on the right.
+    // Bottom: a line for messages on the left, OK / Apply / Cancel on the right. OK, not "Save" (Dmitry, 25.10.2026):
+    // "Save" lit up with nothing changed looked like unsaved changes (WorldTroll on the forum); OK and Cancel are always
+    // on, as in the dialogs of Windows, and the three are as wide as the widest.
     wxBoxSizer* footer = new wxBoxSizer(wxHORIZONTAL);
     m_status = FluentText(this, wxString(), 9, g.text2);
-    FluentButton* save = new FluentButton(this, wxID_OK, T("Сохранить"), true);
+    FluentButton* save = new FluentButton(this, wxID_OK, T("ОК"), true);
     m_apply = new FluentButton(this, wxID_APPLY, T("Сохранено"));
     m_apply->SetText(T("Применить")); // as wide as the longer of the two
     FluentButton* cancel = new FluentButton(this, wxID_CANCEL, T("Отмена"));
+    int buttonWidth = 0;
+    for (FluentButton* b : { save, m_apply, cancel })
+        buttonWidth = std::max(buttonWidth, b->GetMinSize().x);
+    for (FluentButton* b : { save, m_apply, cancel })
+        b->SetMinSize(wxSize(buttonWidth, b->GetMinSize().y));
     footer->Add(m_status, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(12));
     footer->Add(save, 0, wxALIGN_CENTER_VERTICAL);
     footer->Add(m_apply, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
@@ -1012,7 +1019,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
         }
     });
     save->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        // Сохранить closes: no new window in a new language (Dmitry, 11.10.2026: "окно настроек не закрывается").
+        // OK closes: no new window in a new language (Dmitry, 11.10.2026: "окно настроек не закрывается").
         if (!m_canSave || !HasChanges() || Apply(false))
             Close();
     });
@@ -1679,7 +1686,7 @@ void SettingsFrame::BuildHotkeys()
         }
     }
     sides->onChange = [this, sides, editors, save = sides->onChange] {
-        save(); // record_sides, and Save / Apply light up
+        save(); // record_sides, and Apply lights up
         for (HotkeyEditor* editor : editors)
             editor->SetSides(sides->IsOn());
         if (sides->IsOn())
@@ -2066,7 +2073,7 @@ void SettingsFrame::BuildCaretFlag()
         EnableSettingsCard(brief->GetParent(), caretMode == 2 || mouseMode == 2);
     };
     caret->onChange = [pale, save = caret->onChange] {
-        save(); // caret_flag, and Save / Apply light up
+        save(); // caret_flag, and Apply lights up
         pale();
     };
     mouse->onChange = [pale, save = mouse->onChange] {

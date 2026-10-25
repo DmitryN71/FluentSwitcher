@@ -83,7 +83,7 @@ const std::unordered_map<std::string, const char*>& English()
           "Quit FluentSwitcher? Layout fixing will not work until it starts again." },
         { "Закрыть", "Quit" },
         { "Отмена", "Cancel" },
-        { "Сохранить", "Save" },
+        { "ОК", "OK" },
         { "Сохранено", "Saved" },
         { "Применить", "Apply" },
         { "Не удалось прочитать FluentSwitcher.json: ", "Can't read FluentSwitcher.json: " },

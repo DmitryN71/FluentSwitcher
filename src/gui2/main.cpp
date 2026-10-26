@@ -37,11 +37,11 @@ void StartGui() {
 	struct Learned {
 		std::string word;
 		ULONGLONG at = 0;
+		// Слово ушло в исключения - записи "Переключать всегда", ушедшие оттуда с ним, и была ли у каждой отметка "выучено":
+		// взяли это назад (uncount - 2) - они возвращаются. Новое слово в списке - новая запись Learned, старое не тянется.
+		std::vector<std::pair<std::string, bool>> forced;
 	};
 	std::map<std::string, Learned> lastLearned; // по имени списка: слово, которое только что ушло туда (uncount)
-	// Слово ушло в исключения - запись "Переключать всегда", ушедшая оттуда с ним, и была ли у неё отметка "выучено": взяли
-	// это назад (uncount - 2) - она возвращается.
-	std::map<std::string, std::pair<std::string, bool>> leftForced;
 	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const char* name,
 	                       const std::wstring& word, const char* title, const char* text, const char* warnTitle = nullptr,
 	                       const char* warnText = nullptr) {
@@ -318,12 +318,17 @@ void StartGui() {
 				// Слово вернули сразу после автопереключения. Как у ДВух ЗАглавных: на третий раз - в исключения
 				// автопереключения; на второй - предупредить (вернули по ошибке - исправить снова в 10 с: не в счёт,
 				// WorkerImplement::TakeHandFix).
-				// "слово\tзапись": переключено по записи "Переключать всегда" - слово ушло в исключения, и запись уходит оттуда:
-				// одно слово - один список (WinnyS на форуме, 26.10.2026: слово было бы в обоих, и исключение - главнее).
+				// "слово\tзапись\tзапись": переключено по записям "Переключать всегда" - слово ушло в исключения, и записи уходят
+				// оттуда: одно слово - один список (WinnyS на форуме, 26.10.2026: слово было бы в обоих, и исключение - главнее).
 				std::unique_ptr<std::wstring> message(reinterpret_cast<std::wstring*>(lParam));
-				const size_t tab = message->find(L'\t');
-				const std::wstring word = message->substr(0, tab);
-				const std::wstring forced = tab == std::wstring::npos ? std::wstring() : message->substr(tab + 1);
+				std::vector<std::wstring> parts;
+				for (size_t from = 0;;) {
+					const size_t tab = message->find(L'\t', from);
+					parts.push_back(message->substr(from, tab == std::wstring::npos ? std::wstring::npos : tab - from));
+					if (tab == std::wstring::npos) break;
+					from = tab + 1;
+				}
+				const std::wstring word = parts[0];
 				LOG_ANY(L"autoswitch: {} switched back", word);
 				const bool learned = countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions,
 				                                 "autoswitch_exceptions", word, "\"{}\" will not be switched any more",
@@ -331,15 +336,17 @@ void StartGui() {
 				                                 "Once more and \"{}\" will not be switched any more",
 				                                 "You switched it back for the second time. By mistake? Fix it again within 10 seconds");
 				saveWord("autoswitch_exceptions", word);
-				const std::string entry = StrUtils::Convert(forced);
+				if (!learned || parts.size() < 2) return 0;
+				auto& left = lastLearned["autoswitch_exceptions"].forced; // countToList только что завёл новую запись
 				auto& marks = conf_gui()->learned["autoswitch_force"];
-				const bool marked = std::ranges::find(marks, entry) != marks.end();
-				if (learned && !forced.empty() && std::erase(conf_gui()->autoswitch_force, entry)) {
-					std::erase(marks, entry);
-					leftForced[StrUtils::Convert(word)] = { entry, marked };
-					LOG_ANY(L"autoswitch: {} left Always switch for the exceptions", forced);
-					saveWord("autoswitch_force", forced);
+				for (size_t i = 1; i < parts.size(); i++) {
+					const std::string entry = StrUtils::Convert(parts[i]);
+					const bool marked = std::erase(marks, entry) != 0;
+					if (!std::erase(conf_gui()->autoswitch_force, entry)) continue;
+					left.push_back({ entry, marked });
+					LOG_ANY(L"autoswitch: {} left Always switch for the exceptions", parts[i]);
 				}
+				for (const auto& [entry, marked] : left) saveWord("autoswitch_force", StrUtils::Convert(entry));
 				return 0;
 			}
 
@@ -381,24 +388,24 @@ void StartGui() {
 				// Отмену тут же исправили обратно ("Shift дважды" по привычке после автопереключения, потом ещё раз): переключение
 				// было верным - отмена не в счёт.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
+				const Learned last = lastLearned["autoswitch_exceptions"]; // uncount его сотрёт
 				const int undone = uncount(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions",
 				                           *word);
 				if (undone) {
 					LOG_ANY(L"autoswitch: {} fixed again after switching back, not counted", *word);
 					saveWord("autoswitch_exceptions", *word);
 				}
-				// Слово вышло из исключений (третий возврат взяли назад) - запись "Переключать всегда", ушедшая с ним, - обратно,
+				// Слово вышло из исключений (третий возврат взяли назад) - записи "Переключать всегда", ушедшие с ним, - обратно,
 				// с отметкой "выучено", если была.
-				if (const auto it = leftForced.find(StrUtils::Convert(*word)); undone == 2 && it != leftForced.end()) {
-					const auto [entry, marked] = it->second;
-					leftForced.erase(it);
-					auto& list = conf_gui()->autoswitch_force;
+				if (undone != 2 || last.word != StrUtils::Convert(*word)) return 0;
+				auto& list = conf_gui()->autoswitch_force;
+				auto& marks = conf_gui()->learned["autoswitch_force"];
+				for (const auto& [entry, marked] : last.forced) {
 					if (std::ranges::find(list, entry) == list.end()) list.push_back(entry);
-					auto& marks = conf_gui()->learned["autoswitch_force"];
 					if (marked && std::ranges::find(marks, entry) == marks.end()) marks.push_back(entry);
 					LOG_ANY("autoswitch: {} is back in Always switch", entry);
-					saveWord("autoswitch_force", StrUtils::Convert(entry));
 				}
+				for (const auto& [entry, marked] : last.forced) saveWord("autoswitch_force", StrUtils::Convert(entry));
 				return 0;
 			}
 

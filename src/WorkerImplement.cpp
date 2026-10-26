@@ -85,18 +85,17 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     switch (key.type) {
         case KEYTYPE_BACKSPACE: {
             // Опечатку поправили в набираемом слове - оно проверяется как обычно: буфер стёр ту же букву (Дмитрий,
-            // 13.10.2026: "афсс", Backspace, "удшаею" - "facelift." не переключалось никогда). Стирают то, что движок
-            // переключил, - посреди этого слова или раньше (клавиша из переключённых: Total до неё в их пределах), -
-            // исправляют, может быть, его ошибку: это слово не проверяется. Стёрли больше слова, но не его (пробел, своё
-            // слово перед ним, выделенный адрес в браузере): на экране может быть не то, что в буфере, - как после щелчка,
-            // спросить поле, что перед курсором (WorldTroll на форуме, 26.10.2026: стёр адрес Backspace - первое слово до
-            // пробела не переключалось).
+            // 13.10.2026: "афсс", Backspace, "удшаею" - "facelift." не переключалось никогда). Не проверяется слово, где
+            // Backspace стёр больше него (пробел, Tab, слово перед ним: на экране может быть не то, что в буфере; Tab мог
+            // увести в другое поле), или то, что движок в нём уже переключил посреди набора (стирают, может быть, его
+            // ошибку). Буфер пуст - стёрто то, чего здесь не набирали (после щелчка, в новом поле: выделенный адрес в
+            // браузере): как после щелчка - спросить поле, что перед курсором (WorldTroll на форуме, 26.10.2026: стёр адрес
+            // Backspace - первое слово до пробела не переключалось). Кроме стирания сразу после переключения (Enter
+            // очистил буфер, после него ничего не набирали): стирают его.
             const bool inWord = !m_cycleList.TrailingWordKeys().empty();
             const bool switchedHere = m_autoSwitched.early && m_autoSwitched.ends == m_wordEnds;
-            const size_t total = m_cycleList.Total();
-            const bool intoSwitched = m_cycleList.Size() > 0 && !m_autoSwitched.word.empty() &&
-                total <= m_autoSwitched.total && total + m_autoSwitched.span > m_autoSwitched.total;
-            if (switchedHere || intoSwitched)
+            const bool afterOurs = !m_autoWord.moved && m_cycleList.Total() == m_lastSwitchTotal;
+            if (switchedHere || (!inWord && (m_cycleList.Size() > 0 || afterOurs)))
                 m_autoWord.backspace = true;
             else if (!inWord) {
                 m_autoWord.moved = true;
@@ -653,6 +652,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
                                    .from = lay, .to = other, .span = total - first, .total = m_cycleList.Total(),
                                    .changes = m_cycleList.Changes() };
                 m_lastAutoSwitch = GetTickCount64();
+                m_lastSwitchTotal = m_cycleList.Total();
                 m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(from).core);
                 m_lastSwitchedEarly = false;
                 RememberSwitch(from, to);
@@ -695,6 +695,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
                            .retro = wordBegin - first, .pair = shortWord == AutoSwitch::Short::WithPartner,
                            .total = m_cycleList.Total(), .changes = m_cycleList.Changes() };
         m_lastAutoSwitch = GetTickCount64();
+        m_lastSwitchTotal = m_cycleList.Total();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = false;
         RememberSwitch(typed, there);
@@ -863,6 +864,7 @@ void WorkerImplement::AutoSwitchEarly() {
                            .ends = m_wordEnds, .from = lay, .to = other, .span = total - begin, .retro = wordBegin - begin,
                            .total = m_cycleList.Total(), .changes = m_cycleList.Changes() };
         m_lastAutoSwitch = GetTickCount64();
+        m_lastSwitchTotal = m_cycleList.Total();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = true;
         RememberSwitch(typed, there);
@@ -1087,14 +1089,16 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
     }
     LOG_ANY(L"autoswitch: {} switched back", last.word);
     Journal("switched back", last.there, last.typed);
-    // Переключено по записи "Переключать всегда" - и она: уйдёт слово в "Не переключать" - запись уйдёт из того списка
-    // (одно слово - один список; WinnyS на форуме, 26.10.2026). "слово\tзапись".
+    // Переключено по записям "Переключать всегда" - и те, что исключение закроет (AutoSwitch::ForcedCoveredBy): уйдёт слово
+    // в "Не переключать" - они уйдут из того списка. "слово\tзапись\tзапись". Посреди слова к тексту приписано "…" - без
+    // него (запись со знаками, "4pda", ".NET", сравнивается целиком).
+    auto bare = [](std::wstring s) {
+        if (!s.empty() && s.back() == L'…') s.pop_back();
+        return s;
+    };
     std::wstring learn = last.word;
-    for (const auto& f : AutoSwitchForced())
-        if (AutoSwitch::Forced(last.wordTyped, last.wordThere, { f })) {
-            learn += L'\t' + f;
-            break;
-        }
+    for (const auto& f : AutoSwitch::ForcedCoveredBy(bare(last.wordTyped), bare(last.wordThere), last.word, AutoSwitchForced()))
+        learn += L'\t' + f;
     PostWord(WM_AutoSwitchLearn, learn);
     m_lastUndo = { .word = last.word, .at = GetTickCount64() };
     if (undo && span) *undo = { .tail = keys, .retro = 0, .all = true, .from = last.from, .to = last.to };
@@ -1479,6 +1483,7 @@ void WorkerImplement::ChangeForeground(HWND hwnd) {
     PostMessage(g_guiHandle, WM_ForegroundChanged, 0, 0);
     m_autoWord = {}; // другое окно: своя раскладка, свой курсор
     m_autoSwitched = {};
+    m_lastSwitchTotal = SIZE_MAX;
     m_twoCaps = {};
     WarmUpEarly();
     DWORD procId = 0;

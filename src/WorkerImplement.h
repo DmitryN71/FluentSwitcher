@@ -248,8 +248,8 @@ class WorkerImplement {
         m_autoWord.moved = true;
         m_autoWord.boundary = -1; // новое место - спросить поле заново
         // Стирание и отмены были там, откуда ушли: слово здесь новое (Дмитрий, 16.10.2026: стёр Backspace слово с пробелом в
-        // одном поле письма, щёлкнул в «Копию» - там "шкштф" (irina) не переключилось: "Backspace past the word"
-        // держалось до пробела).
+        // одном поле письма, щёлкнул в «Копию» - там "шкштф" (irina) не переключилось: запрет после Backspace держался до
+        // пробела).
         m_autoWord.backspace = m_autoWord.undone = m_autoWord.twoCapsUndone = false;
         if (m_autoSwitched.early) m_autoSwitched = {}; // слово, переключённое посреди, осталось позади
     }
@@ -269,6 +269,9 @@ class WorkerImplement {
     // включённых раскладках (IsBackslashKey): где эта клавиша - буква (ґ украинской расширенной), это не она.
     bool AfterBackslash(size_t wordBegin) const;
     ULONGLONG m_lastAutoSwitch = 0; // когда FluentSwitcher сам переключил слово (в конце или посреди)
+    // m_cycleList.Total() при этом: после него ничего не набирали (Enter очистил буфер) - Backspace стирает его. Другое окно -
+    // не в счёт (SIZE_MAX).
+    size_t m_lastSwitchTotal = SIZE_MAX;
     std::wstring m_lastSwitchedTyped;  // то слово, как его набрали (строчными, только буквы)
     bool m_lastSwitchedEarly = false;  // переключено посреди: в m_lastSwitchedTyped - его начало
     // Раскладку только что сменил сам FluentSwitcher (перевод слова, выделенного): это не ручная смена.
@@ -278,7 +281,7 @@ class WorkerImplement {
     }
     struct {
         HKL lay = 0;            // раскладка на прошлой границе слова; 0 - не знаем (другое окно)
-        bool backspace = false; // в слове стирали
+        bool backspace = false; // Backspace стёр больше слова или то, что движок в нём переключил: слово не проверять
         bool moved = false;     // курсор переезжал в том же окне
         bool undone = false;    // переключение посреди этого слова отменили - в нём больше не переключать
         bool twoCapsUndone = false; // ДВе ЗАглавные этого слова исправили на знаке и отменили - больше не исправлять

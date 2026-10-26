@@ -16,7 +16,8 @@
 //   - знак после настоящего слова - просто знак: "it." - не "шею", хотя точка там, где в русской раскладке "ю"; и
 //     после короткого незнакомого: "En." - не "Утю" (буква там только из знака на конце - не меньше трёх букв).
 //   - слово после ручной смены раскладки, в поле пароля, в консоли - не трогает движок; после Backspace - если он
-//     стёр больше этого слова или то, что движок в нём уже переключил (WorkerImplement, KEYTYPE_BACKSPACE).
+//     стёр больше этого слова или то, что движок в нём уже переключил; буфер пуст (стёрто не набранное здесь: адрес в
+//     браузере) - как после щелчка, кроме стирания сразу после переключения на Enter (WorkerImplement, KEYTYPE_BACKSPACE).
 //   - слова из списка "Переключать всегда" (autoswitch_force, в нужном виде: the, a) переключаются и без словаря, и
 //     одной буквой: "еру" (для словаря - русское слово) станет the, "ф" - a.
 //   - слово с Ы, Ь в начале, где словарь там его не знает, - и так, если только это не опечатка своего (NotRussian):
@@ -233,6 +234,24 @@ inline bool Forced(const std::wstring& typed, const std::wstring& there, const s
 		if (!fl.empty() && fl == al && fl != tl) return true;
 	}
 	return false;
+}
+
+// Записи "Переключать всегда", по которым переключено typed - there, которые закроет исключение word, когда слово уйдёт в
+// "Не переключать" (одно слово - один список: они уйдут оттуда; WinnyS на форуме, 26.10.2026). Клавиши записи - буквы
+// того, что там (со знаками по краям - всё слово), и исключение их не пропустит. "ещё" там "to`": запись "to" - клавиши
+// "ещ", исключение "ещё" их не закрывает - она остаётся.
+inline std::vector<std::wstring> ForcedCoveredBy(const std::wstring& typed, const std::wstring& there, const std::wstring& word,
+                                                 const std::vector<std::wstring>& forced) {
+	std::vector<std::wstring> covered;
+	const Part a = Letters(there);
+	for (const auto& f : forced) {
+		if (!Forced(typed, there, { f })) continue;
+		const bool whole = Signed(f) || typed.size() != there.size();
+		const std::wstring t = whole ? typed : typed.substr(a.begin, a.end - a.begin);
+		const std::wstring h = whole ? there : there.substr(a.begin, a.end - a.begin);
+		if (Excepted(t, h, { word })) covered.push_back(f);
+	}
+	return covered;
 }
 
 // Число с точками и запятыми, где они набраны клавишами, которые в этой раскладке буквы: "1ю5ю3" - "1.5.3", "1б5" -

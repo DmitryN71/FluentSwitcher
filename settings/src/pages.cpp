@@ -28,6 +28,7 @@
 #include <shlobj.h>           // the report to the developer: the desktop, Explorer
 #include <tlhelp32.h>         // ... the running programs
 #include <mapi.h>             // ... the letter with the file (Simple MAPI)
+#include <set>
 #include <thread>
 
 namespace
@@ -1456,6 +1457,29 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
                 const wxArrayString was = list.words;
                 if (!EditWordList(this, kind, title, help, SwitchLayouts(m_edit), &list))
                     return;
+                // The engine changed this list while its window was open (learned a word, moved one between the lists):
+                // TakeLearnedNow has put that into m_edit already - the frame is activated on "Готово" too, before
+                // EditWordList returns (wx/msw) - and the window's copy of the list would undo it. Its additions and removals
+                // stay.
+                {
+                    const nlohmann::json& merged = std::as_const(m_edit).Json();
+                    const wxArrayString engine = JsonWords(merged, key, defaults), engineMarks = LearnedWords(merged, key);
+                    for (const wxString& w : engine)
+                        if (was.Index(w) == wxNOT_FOUND && list.words.Index(w) == wxNOT_FOUND)
+                        {
+                            list.words.Add(w);
+                            if (engineMarks.Index(w) != wxNOT_FOUND && list.learned.Index(w) == wxNOT_FOUND)
+                                list.learned.Add(w);
+                        }
+                    for (const wxString& w : was)
+                        if (engine.Index(w) == wxNOT_FOUND)
+                        {
+                            if (const int i = list.words.Index(w); i != wxNOT_FOUND)
+                                list.words.RemoveAt(i);
+                            if (const int i = list.learned.Index(w); i != wxNOT_FOUND)
+                                list.learned.RemoveAt(i);
+                        }
+                }
                 nlohmann::json words = nlohmann::json::array(), learned = nlohmann::json::array();
                 for (const wxString& w : list.words)
                     words.push_back(w.utf8_string());
@@ -1498,30 +1522,38 @@ wxString SettingsFrame::LeaveOtherList(WordKind kind, const wxArrayString& was, 
         if (std::string_view(list.key) == otherKey)
             otherDefaults = list.defaults;
     // Lower case in every alphabet (CharLowerBuffW, as the engine): "СМ" and "см" are one word.
-    auto lower = [](const wxString& s) {
-        std::wstring w = s.ToStdWstring();
+    auto lower = [](std::wstring w) {
         if (!w.empty())
             CharLowerBuffW(w.data(), (DWORD)w.size());
         return w;
     };
+    // A word as the engine compares the words of these lists (AutoSwitch::Letters, Excepted, SameSigned): the letters
+    // between the signs at its edges, in lower case, in its own layout and in the others - "etc." and "etc" are one word,
+    // "cv" and "см" too. The forms of each word are made once (OtherForms asks the keyboard for every letter).
     const std::vector<HKL> layouts = SwitchLayouts(m_edit);
-    auto same = [&](const wxString& a, const wxString& b) {
-        if (lower(a) == lower(b))
-            return true;
-        for (const wxString& form : OtherForms(a, layouts))
-            if (lower(form) == lower(b))
-                return true;
-        return false;
+    auto keysOf = [&](const wxString& word) {
+        std::set<std::wstring> keys;
+        auto add = [&](const wxString& text) {
+            const std::wstring w = text.ToStdWstring();
+            size_t b = 0, e = w.size();
+            while (b < e && !IsCharAlphaW(w[b]))
+                b++;
+            while (e > b && !IsCharAlphaW(w[e - 1]))
+                e--;
+            if (b < e)
+                keys.insert(lower(w.substr(b, e - b)));
+        };
+        add(word);
+        for (const wxString& form : OtherForms(word, layouts))
+            add(form);
+        return keys;
     };
-    wxArrayString added;
+    std::set<std::wstring> before, added;
+    for (const wxString& w : was)
+        before.insert(lower(w.ToStdWstring()));
     for (const wxString& w : now)
-    {
-        bool before = false;
-        for (const wxString& o : was)
-            before = before || lower(o) == lower(w);
-        if (!before)
-            added.Add(w);
-    }
+        if (!before.contains(lower(w.ToStdWstring())))
+            added.merge(keysOf(w));
     if (added.empty())
         return wxString();
     nlohmann::json& out = m_edit.Json();
@@ -1530,8 +1562,8 @@ wxString SettingsFrame::LeaveOtherList(WordKind kind, const wxArrayString& was, 
     for (const wxString& o : JsonWords(out, otherKey, otherDefaults))
     {
         bool hit = false;
-        for (const wxString& a : added)
-            hit = hit || same(a, o) || same(o, a);
+        for (const std::wstring& k : keysOf(o))
+            hit = hit || added.contains(k);
         if (hit)
             removed.Add(o);
         else

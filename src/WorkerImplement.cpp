@@ -10,6 +10,9 @@
 #include <UIAutomation.h>
 #include <fstream>
 
+// Переключено посреди слова: к его тексту в записи (m_autoSwitched) и в журнале - "…" (дальше слово не набрано).
+static constexpr wchar_t kUnfinished = L'…';
+
 // Слово окну движка (gui2/main.cpp - его счёт, списки): не дошло (окно уже закрыто - выход) - удалить здесь, как строку
 // журнала (Journal), а не потерять (ревью 11.10.2026).
 static void PostWord(UINT msg, const std::wstring& word) {
@@ -34,7 +37,12 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         m_heldMods.clear();
         for (TKeyCode k : keyData.cur_hotKey)
             if (CHotKey::IsKnownMods(k)) m_heldMods.push_back(k);
-        if (!AutoSwitchLastWord(false)) FixTwoCaps(false);
+        const bool ended = AutoSwitchLastWord(false);
+        if (!ended) FixTwoCaps(false);
+        // Enter после слова, которое движок переключил (сейчас или посреди набора; и число - FixNumberSigns): Backspace сразу
+        // после него стирает это переключение (m_lastSwitchTotal). Tab - в другое поле: там стирают своё.
+        const bool switchedWord = ended || (m_autoSwitched.early && m_autoSwitched.ends == m_wordEnds);
+        m_lastSwitchTotal = keyData.vkCode == VK_RETURN && switchedWord ? m_cycleList.Total() : SIZE_MAX;
         // Только пока придержка наша: отнятую (щелчок, другое окно, таймаут) хук уже отпускает сам, и нажатый снова
         // модификатор мог бы остаться нажатым - его отпускание пальцем уже ушло.
         if (m_heldModsUp && KeyHold::Allowed(keyData.holdId)) {
@@ -90,14 +98,13 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
             // увести в другое поле), или то, что движок в нём уже переключил посреди набора (стирают, может быть, его
             // ошибку). Буфер пуст - стёрто то, чего здесь не набирали (после щелчка, в новом поле: выделенный адрес в
             // браузере): как после щелчка - спросить поле, что перед курсором (WorldTroll на форуме, 26.10.2026: стёр адрес
-            // Backspace - первое слово до пробела не переключалось). Кроме стирания сразу после переключения (Enter
-            // очистил буфер, после него ничего не набирали): стирают его.
-            const bool inWord = !m_cycleList.TrailingWordKeys().empty();
+            // Backspace - первое слово до пробела не переключалось). Кроме стирания сразу после Enter, которым кончилось
+            // переключённое слово (Enter очистил буфер, после него ничего не набирали, курсор не уходил): стирают его.
+            const bool empty = !m_cycleList.HasAnySymbol();
             const bool switchedHere = m_autoSwitched.early && m_autoSwitched.ends == m_wordEnds;
-            const bool afterOurs = !m_autoWord.moved && m_cycleList.Total() == m_lastSwitchTotal;
-            if (switchedHere || (!inWord && (m_cycleList.Size() > 0 || afterOurs)))
+            if (switchedHere || m_cycleList.EndsWithBoundary() || (empty && m_cycleList.Total() == m_lastSwitchTotal))
                 m_autoWord.backspace = true;
-            else if (!inWord) {
+            else if (empty) {
                 m_autoWord.moved = true;
                 m_autoWord.boundary = -1;
             }
@@ -118,6 +125,10 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
             break;
         case KEYTYPE_NONE:
         case KEYTYPE_COMMAND_CLEAR: {
+            // Enter после слова, переключённого посреди набора (не придержанный: в конце проверять было нечего) - как
+            // придержанный (held_end); после придержанного сам он и пришёл - метка уже есть.
+            if (vkCode == VK_RETURN && m_autoSwitched.early && m_autoSwitched.ends == m_wordEnds)
+                m_lastSwitchTotal = m_cycleList.Total();
             ClearAllWords();
             // Enter, Esc - конец слова; стрелки, Home, End, Delete, сочетания - курсор мог переехать.
             if (Utils::is_in(vkCode, VK_RETURN, VK_ESCAPE))
@@ -231,7 +242,8 @@ bool IsPasswordUia() {
 }
 
 // После щелчка или стрелок в том же окне: перед набранным словом в поле в фокусе не буква - слово набрано с начала
-// (AutoSwitch::StartedAfterBoundary: 1 - да, 0 - нет, -1 - не узнать).
+// (AutoSwitch::StartedAfterBoundary: 1 - да, 0 - нет, -1 - не узнать: поле ещё не показало набранного). -2 - поле не
+// скажет совсем (не отдаёт текста): в этом слове не спрашивать снова - с придержанными клавишами (ревью 1.5.19).
 int StartedAfterBoundary(const std::wstring& typed) {
     IUIAutomation* uia = Uia();
     CComPtr<IUIAutomationElement> el;
@@ -239,7 +251,7 @@ int StartedAfterBoundary(const std::wstring& typed) {
     bool atStart = false;
     if (!uia || FAILED(uia->GetFocusedElement(&el)) || !el ||
         !FieldText::BeforeCaret(el, (int)typed.size() + 8, before, atStart))
-        return -1;
+        return -2;
     return AutoSwitch::StartedAfterBoundary(before, typed, atStart);
 }
 
@@ -479,7 +491,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
     };
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return no("a password, a console or an excluded program", false);
-    if (m_autoWord.backspace) return no("Backspace in what was switched");
+    if (m_autoWord.backspace) return no("Backspace past the word or in what was switched in it");
     if (m_autoWord.undone) return no("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
@@ -500,11 +512,11 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
     // трогаем - если только перед словом в поле не пробел, начало строки или знак (Дмитрий 06.10: щёлкнул в поле ответа,
     // набрал "nj - "Это" ждало соседа). Поле спрашиваем раз за слово и только когда нужно: о коротком и о том, что не
     // может быть русским (AutoSwitch::NotRussian); что уже ответило посреди этого слова (AutoSwitchEarly) - не снова.
-    int boundary = -2;
+    std::optional<int> boundary;
     auto afterBoundary = [&] {
         if (!m_autoWord.moved) return true;
-        if (boundary == -2) {
-            if (m_autoWord.boundary >= 0)
+        if (!boundary) {
+            if (m_autoWord.boundary != -1)
                 boundary = m_autoWord.boundary;
             else {
                 boundary = StartedAfterBoundary(typed);
@@ -652,7 +664,6 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
                                    .from = lay, .to = other, .span = total - first, .total = m_cycleList.Total(),
                                    .changes = m_cycleList.Changes() };
                 m_lastAutoSwitch = GetTickCount64();
-                m_lastSwitchTotal = m_cycleList.Total();
                 m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(from).core);
                 m_lastSwitchedEarly = false;
                 RememberSwitch(from, to);
@@ -695,7 +706,6 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
                            .retro = wordBegin - first, .pair = shortWord == AutoSwitch::Short::WithPartner,
                            .total = m_cycleList.Total(), .changes = m_cycleList.Changes() };
         m_lastAutoSwitch = GetTickCount64();
-        m_lastSwitchTotal = m_cycleList.Total();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = false;
         RememberSwitch(typed, there);
@@ -753,7 +763,7 @@ void WorkerImplement::AutoSwitchEarly() {
     if (!cfg->autoswitch || !KeyHold::Allowed(m_holdId)) return never("off or too late");
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return never("a password, a console or an excluded program");
-    if (m_autoWord.backspace) return never("Backspace in what was switched");
+    if (m_autoWord.backspace) return never("Backspace past the word or in what was switched in it");
     if (m_autoWord.undone) return never("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
@@ -775,10 +785,11 @@ void WorkerImplement::AutoSwitchEarly() {
     const auto tail = m_cycleList.TailWords(false, 6, &fixedBefore);
     // После щелчка или стрелок в том же окне могли дописывать середину слова: на букву позже - если только поле не
     // говорит, что перед словом пробел, начало строки или знак (Дмитрий 07.10: вернулся в окно, щёлкнул в пустое поле,
-    // "Щщзы" - четыре буквы - не стало "Oops"). Поле спрашиваем, пока оно не ответит, ответ - на всё слово.
+    // "Щщзы" - четыре буквы - не стало "Oops"). Поле спрашиваем, пока оно не ответит, ответ - на всё слово (и что оно не
+    // скажет совсем).
     size_t minLetters = AutoSwitch::kEarlyMin;
     if (m_autoWord.moved) {
-        if (m_autoWord.boundary < 0) {
+        if (m_autoWord.boundary == -1) {
             m_autoWord.boundary = StartedAfterBoundary(typed);
             LOG_ANY(L"autoswitch early: {} after a click or arrows, before it in the field: {}", typed, m_autoWord.boundary);
         }
@@ -846,7 +857,7 @@ void WorkerImplement::AutoSwitchEarly() {
         // Короткие слова перед ним, набранные так же ("f" перед "vj;y"), - вместе с ним.
         const size_t total = m_cycleList.Size(), wordBegin = tail.empty() ? total - keys.size() : tail[0].begin;
         const size_t begin = tail.empty() ? wordBegin : RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions);
-        const std::wstring more = L"\u2026";
+        const std::wstring more(1, kUnfinished);
         const std::wstring from = TailText(m_cycleList, begin, total, lay) + more;
         std::wstring retroFrom = TailText(m_cycleList, begin, wordBegin, lay);
         while (!retroFrom.empty() && retroFrom.back() == L' ') retroFrom.pop_back();
@@ -864,7 +875,6 @@ void WorkerImplement::AutoSwitchEarly() {
                            .ends = m_wordEnds, .from = lay, .to = other, .span = total - begin, .retro = wordBegin - begin,
                            .total = m_cycleList.Total(), .changes = m_cycleList.Changes() };
         m_lastAutoSwitch = GetTickCount64();
-        m_lastSwitchTotal = m_cycleList.Total();
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = true;
         RememberSwitch(typed, there);
@@ -1093,7 +1103,7 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
     // в "Не переключать" - они уйдут из того списка. "слово\tзапись\tзапись". Посреди слова к тексту приписано "…" - без
     // него (запись со знаками, "4pda", ".NET", сравнивается целиком).
     auto bare = [](std::wstring s) {
-        if (!s.empty() && s.back() == L'…') s.pop_back();
+        if (!s.empty() && s.back() == kUnfinished) s.pop_back();
         return s;
     };
     std::wstring learn = last.word;

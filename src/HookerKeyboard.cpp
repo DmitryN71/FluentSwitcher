@@ -100,8 +100,18 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 		// VK_NAVIGATION_*. Геймпад выключили, держа эту кнопку, - её отпускания не будет (8BitDo Ultimate 2, notAlx на форуме,
 		// 26.10.2026: пришло 0x07 без отпускания), она считалась нажатой, и ни одно сочетание больше не срабатывало до
 		// перезапуска. Такие нажатия - мимо нас, в программы и Windows (Xbox Game Bar) - как шли.
+		// Но нажатие между отменяет одиночное "на отпускание" и "дважды", как любое другое: 0x07 шлёт и AutoHotkey
+		// (#MenuMaskKey) между Win или Alt и их отпусканием - Win с его сочетанием уже не одиночный.
 		if (vkCode == 0x07 || (vkCode >= 0x88 && vkCode <= 0x8F) || (vkCode >= 0xC3 && vkCode <= 0xDA)) {
 			LOG_ANY(L"skip a gamepad key 0x{:x}", vkCode);
+			if (isDown) {
+				possible_hk_up.Clear();
+				curKeys.BreakDouble();
+				if (pending_double_vk != 0) {
+					LOG_ANY("double {} canceled by {}", LogHotKey(pending_double), LogKey(vkCode));
+					pending_double_vk = 0;
+				}
+			}
 			return;
 		}
 

@@ -111,34 +111,39 @@ void StartGui() {
 	};
 	// Счёт исправлений вручную изменился - в файл раз в минуту, а не на каждое исправление.
 	auto saveFixCounts = [&] { saveMerged([](ProgramConfig&) {}, false); };
-	// Слово ушло в список name, вернулось из него или изменился его счёт: в памяти - уже; движку - сразу, в файл - только
-	// это слово (его счёт, место в списке и отметка "выучено").
-	auto saveWord = [&](const char* name, const std::wstring& word) {
+	// Слова ушли в списки (имя списка - слово), вернулись оттуда или изменился их счёт: в памяти - уже; движку - сразу, в
+	// файл - только эти слова (их счёт, место в списке и отметка "выучено"), одной записью: слово ушло в исключения, а
+	// записи - из "Переключать всегда" - движок видит это сразу целиком (ревью 1.5.19).
+	using ListWord = std::pair<const char*, std::wstring>;
+	auto saveWords = [&](const std::vector<ListWord>& words) {
 		cfg_details::ApplyGuiConfig();
-		const std::string utf8 = StrUtils::Convert(word);
-		auto lists = [&](ProgramConfig& c) -> std::pair<std::map<std::string, int>*, std::vector<std::string>*> {
-			if (std::string_view(name) == "two_caps_exceptions") return { &c.two_caps_undo, &c.two_caps_exceptions };
-			if (std::string_view(name) == "autoswitch_exceptions") return { &c.autoswitch_undo, &c.autoswitch_exceptions };
+		auto lists = [](ProgramConfig& c, std::string_view name) -> std::pair<std::map<std::string, int>*, std::vector<std::string>*> {
+			if (name == "two_caps_exceptions") return { &c.two_caps_undo, &c.two_caps_exceptions };
+			if (name == "autoswitch_exceptions") return { &c.autoswitch_undo, &c.autoswitch_exceptions };
 			return { &c.autoswitch_fix, &c.autoswitch_force };
 		};
 		saveMerged([&](ProgramConfig& disk) {
-			auto [memCounts, memList] = lists(*conf_gui());
-			auto [diskCounts, diskList] = lists(disk);
-			if (const auto it = memCounts->find(utf8); it != memCounts->end())
-				(*diskCounts)[utf8] = it->second;
-			else
-				diskCounts->erase(utf8);
-			auto same = [&](const std::vector<std::string>& from, std::vector<std::string>& to) {
-				const bool in = std::ranges::find(from, utf8) != from.end();
-				if (!in)
-					std::erase(to, utf8);
-				else if (std::ranges::find(to, utf8) == to.end())
-					to.push_back(utf8);
-			};
-			same(*memList, *diskList);
-			same(conf_gui()->learned[name], disk.learned[name]);
+			for (const auto& [name, word] : words) {
+				const std::string utf8 = StrUtils::Convert(word);
+				auto [memCounts, memList] = lists(*conf_gui(), name);
+				auto [diskCounts, diskList] = lists(disk, name);
+				if (const auto it = memCounts->find(utf8); it != memCounts->end())
+					(*diskCounts)[utf8] = it->second;
+				else
+					diskCounts->erase(utf8);
+				auto same = [&](const std::vector<std::string>& from, std::vector<std::string>& to) {
+					const bool in = std::ranges::find(from, utf8) != from.end();
+					if (!in)
+						std::erase(to, utf8);
+					else if (std::ranges::find(to, utf8) == to.end())
+						to.push_back(utf8);
+				};
+				same(*memList, *diskList);
+				same(conf_gui()->learned[name], disk.learned[name]);
+			}
 		}, true);
 	};
+	auto saveWord = [&](const char* name, const std::wstring& word) { saveWords({ { name, word } }); };
 	timer.CycleTimer([&] {
 		if (fixCountsChanged) saveFixCounts();
 		// Запись для отчёта (SettingsIpc.h) - не дольше часа: о ней могли забыть. Записанное остаётся в файле.
@@ -322,12 +327,7 @@ void StartGui() {
 				// оттуда: одно слово - один список (WinnyS на форуме, 26.10.2026: слово было бы в обоих, и исключение - главнее).
 				std::unique_ptr<std::wstring> message(reinterpret_cast<std::wstring*>(lParam));
 				std::vector<std::wstring> parts;
-				for (size_t from = 0;;) {
-					const size_t tab = message->find(L'\t', from);
-					parts.push_back(message->substr(from, tab == std::wstring::npos ? std::wstring::npos : tab - from));
-					if (tab == std::wstring::npos) break;
-					from = tab + 1;
-				}
+				StrUtils::Split2(*message, parts, L"\t");
 				const std::wstring word = parts[0];
 				LOG_ANY(L"autoswitch: {} switched back", word);
 				const bool learned = countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions,
@@ -335,18 +335,20 @@ void StartGui() {
 				                                 "It is in the exceptions of the layout auto switch: Settings, Auto switch",
 				                                 "Once more and \"{}\" will not be switched any more",
 				                                 "You switched it back for the second time. By mistake? Fix it again within 10 seconds");
-				saveWord("autoswitch_exceptions", word);
-				if (!learned || parts.size() < 2) return 0;
-				auto& left = lastLearned["autoswitch_exceptions"].forced; // countToList только что завёл новую запись
-				auto& marks = conf_gui()->learned["autoswitch_force"];
-				for (size_t i = 1; i < parts.size(); i++) {
-					const std::string entry = StrUtils::Convert(parts[i]);
-					const bool marked = std::erase(marks, entry) != 0;
-					if (!std::erase(conf_gui()->autoswitch_force, entry)) continue;
-					left.push_back({ entry, marked });
-					LOG_ANY(L"autoswitch: {} left Always switch for the exceptions", parts[i]);
+				std::vector<ListWord> changed{ { "autoswitch_exceptions", word } };
+				if (learned) {
+					auto& left = lastLearned["autoswitch_exceptions"].forced; // countToList только что завёл новую запись
+					auto& marks = conf_gui()->learned["autoswitch_force"];
+					for (size_t i = 1; i < parts.size(); i++) {
+						const std::string entry = StrUtils::Convert(parts[i]);
+						const bool marked = std::erase(marks, entry) != 0;
+						if (!std::erase(conf_gui()->autoswitch_force, entry)) continue;
+						left.push_back({ entry, marked });
+						changed.push_back({ "autoswitch_force", parts[i] });
+						LOG_ANY(L"autoswitch: {} left Always switch for the exceptions", parts[i]);
+					}
 				}
-				for (const auto& [entry, marked] : left) saveWord("autoswitch_force", StrUtils::Convert(entry));
+				saveWords(changed);
 				return 0;
 			}
 
@@ -391,21 +393,22 @@ void StartGui() {
 				const Learned last = lastLearned["autoswitch_exceptions"]; // uncount его сотрёт
 				const int undone = uncount(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions",
 				                           *word);
-				if (undone) {
-					LOG_ANY(L"autoswitch: {} fixed again after switching back, not counted", *word);
-					saveWord("autoswitch_exceptions", *word);
+				if (!undone) return 0;
+				LOG_ANY(L"autoswitch: {} fixed again after switching back, not counted", *word);
+				std::vector<ListWord> changed{ { "autoswitch_exceptions", *word } };
+				// Слово вышло из исключений (третий возврат взяли назад; uncount - 2 только для last.word) - записи
+				// "Переключать всегда", ушедшие с ним, - обратно, с отметкой "выучено", если была.
+				if (undone == 2) {
+					auto& list = conf_gui()->autoswitch_force;
+					auto& marks = conf_gui()->learned["autoswitch_force"];
+					for (const auto& [entry, marked] : last.forced) {
+						if (std::ranges::find(list, entry) == list.end()) list.push_back(entry);
+						if (marked && std::ranges::find(marks, entry) == marks.end()) marks.push_back(entry);
+						changed.push_back({ "autoswitch_force", StrUtils::Convert(entry) });
+						LOG_ANY("autoswitch: {} is back in Always switch", entry);
+					}
 				}
-				// Слово вышло из исключений (третий возврат взяли назад) - записи "Переключать всегда", ушедшие с ним, - обратно,
-				// с отметкой "выучено", если была.
-				if (undone != 2 || last.word != StrUtils::Convert(*word)) return 0;
-				auto& list = conf_gui()->autoswitch_force;
-				auto& marks = conf_gui()->learned["autoswitch_force"];
-				for (const auto& [entry, marked] : last.forced) {
-					if (std::ranges::find(list, entry) == list.end()) list.push_back(entry);
-					if (marked && std::ranges::find(marks, entry) == marks.end()) marks.push_back(entry);
-					LOG_ANY("autoswitch: {} is back in Always switch", entry);
-				}
-				for (const auto& [entry, marked] : last.forced) saveWord("autoswitch_force", StrUtils::Convert(entry));
+				saveWords(changed);
 				return 0;
 			}
 

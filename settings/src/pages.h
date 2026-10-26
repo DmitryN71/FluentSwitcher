@@ -52,9 +52,17 @@ private:
     // The counts of the lists' cards from m_edit again (after the window of a list, after Apply took the words the
     // engine learned meanwhile).
     void RefillWordLists();
-    // A word just added to "Не переключать" or "Переключать всегда" leaves the other (one word - one list); the line to
-    // show at the bottom, or nothing.
+    // A word just added to "Не переключать" or "Переключать всегда" takes out of the other what stands in its way (one
+    // word - one list); the line to show at the bottom, or nothing.
     wxString LeaveOtherList(WordKind kind, const wxArrayString& was, const wxArrayString& now);
+    // The entries of "Переключать всегда" that "Не переключать" covers (the exception wins: they never worked) - out of
+    // m_edit; the line to show at the bottom, or nothing. When the window opens and at Apply.
+    wxString DropCoveredForced();
+    // The counts of switch-backs of the words moved into or out of the two lists since `saved` start over (in m_edit).
+    void RestartMovedCounts(const Config& saved);
+    // The list `key` while the file has none (the card's defaults); `words` out of it in m_edit, with their marks.
+    wxArrayString DefaultsOf(const char* key) const;
+    void DropWords(const char* key, const wxArrayString& words);
     // The words the engine learned while this window is open: into what it shows and into what it read (no change of
     // its own). When the window comes to the front and before a list opens.
     void TakeLearnedNow();

@@ -67,10 +67,13 @@ public:
 	// Щелчок мыши после последнего нажатия: следующее нажатие той же клавиши - уже не "дважды"
 	// (Shift+щелчок, Shift+щелчок подряд при выделении).
 	void BreakDoubleIfClicked(const TimePoint& click) {
-		if (last_down_vk != 0 && click > last_down_time) {
-			last_down_vk = 0;
-			double_cnt = 0;
-		}
+		if (last_down_vk != 0 && click > last_down_time)
+			BreakDouble();
+	}
+	// Между нажатиями было другое, которого мы не считаем (кнопка геймпада, HookerKeyboard.cpp).
+	void BreakDouble() {
+		last_down_vk = 0;
+		double_cnt = 0;
 	}
 
 	const CHotKey& GetHk()const { return one_value; }
@@ -156,8 +159,13 @@ private:
 			// Нажата давно, а Windows считает её отпущенной: отпускание потерялось. И для отправленных заново (KeyHold.h -
 			// придержанные нажатия возвращаются как эмулированные): иначе такая клавиша оставалась "нажатой" навсегда, и
 			// Shift дважды выглядел бы как сочетание с ней.
-			if (info.time.DeltTo(now)>=10s && !(GetAsyncKeyState(code) & 0x8000)) {
-				LOG_WARN("delete key because it not down now {}", LogKey(code));
+			// И нажатая только программой, не модификатор, без повторов 10 с: программа не прислала отпускания, и Windows так
+			// и считает её нажатой - GetAsyncKeyState ничего не скажет, а с ней в нажатых не срабатывало ни одно сочетание
+			// до перезапуска (геймпад, notAlx на форуме, 26.10.2026: 0x07 без отпускания). Человек держит клавишу - идут
+			// повторы (time), Shift, Ctrl, Alt, Win программа держит нарочно - их не трогаем.
+			const bool injectedOnly = info.hasEmulated && !info.hasPhisic && !CHotKey::IsKnownMods(code);
+			if (info.time.DeltTo(now) >= 10s && (injectedOnly || !(GetAsyncKeyState(code) & 0x8000))) {
+				LOG_WARN("delete key because it not down now {}{}", LogKey(code), injectedOnly ? " (sent by a program)" : "");
 				one_value.Remove(code);
 				return true;
 			}

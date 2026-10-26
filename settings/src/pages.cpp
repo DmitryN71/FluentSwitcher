@@ -23,11 +23,13 @@
 #include "../../src/UpdateInstall.h"
 #include "../../src/CanElevate.h"
 #include "../../src/ConfigLock.h"
-#include <shlwapi.h>          // SHLoadIndirectString: the names of keyboards
+#include "../../src/AutoSwitch.h" // one word - one list: the engine's rule (Covers)
+#include <shlwapi.h>         // SHLoadIndirectString: the names of keyboards
 #pragma comment(lib, "shlwapi.lib")
 #include <shlobj.h>           // the report to the developer: the desktop, Explorer
 #include <tlhelp32.h>         // ... the running programs
 #include <mapi.h>             // ... the letter with the file (Simple MAPI)
+#include <map>
 #include <set>
 #include <thread>
 
@@ -39,14 +41,9 @@ const char* const kVersion = FS_VERSION; // fs_version.h, made by CMake: the sam
 // exceptions of ДВе ЗАглавные, the third fix by hand into "Переключать всегда" - and writes them to the file; the
 // window's copy is older, and writing it whole would drop them. Before the window writes the file: the words the engine
 // added since the window read it go into what it writes (a word the user removed here stays removed), and the engine's
-// counts are taken as they are now (the window does not edit them).
-void TakeEngineLearned(Config& edit, const Config& saved)
+// counts are taken as they are now (the window does not edit them). `now` - the file as the engine has it.
+void MergeEngineLearned(Config& edit, const Config& saved, const nlohmann::json& now)
 {
-    Config disk;
-    wxString error;
-    if (!disk.Load(edit.Path(), &error))
-        return;
-    const nlohmann::json& now = std::as_const(disk).Json();
     const nlohmann::json& before = saved.Json();
     nlohmann::json& out = edit.Json();
     for (const char* key : { "autoswitch_exceptions", "autoswitch_force", "two_caps_exceptions" })
@@ -123,6 +120,14 @@ void TakeEngineLearned(Config& edit, const Config& saved)
         out.erase("learned");
     else
         out["learned"] = learned;
+}
+
+void TakeEngineLearned(Config& edit, const Config& saved)
+{
+    Config disk;
+    wxString error;
+    if (disk.Load(edit.Path(), &error))
+        MergeEngineLearned(edit, saved, std::as_const(disk).Json());
 }
 
 // ----- The report for the forum: the errors of the journal of the automatic switch -----
@@ -1112,6 +1117,12 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
 
     if (!loadError.empty())
         SetStatus(T("Не удалось прочитать FluentSwitcher.json: ") + loadError, true);
+    else if (m_canSave)
+        if (const wxString dropped = DropCoveredForced(); !dropped.empty())
+        {
+            RefillWordLists();
+            SetStatus(dropped, false); // Apply - to keep it
+        }
     ShowSection(section);
     // Not narrower than the widest page: the pages scroll only up and down, and a card cut at the right edge hid its
     // switch or button (Dmitry, 11.10.2026). The height - for the search, the eleven sections and "Закрыть FluentSwitcher"
@@ -1452,34 +1463,18 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
             FluentButton* edit = new FluentButton(card, wxID_ANY, T("Изменить…"));
             edit->Bind(wxEVT_BUTTON, [this, key, kind, title, help, defaults](wxCommandEvent&) {
                 TakeLearnedNow();
+                const Config base = m_saved; // the engine's lists when the window opens
                 const nlohmann::json& file = std::as_const(m_edit).Json();
                 WordListWords list{ JsonWords(file, key, defaults), LearnedWords(file, key) };
                 const wxArrayString was = list.words;
                 if (!EditWordList(this, kind, title, help, SwitchLayouts(m_edit), &list))
                     return;
-                // The engine changed this list while its window was open (learned a word, moved one between the lists):
-                // TakeLearnedNow has put that into m_edit already - the frame is activated on "Готово" too, before
-                // EditWordList returns (wx/msw) - and the window's copy of the list would undo it. Its additions and removals
-                // stay.
-                {
-                    const nlohmann::json& merged = std::as_const(m_edit).Json();
-                    const wxArrayString engine = JsonWords(merged, key, defaults), engineMarks = LearnedWords(merged, key);
-                    for (const wxString& w : engine)
-                        if (was.Index(w) == wxNOT_FOUND && list.words.Index(w) == wxNOT_FOUND)
-                        {
-                            list.words.Add(w);
-                            if (engineMarks.Index(w) != wxNOT_FOUND && list.learned.Index(w) == wxNOT_FOUND)
-                                list.learned.Add(w);
-                        }
-                    for (const wxString& w : was)
-                        if (engine.Index(w) == wxNOT_FOUND)
-                        {
-                            if (const int i = list.words.Index(w); i != wxNOT_FOUND)
-                                list.words.RemoveAt(i);
-                            if (const int i = list.learned.Index(w); i != wxNOT_FOUND)
-                                list.learned.RemoveAt(i);
-                        }
-                }
+                // The engine changed the lists while the window was open (learned a word, moved one between the lists),
+                // and the window's copy would undo it: taken (the frame's activation on "Готово" has mostly taken it
+                // already - wx/msw - not always), the window's list written, and then what the engine did since the window
+                // opened - over it again, as Apply takes it (MergeEngineLearned: the window's own additions and removals
+                // stay).
+                TakeLearnedNow();
                 nlohmann::json words = nlohmann::json::array(), learned = nlohmann::json::array();
                 for (const wxString& w : list.words)
                     words.push_back(w.utf8_string());
@@ -1496,6 +1491,7 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
                     if (out["learned"].empty())
                         out.erase("learned");
                 }
+                MergeEngineLearned(m_edit, base, std::as_const(m_saved).Json());
                 const wxString left = LeaveOtherList(kind, was, list.words);
                 Changed();
                 RefillWordLists();
@@ -1508,96 +1504,177 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
     m_wordLists.push_back({ key, kind, defaults, about, label });
 }
 
+namespace
+{
+// The engine's "one word - one list" for the words of the lists (AutoSwitch::Covers): an exception stands in the way of an
+// entry of "Переключать всегда" when it lets the entry through in none of the layouts it is typed in (OtherForms; and as
+// it is - the same word in both lists). "ещё" and "to" can stay together: "ещё" in the other layout is "to`", and "ещ" is
+// still switched to "to". The forms of each entry are made once (OtherForms asks the keyboard for every letter).
+class Covering
+{
+public:
+    explicit Covering(std::vector<HKL> layouts) : m_layouts(std::move(layouts)) {}
+
+    bool operator()(const wxString& exception, const wxString& entry)
+    {
+        auto [it, fresh] = m_keys.try_emplace(entry);
+        if (fresh)
+        {
+            it->second.push_back(entry.ToStdWstring());
+            for (const wxString& form : OtherForms(entry, m_layouts))
+                it->second.push_back(form.ToStdWstring());
+        }
+        const std::wstring x = exception.ToStdWstring(), f = entry.ToStdWstring();
+        for (const std::wstring& keys : it->second)
+            if (AutoSwitch::Covers(x, f, keys))
+                return true;
+        return false;
+    }
+
+private:
+    std::vector<HKL> m_layouts;
+    std::map<wxString, std::vector<std::wstring>> m_keys;
+};
+
+// «a», «b» - for the line at the bottom of the window.
+wxString QuotedWords(const wxArrayString& words)
+{
+    wxString text;
+    for (const wxString& w : words)
+        text += (text.empty() ? wxString() : wxString(", ")) + wxString::Format(T("«%s»"), w);
+    return text;
+}
+} // namespace
+
+wxArrayString SettingsFrame::DefaultsOf(const char* key) const
+{
+    for (const WordListOnPage& list : m_wordLists)
+        if (std::string_view(list.key) == key)
+            return list.defaults;
+    return wxArrayString();
+}
+
+void SettingsFrame::DropWords(const char* key, const wxArrayString& words)
+{
+    nlohmann::json& out = m_edit.Json();
+    nlohmann::json kept = nlohmann::json::array();
+    for (const wxString& w : JsonWords(out, key, DefaultsOf(key)))
+        if (words.Index(w) == wxNOT_FOUND)
+            kept.push_back(w.utf8_string());
+    out[key] = kept;
+    if (!out.contains("learned") || !out["learned"].is_object() || !out["learned"].contains(key) ||
+        !out["learned"][key].is_array())
+        return;
+    nlohmann::json marks = nlohmann::json::array();
+    for (const auto& m : out["learned"][key])
+        if (!m.is_string() || words.Index(wxString::FromUTF8(m.get<std::string>())) == wxNOT_FOUND)
+            marks.push_back(m);
+    if (!marks.empty())
+        out["learned"][key] = marks;
+    else
+    {
+        out["learned"].erase(key);
+        if (out["learned"].empty())
+            out.erase("learned");
+    }
+}
+
 // One word - one list (WinnyS on the forum, 26.10.2026: a word in both "Не переключать" and "Переключать всегда" - which
-// wins? "Не переключать", and the other one was dead): a word just added to one of the two leaves the other, in any of its
-// layouts (cv - and "см"). `was`, `now` - the list before and after its window. Returns the line for the bottom of the
-// window, or nothing.
+// wins? "Не переключать", and the other one was dead): a word just added to one of the two takes out of the other what
+// stands in its way, as the engine decides it (Covering): "см" added to "Не переключать" takes "cv" out of "Переключать
+// всегда", "cv" added there takes "см" out of "Не переключать". `was`, `now` - the list before and after its window (the
+// window's own: a word the engine added meanwhile has done this by itself, gui2 WM_AutoSwitchLearn). Returns the line for
+// the bottom of the window, or nothing.
 wxString SettingsFrame::LeaveOtherList(WordKind kind, const wxArrayString& was, const wxArrayString& now)
 {
     if (kind != WordKind::Never && kind != WordKind::Always)
         return wxString();
-    const char* otherKey = kind == WordKind::Never ? "autoswitch_force" : "autoswitch_exceptions";
-    wxArrayString otherDefaults;
-    for (const WordListOnPage& list : m_wordLists)
-        if (std::string_view(list.key) == otherKey)
-            otherDefaults = list.defaults;
-    // Lower case in every alphabet (CharLowerBuffW, as the engine): "СМ" and "см" are one word.
-    auto lower = [](std::wstring w) {
-        if (!w.empty())
-            CharLowerBuffW(w.data(), (DWORD)w.size());
-        return w;
-    };
-    // A word as the engine compares the words of these lists (AutoSwitch::Letters, Excepted, SameSigned): the letters
-    // between the signs at its edges, in lower case, in its own layout and in the others - "etc." and "etc" are one word,
-    // "cv" and "см" too. The forms of each word are made once (OtherForms asks the keyboard for every letter).
-    const std::vector<HKL> layouts = SwitchLayouts(m_edit);
-    auto keysOf = [&](const wxString& word) {
-        std::set<std::wstring> keys;
-        auto add = [&](const wxString& text) {
-            const std::wstring w = text.ToStdWstring();
-            size_t b = 0, e = w.size();
-            while (b < e && !IsCharAlphaW(w[b]))
-                b++;
-            while (e > b && !IsCharAlphaW(w[e - 1]))
-                e--;
-            if (b < e)
-                keys.insert(lower(w.substr(b, e - b)));
-        };
-        add(word);
-        for (const wxString& form : OtherForms(word, layouts))
-            add(form);
-        return keys;
-    };
-    std::set<std::wstring> before, added;
+    const bool never = kind == WordKind::Never;
+    const char* otherKey = never ? "autoswitch_force" : "autoswitch_exceptions";
+    std::set<std::wstring> before;
     for (const wxString& w : was)
-        before.insert(lower(w.ToStdWstring()));
+        before.insert(AutoSwitch::Lower(w.ToStdWstring()));
+    wxArrayString added;
     for (const wxString& w : now)
-        if (!before.contains(lower(w.ToStdWstring())))
-            added.merge(keysOf(w));
+        if (!before.contains(AutoSwitch::Lower(w.ToStdWstring())))
+            added.Add(w);
     if (added.empty())
         return wxString();
-    nlohmann::json& out = m_edit.Json();
-    nlohmann::json kept = nlohmann::json::array();
+    Covering covers(SwitchLayouts(m_edit));
     wxArrayString removed;
-    for (const wxString& o : JsonWords(out, otherKey, otherDefaults))
-    {
-        bool hit = false;
-        for (const std::wstring& k : keysOf(o))
-            hit = hit || added.contains(k);
-        if (hit)
-            removed.Add(o);
-        else
-            kept.push_back(o.utf8_string());
-    }
+    for (const wxString& o : JsonWords(std::as_const(m_edit).Json(), otherKey, DefaultsOf(otherKey)))
+        for (const wxString& w : added)
+            if (never ? covers(w, o) : covers(o, w))
+            {
+                removed.Add(o);
+                break;
+            }
     if (removed.empty())
         return wxString();
-    out[otherKey] = kept;
-    if (out.contains("learned") && out["learned"].is_object() && out["learned"].contains(otherKey) &&
-        out["learned"][otherKey].is_array())
+    DropWords(otherKey, removed);
+    return wxString::Format(T("Убрано из «%s»: %s"), never ? T("Переключать всегда") : T("Не переключать"),
+                            QuotedWords(removed));
+}
+
+// One word - one list in the lists as they are (1.5.18 learned words into both; the file edited by hand; the engine
+// learned an entry while this window held an exception not saved yet): an entry of "Переключать всегда" that a word of "Не
+// переключать" covers was never switched - the exception wins (the engine's rule) - and goes, which changes nothing in the
+// switch. Returns the line for the bottom of the window, or nothing.
+wxString SettingsFrame::DropCoveredForced()
+{
+    const nlohmann::json& file = std::as_const(m_edit).Json();
+    const wxArrayString never = JsonWords(file, "autoswitch_exceptions", DefaultsOf("autoswitch_exceptions"));
+    if (never.empty())
+        return wxString();
+    Covering covers(SwitchLayouts(m_edit));
+    wxArrayString dead;
+    for (const wxString& f : JsonWords(file, "autoswitch_force", DefaultsOf("autoswitch_force")))
+        for (const wxString& x : never)
+            if (covers(x, f))
+            {
+                dead.Add(f);
+                break;
+            }
+    if (dead.empty())
+        return wxString();
+    DropWords("autoswitch_force", dead);
+    return wxString::Format(T("Убрано из «Переключать всегда» – эти слова есть в «Не переключать» и так не переключались: %s"),
+                            QuotedWords(dead));
+}
+
+// A word put into "Не переключать" or "Переключать всегда" or taken out of them starts its count of switch-backs over
+// (review of 1.5.19: two switch-backs from long ago, and one more by mistake put the word into "Не переключать" and took the
+// user's own entry out of "Переключать всегда" with it). The count is kept by the word as typed: the word's own and those
+// of its forms in the other layouts go. `saved` - the lists before. (The engine takes the counts from the file on the
+// reload after Apply.)
+void SettingsFrame::RestartMovedCounts(const Config& saved)
+{
+    nlohmann::json& out = m_edit.Json();
+    const auto counts = out.find("autoswitch_undo");
+    if (counts == out.end() || !counts->is_object() || counts->empty())
+        return;
+    const std::vector<HKL> layouts = SwitchLayouts(m_edit);
+    for (const char* key : { "autoswitch_exceptions", "autoswitch_force" })
     {
-        nlohmann::json marks = nlohmann::json::array();
-        for (const auto& m : out["learned"][otherKey])
-        {
-            bool gone = false;
-            for (const wxString& r : removed)
-                gone = gone || (m.is_string() && wxString::FromUTF8(m.get<std::string>()) == r);
-            if (!gone)
-                marks.push_back(m);
-        }
-        if (!marks.empty())
-            out["learned"][otherKey] = marks;
-        else
-        {
-            out["learned"].erase(otherKey);
-            if (out["learned"].empty())
-                out.erase("learned");
-        }
+        const wxArrayString defaults = DefaultsOf(key);
+        const wxArrayString before = JsonWords(saved.Json(), key, defaults), after = JsonWords(out, key, defaults);
+        auto restart = [&](const wxArrayString& from, const wxArrayString& to) {
+            for (const wxString& w : from)
+            {
+                if (to.Index(w, false) != wxNOT_FOUND)
+                    continue;
+                wxArrayString forms = OtherForms(w, layouts);
+                forms.Add(w);
+                for (const wxString& form : forms)
+                {
+                    const std::wstring core = AutoSwitch::Lower(AutoSwitch::Letters(form.ToStdWstring()).core);
+                    counts->erase(wxString(core).utf8_string());
+                }
+            }
+        };
+        restart(before, after);
+        restart(after, before);
     }
-    wxString words;
-    for (const wxString& r : removed)
-        words += (words.empty() ? wxString() : wxString(", ")) + wxString::Format(T("«%s»"), r);
-    return wxString::Format(T("Убрано из «%s»: %s"), kind == WordKind::Never ? T("Переключать всегда") : T("Не переключать"),
-                            words);
 }
 
 // Forum, WinnyS, 11.10.2026: a note said a word went into "Переключать всегда", and the open window did not show it - it
@@ -2931,13 +3008,15 @@ bool SettingsFrame::Apply(bool reopen)
     } newWindow;
     if (m_edit != m_saved)
     {
-        wxString error;
+        wxString error, dropped;
         bool saved;
         {
             // Taking what the engine learned and writing - together, while the engine does not write (it adds learned
             // words and its counts to the file too): its write in between would be lost.
             ConfigLock lock;
             TakeEngineLearned(m_edit, m_saved);
+            dropped = DropCoveredForced(); // the engine learned an entry that an exception of this window covers
+            RestartMovedCounts(m_saved);
             saved = m_edit.Save(&error);
         }
         RefillWordLists(); // with the words the engine learned meanwhile
@@ -2947,6 +3026,8 @@ bool SettingsFrame::Apply(bool reopen)
             return false;
         }
         m_saved = m_edit;
+        if (!dropped.empty())
+            SetStatus(dropped, false);
         if (reopen && (m_edit.GetString("gui_lang", wxString()) != oldLanguage ||
                        m_edit.GetString("ui_theme", wxString()) != oldTheme))
         {

@@ -252,6 +252,7 @@ class WorkerImplement {
         // пробела).
         m_autoWord.backspace = m_autoWord.undone = m_autoWord.twoCapsUndone = false;
         if (m_autoSwitched.early) m_autoSwitched = {}; // слово, переключённое посреди, осталось позади
+        m_lastSwitchTotal = SIZE_MAX; // и Backspace здесь стирает не его
     }
     // Граница слова (пробел, Enter, Tab): приметы слова сначала, раскладка - как сейчас.
     void AutoWordEnd();
@@ -269,8 +270,8 @@ class WorkerImplement {
     // включённых раскладках (IsBackslashKey): где эта клавиша - буква (ґ украинской расширенной), это не она.
     bool AfterBackslash(size_t wordBegin) const;
     ULONGLONG m_lastAutoSwitch = 0; // когда FluentSwitcher сам переключил слово (в конце или посреди)
-    // m_cycleList.Total() при этом: после него ничего не набирали (Enter очистил буфер) - Backspace стирает его. Другое окно -
-    // не в счёт (SIZE_MAX).
+    // m_cycleList.Total() на Enter, которым кончилось переключённое слово: после него ничего не набирали (Enter очистил
+    // буфер) - Backspace стирает переключённое. Курсор переехал, другое окно - не в счёт (SIZE_MAX).
     size_t m_lastSwitchTotal = SIZE_MAX;
     std::wstring m_lastSwitchedTyped;  // то слово, как его набрали (строчными, только буквы)
     bool m_lastSwitchedEarly = false;  // переключено посреди: в m_lastSwitchedTyped - его начало
@@ -286,7 +287,7 @@ class WorkerImplement {
         bool undone = false;    // переключение посреди этого слова отменили - в нём больше не переключать
         bool twoCapsUndone = false; // ДВе ЗАглавные этого слова исправили на знаке и отменили - больше не исправлять
         int boundary = -1;      // после того, как курсор переезжал: перед словом в поле граница (1) или буква (0), -1 - не
-                                // спрашивали или поле не сказало (StartedAfterBoundary)
+                                // спрашивали или поле ещё не сказало, -2 - не скажет (StartedAfterBoundary)
     } m_autoWord;
     struct {
         std::wstring word;      // как набрано (буквенная часть, строчными)

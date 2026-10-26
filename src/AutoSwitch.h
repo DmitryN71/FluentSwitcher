@@ -189,19 +189,28 @@ inline bool Signed(const std::wstring& entry) {
 }
 // ... набранное - это слово, в кавычках или скобках и со знаками препинания после него ("C#,", "\"C#\"", "Mr.,"):
 // знаки снаружи снимаются по одному, пока не совпадёт. Точка в конце записи не обязательна: "etc." - и для "etc".
-inline bool SameSigned(const std::wstring& entry, const std::wstring& word) {
+// Где она в word: [begin, end); full - с точкой записи (без неё - "etc" для "etc.").
+struct SignedSpan {
+	bool found = false, full = false;
+	size_t begin = 0, end = 0;
+};
+inline SignedSpan FindSigned(const std::wstring& entry, const std::wstring& word) {
 	const std::wstring el = Lower(entry);
 	const std::wstring bare = el.size() > 1 && el.back() == L'.' ? el.substr(0, el.size() - 1) : std::wstring();
 	const std::wstring w = Lower(word);
 	for (size_t b = 0;; b++) {
 		std::wstring rest = w.substr(b);
 		while (true) {
-			if (rest == el || (!bare.empty() && rest == bare)) return true;
+			if (rest == el) return { true, true, b, b + rest.size() };
+			if (!bare.empty() && rest == bare) return { true, false, b, b + rest.size() };
 			if (rest.empty() || !wcschr(kTrailSigns, rest.back())) break;
 			rest.pop_back();
 		}
-		if (b >= w.size() || !wcschr(kLeadSigns, w[b])) return false;
+		if (b >= w.size() || !wcschr(kLeadSigns, w[b])) return {};
 	}
+}
+inline bool SameSigned(const std::wstring& entry, const std::wstring& word) {
+	return FindSigned(entry, word).found;
 }
 
 // Слово из исключений - в любой из двух форм (cv или см).
@@ -236,20 +245,33 @@ inline bool Forced(const std::wstring& typed, const std::wstring& there, const s
 	return false;
 }
 
+// Одно слово - один список (WinnyS на форуме, 26.10.2026: слово в "Не переключать" и в "Переключать всегда" - что
+// главнее? "Не переключать", а запись в другом мертва): исключение закрывает запись entry "Переключать всегда", если не
+// пропустит её клавиш keys - самой записи, набранной в другой раскладке. "ещё" там "to`": запись "to" - клавиши "ещ",
+// исключение "ещё" их не закрывает, "ещ" по-прежнему станет "to". Так решают и движок (ForcedCoveredBy), и окно настроек.
+inline bool Covers(const std::wstring& exception, const std::wstring& entry, const std::wstring& keys) {
+	return Excepted(keys, entry, { exception });
+}
+
 // Записи "Переключать всегда", по которым переключено typed - there, которые закроет исключение word, когда слово уйдёт в
-// "Не переключать" (одно слово - один список: они уйдут оттуда; WinnyS на форуме, 26.10.2026). Клавиши записи - буквы
-// того, что там (со знаками по краям - всё слово), и исключение их не пропустит. "ещё" там "to`": запись "to" - клавиши
-// "ещ", исключение "ещё" их не закрывает - она остаётся.
+// "Не переключать" (они уйдут оттуда). Клавиши записи - буквы того, что там; со знаками по краям - вся запись ("4pda",
+// ".NET"), а совпала она без своей точки ("уес" - "etc" по "etc.") - её клавиш не набрано, исключение их не закроет:
+// "уесю" по-прежнему станет "etc.".
 inline std::vector<std::wstring> ForcedCoveredBy(const std::wstring& typed, const std::wstring& there, const std::wstring& word,
                                                  const std::vector<std::wstring>& forced) {
 	std::vector<std::wstring> covered;
+	if (typed.size() != there.size()) return covered; // клавиша - знак (TailText): иначе клавиш записи не найти
 	const Part a = Letters(there);
 	for (const auto& f : forced) {
 		if (!Forced(typed, there, { f })) continue;
-		const bool whole = Signed(f) || typed.size() != there.size();
-		const std::wstring t = whole ? typed : typed.substr(a.begin, a.end - a.begin);
-		const std::wstring h = whole ? there : there.substr(a.begin, a.end - a.begin);
-		if (Excepted(t, h, { word })) covered.push_back(f);
+		size_t b = a.begin, e = a.end;
+		if (Signed(f)) {
+			const SignedSpan s = FindSigned(f, there);
+			if (!s.full) continue;
+			b = s.begin;
+			e = s.end;
+		}
+		if (Covers(word, there.substr(b, e - b), typed.substr(b, e - b))) covered.push_back(f);
 	}
 	return covered;
 }

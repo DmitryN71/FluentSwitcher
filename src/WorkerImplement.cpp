@@ -1086,7 +1086,15 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
     }
     LOG_ANY(L"autoswitch: {} switched back", last.word);
     Journal("switched back", last.there, last.typed);
-    PostWord(WM_AutoSwitchLearn, last.word);
+    // Переключено по записи "Переключать всегда" - и она: уйдёт слово в "Не переключать" - запись уйдёт из того списка
+    // (одно слово - один список; WinnyS на форуме, 26.10.2026). "слово\tзапись".
+    std::wstring learn = last.word;
+    for (const auto& f : AutoSwitchForced())
+        if (AutoSwitch::Forced(last.wordTyped, last.wordThere, { f })) {
+            learn += L'\t' + f;
+            break;
+        }
+    PostWord(WM_AutoSwitchLearn, learn);
     m_lastUndo = { .word = last.word, .at = GetTickCount64() };
     if (undo && span) *undo = { .tail = keys, .retro = 0, .all = true, .from = last.from, .to = last.to };
     return true;

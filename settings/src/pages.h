@@ -52,6 +52,9 @@ private:
     // The counts of the lists' cards from m_edit again (after the window of a list, after Apply took the words the
     // engine learned meanwhile).
     void RefillWordLists();
+    // A word just added to "Не переключать" or "Переключать всегда" leaves the other (one word - one list); the line to
+    // show at the bottom, or nothing.
+    wxString LeaveOtherList(WordKind kind, const wxArrayString& was, const wxArrayString& now);
     // The words the engine learned while this window is open: into what it shows and into what it read (no change of
     // its own). When the window comes to the front and before a list opens.
     void TakeLearnedNow();

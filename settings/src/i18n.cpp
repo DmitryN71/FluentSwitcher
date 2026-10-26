@@ -366,6 +366,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Слово попадает сюда и само – после третьей отмены автопереключения, с отметкой «выучено»",
           "A word also gets here by itself, after the automatic switch is undone the third time, marked \"learned\"" },
         { "Переключать всегда", "Always switch" },
+        { "Убрано из «%s»: %s", "Removed from \"%s\": %s" },
         { "Даже если словарь их не знает или это одна буква: the, a",
           "Even when the dictionary does not know them or it is one letter: the, a" },
         { "Пишите слово в том виде, какой нужен: the – и набранное «еру» станет the, a – и «ф» станет a. Слово в "

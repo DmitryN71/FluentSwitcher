@@ -1453,6 +1453,7 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
                 TakeLearnedNow();
                 const nlohmann::json& file = std::as_const(m_edit).Json();
                 WordListWords list{ JsonWords(file, key, defaults), LearnedWords(file, key) };
+                const wxArrayString was = list.words;
                 if (!EditWordList(this, kind, title, help, SwitchLayouts(m_edit), &list))
                     return;
                 nlohmann::json words = nlohmann::json::array(), learned = nlohmann::json::array();
@@ -1471,13 +1472,100 @@ void SettingsFrame::WordList(const char* key, WordKind kind, const wxString& tit
                     if (out["learned"].empty())
                         out.erase("learned");
                 }
+                const wxString left = LeaveOtherList(kind, was, list.words);
                 Changed();
                 RefillWordLists();
+                if (!left.empty())
+                    SetStatus(left, false);
             });
             return edit;
         });
     CardTip(label, tip);
     m_wordLists.push_back({ key, kind, defaults, about, label });
+}
+
+// One word - one list (WinnyS on the forum, 26.10.2026: a word in both "Не переключать" and "Переключать всегда" - which
+// wins? "Не переключать", and the other one was dead): a word just added to one of the two leaves the other, in any of its
+// layouts (cv - and "см"). `was`, `now` - the list before and after its window. Returns the line for the bottom of the
+// window, or nothing.
+wxString SettingsFrame::LeaveOtherList(WordKind kind, const wxArrayString& was, const wxArrayString& now)
+{
+    if (kind != WordKind::Never && kind != WordKind::Always)
+        return wxString();
+    const char* otherKey = kind == WordKind::Never ? "autoswitch_force" : "autoswitch_exceptions";
+    wxArrayString otherDefaults;
+    for (const WordListOnPage& list : m_wordLists)
+        if (std::string_view(list.key) == otherKey)
+            otherDefaults = list.defaults;
+    // Lower case in every alphabet (CharLowerBuffW, as the engine): "СМ" and "см" are one word.
+    auto lower = [](const wxString& s) {
+        std::wstring w = s.ToStdWstring();
+        if (!w.empty())
+            CharLowerBuffW(w.data(), (DWORD)w.size());
+        return w;
+    };
+    const std::vector<HKL> layouts = SwitchLayouts(m_edit);
+    auto same = [&](const wxString& a, const wxString& b) {
+        if (lower(a) == lower(b))
+            return true;
+        for (const wxString& form : OtherForms(a, layouts))
+            if (lower(form) == lower(b))
+                return true;
+        return false;
+    };
+    wxArrayString added;
+    for (const wxString& w : now)
+    {
+        bool before = false;
+        for (const wxString& o : was)
+            before = before || lower(o) == lower(w);
+        if (!before)
+            added.Add(w);
+    }
+    if (added.empty())
+        return wxString();
+    nlohmann::json& out = m_edit.Json();
+    nlohmann::json kept = nlohmann::json::array();
+    wxArrayString removed;
+    for (const wxString& o : JsonWords(out, otherKey, otherDefaults))
+    {
+        bool hit = false;
+        for (const wxString& a : added)
+            hit = hit || same(a, o) || same(o, a);
+        if (hit)
+            removed.Add(o);
+        else
+            kept.push_back(o.utf8_string());
+    }
+    if (removed.empty())
+        return wxString();
+    out[otherKey] = kept;
+    if (out.contains("learned") && out["learned"].is_object() && out["learned"].contains(otherKey) &&
+        out["learned"][otherKey].is_array())
+    {
+        nlohmann::json marks = nlohmann::json::array();
+        for (const auto& m : out["learned"][otherKey])
+        {
+            bool gone = false;
+            for (const wxString& r : removed)
+                gone = gone || (m.is_string() && wxString::FromUTF8(m.get<std::string>()) == r);
+            if (!gone)
+                marks.push_back(m);
+        }
+        if (!marks.empty())
+            out["learned"][otherKey] = marks;
+        else
+        {
+            out["learned"].erase(otherKey);
+            if (out["learned"].empty())
+                out.erase("learned");
+        }
+    }
+    wxString words;
+    for (const wxString& r : removed)
+        words += (words.empty() ? wxString() : wxString(", ")) + wxString::Format(T("«%s»"), r);
+    return wxString::Format(T("Убрано из «%s»: %s"), kind == WordKind::Never ? T("Переключать всегда") : T("Не переключать"),
+                            words);
 }
 
 // Forum, WinnyS, 11.10.2026: a note said a word went into "Переключать всегда", and the open window did not show it - it

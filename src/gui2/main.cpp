@@ -315,14 +315,24 @@ void StartGui() {
 				// Слово вернули сразу после автопереключения. Как у ДВух ЗАглавных: на третий раз - в исключения
 				// автопереключения; на второй - предупредить (вернули по ошибке - исправить снова в 10 с: не в счёт,
 				// WorkerImplement::TakeHandFix).
-				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
-				LOG_ANY(L"autoswitch: {} switched back", *word);
-				countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions", *word,
-				            "\"{}\" will not be switched any more",
-				            "It is in the exceptions of the layout auto switch: Settings, Auto switch",
-				            "Once more and \"{}\" will not be switched any more",
-				            "You switched it back for the second time. By mistake? Fix it again within 10 seconds");
-				saveWord("autoswitch_exceptions", *word);
+				// "слово\tзапись": переключено по записи "Переключать всегда" - слово ушло в исключения, и запись уходит оттуда:
+				// одно слово - один список (WinnyS на форуме, 26.10.2026: слово было бы в обоих, и исключение - главнее).
+				std::unique_ptr<std::wstring> message(reinterpret_cast<std::wstring*>(lParam));
+				const size_t tab = message->find(L'\t');
+				const std::wstring word = message->substr(0, tab);
+				const std::wstring forced = tab == std::wstring::npos ? std::wstring() : message->substr(tab + 1);
+				LOG_ANY(L"autoswitch: {} switched back", word);
+				const bool learned = countToList(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions,
+				                                 "autoswitch_exceptions", word, "\"{}\" will not be switched any more",
+				                                 "It is in the exceptions of the layout auto switch: Settings, Auto switch",
+				                                 "Once more and \"{}\" will not be switched any more",
+				                                 "You switched it back for the second time. By mistake? Fix it again within 10 seconds");
+				saveWord("autoswitch_exceptions", word);
+				if (learned && !forced.empty() && std::erase(conf_gui()->autoswitch_force, StrUtils::Convert(forced))) {
+					std::erase(conf_gui()->learned["autoswitch_force"], StrUtils::Convert(forced));
+					LOG_ANY(L"autoswitch: {} left Always switch for the exceptions", forced);
+					saveWord("autoswitch_force", forced);
+				}
 				return 0;
 			}
 

@@ -89,9 +89,28 @@ public:
         if (!mouse_flag_set.empty()) mouse_flag_set = renamed(mouse_flag_set); // пусто - как у текстового курсора
         if (mouse_flag_set == showFlags_AppIcon || mouse_flag_set == showFlags_Nothing) mouse_flag_set = flags_Default;
     }
-    // Программа впереди - из autoswitch_off: автопереключения там нет (WorkerImplement: AutoSwitchLastWord, AutoSwitchEarly;
-    // IsCodeEditor - без записи в журнал: то же слово его уже записало).
+    // Впереди - окно самого FluentSwitcher (настройки и окна их списков - тот же FluentSwitcher.exe, --settings): слова там
+    // набирают как есть - "ghbdtn" в "Не переключать", "ДВе" в исключения ДВух ЗАглавных, - их не переключают и не
+    // исправляют (Дмитрий, 26.10.2026: набирал в окне списка - переключилось).
+    static bool OwnWindowTop() {
+        const DWORD pid = Utils::GetFocusedWndInfo().pid_top;
+        if (pid == GetCurrentProcessId()) return true;
+        static const std::wstring self = [] {
+            std::wstring path, name;
+            Utils::GetProcLowerNameByPid(GetCurrentProcessId(), path, name);
+            return path;
+        }();
+        std::wstring path, name;
+        return !self.empty() && Utils::GetProcLowerNameByPid(pid, path, name) == SW_ERR_SUCCESS && path == self;
+    }
+    // Программа впереди - из autoswitch_off или сам FluentSwitcher (OwnWindowTop): автопереключения там нет
+    // (WorkerImplement: AutoSwitchLastWord, AutoSwitchEarly; IsCodeEditor - без записи в журнал: то же слово его уже
+    // записало).
     bool IsAutoSwitchOffTop(bool log = true) const {
+        if (OwnWindowTop()) {
+            if (log) LOG_ANY(L"No automatic switch in FluentSwitcher's own windows");
+            return true;
+        }
         if (autoswitch_off.empty()) return false;
         std::wstring path, name;
         if (Utils::GetProcLowerNameByPid(Utils::GetFocusedWndInfo().pid_top, path, name) != SW_ERR_SUCCESS || name.empty())

@@ -1126,7 +1126,8 @@ void WorkerImplement::AutoWordEnd() {
 
 void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
     GETCONF;
-    if ((!cfg->two_caps && !cfg->fix_lone_i) || !KeyHold::Allowed(m_holdId) || cfg->IsSkipProgramTop() || IsPasswordFocus())
+    if ((!cfg->two_caps && !cfg->fix_lone_i) || !KeyHold::Allowed(m_holdId) || cfg->IsSkipProgramTop() || IsPasswordFocus() ||
+        ProgramConfig::OwnWindowTop())
         return;
     // Это слово исправили на знаке после него, и исправление отменили: так и оставить - иначе пробел или Enter исправили
     // бы его снова.

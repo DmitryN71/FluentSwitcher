@@ -803,6 +803,19 @@ inline bool ExceptedEarly(const std::wstring& typed, const std::wstring& there,
 	return false;
 }
 
+// Набранное - начало более длинного слова из исключений, в любой из двух форм: слово из "Переключать всегда" сразу, как
+// набрано, не переключать - может, набирают то, из исключений ("Uhfylt" там, "Uhfyltt" здесь; Дмитрий, 26.10.2026).
+inline bool ExceptionAhead(const std::wstring& typed, const std::wstring& there,
+                           const std::vector<std::wstring>& exceptions) {
+	const std::wstring tl = Lower(Letters(typed).core), al = Lower(Letters(there).core);
+	for (const auto& e : exceptions) {
+		const std::wstring el = Lower(Letters(e).core);
+		for (const std::wstring* w : { &tl, &al })
+			if (!w->empty() && el.size() > w->size() && el.compare(0, w->size(), *w) == 0) return true;
+	}
+	return false;
+}
+
 // Решение посреди слова. typed - набранное с начала слова, there - те же клавиши в другой раскладке; minLetters - с
 // какой буквы можно переключать: kEarlyMin, после щелчка или стрелок в том же окне на одну больше (могли дописывать
 // середину слова). knownTyped(буквы) - набранное - слово или начало слова своего языка (не знаем - да: не трогать);

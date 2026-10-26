@@ -816,9 +816,10 @@ void WorkerImplement::AutoSwitchEarly() {
         // Слово из "Переключать всегда" набрано целиком - сейчас, не дожидаясь пробела, если так не начинается ни одно
         // слово своего языка. Правило ниже смотрит и на букву раньше, а "рее" - начало "реестр": выученное "http"
         // ("реез") переключалось только на пробеле (Дмитрий 07.10). Прописные - как с заглавной: "АИЩ" словарь считает
-        // словом, и выученное FBO ждало пробела (Дмитрий, 22.10.2026; WordStart::TypedEvenCaps).
+        // словом, и выученное FBO ждало пробела (Дмитрий, 22.10.2026; WordStart::TypedEvenCaps). Начало более длинного
+        // слова из "Не переключать" - тоже ждёт пробела (ExceptionAhead).
         const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
-            !AutoSwitch::Excepted(typed, there, exceptions) &&
+            !AutoSwitch::Excepted(typed, there, exceptions) && !AutoSwitch::ExceptionAhead(typed, there, exceptions) &&
             !WordStart::TypedEvenCaps(AutoSwitch::Letters(typed).core, lang);
         auto verdict = forcedWhole ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
             : !cfg->autoswitch_early ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Never, "a word of Always switch only" }

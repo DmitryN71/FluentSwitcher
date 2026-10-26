@@ -24,9 +24,10 @@ class SettingsFrame : public wxFrame
 {
 public:
     // folder: where FluentSwitcher.exe and its FluentSwitcher.json are. enginePid: a test engine, 0 = the
-    // one in `folder`. loadError: the config could not be read (shown; OK and Apply do not save then).
+    // one in `folder`. loadError: the config could not be read (shown; OK and Apply do not save then). section: the one
+    // to open on; -1 - the one it was closed on (RestorePlacement).
     SettingsFrame(const Config& config, const wxString& folder, unsigned long enginePid, const wxString& loadError,
-                  int section = 0);
+                  int section = -1);
 
 private:
     // Pages and cards.
@@ -124,6 +125,8 @@ private:
     bool HasChanges() const;
     // The window's place and size from the last time ("settings_window"); false - none or off the screens now.
     bool RestorePlacement();
+    // The section it was closed on ("settings_window" too), 0 - none.
+    int LastSection() const;
     void SavePlacement();
     // reopen: a new language or theme opens the window again in it (Apply); false - the window is closing (Сохранить)
     // or busy otherwise, the new look comes with the next opening.

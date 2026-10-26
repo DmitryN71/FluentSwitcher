@@ -235,8 +235,9 @@ public:
 	// 06.10.2026: слово исправляли обе копии). С 06.10 по 09.10.2026 молчали всегда - форум (Ivan_Strelec): работать
 	// по удалённым подключениям, как обычно.
 	bool work_in_remote = true;
-	// Место и размер окна настроек ("left,top,right,bottom,maximized" - settings/src/pages.cpp, RestorePlacement). Движок
-	// его только хранит: без поля в ProgramConfig его запись файла стирала бы его.
+	// Место и размер окна настроек и раздел, на котором его закрыли ("left,top,right,bottom,maximized,section" -
+	// settings/src/pages.cpp, RestorePlacement). Движок его только хранит: без поля в ProgramConfig его запись файла
+	// стирала бы его.
 	string settings_window;
 	// FluentSwitcher выключили (Win+F8, меню у значка, окно настроек) - после перезапуска он остаётся выключенным (форум,
 	// gutasiho, 10.10.2026). Пишет движок, когда его включают или выключают (gui2/main.cpp, WM_EnabledChanged); окно

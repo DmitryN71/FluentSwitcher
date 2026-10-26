@@ -4,7 +4,8 @@
 //   FluentSwitcher.exe --settings              the settings of the engine in this folder
 //   --config=<FluentSwitcher.json>             another copy's settings (the engine looked for is in that folder)
 //   --engine-pid=<pid>                         that engine process exactly (tests)
-//   --section=<n>                              open on that section (0 = the first)
+//   --section=<n>                              open on that section (0 = the first); without it - on the one it
+//                                              was closed on
 //   --replace-pid=<pid>                        the window restarting itself (a new language or theme): that process's
 //                                              window stays until this one is on the screen, then this one closes it
 //
@@ -123,8 +124,9 @@ public:
         }
         unsigned long pid = 0;
         enginePid.ToULong(&pid);
-        long first = 0;
-        section.ToLong(&first);
+        long first = -1; // the section it was closed on
+        if (!section.empty())
+            section.ToLong(&first);
 
         SetAppDisplayName("FluentSwitcher"); // the title of AskFluent
 

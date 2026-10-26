@@ -1124,7 +1124,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
             RefillWordLists();
             SetStatus(dropped, false); // Apply - to keep it
         }
-    ShowSection(section);
+    ShowSection(section >= 0 ? section : LastSection());
     // Not narrower than the widest page: the pages scroll only up and down, and a card cut at the right edge hid its
     // switch or button (Dmitry, 11.10.2026). The height - for the search, the eleven sections and "Закрыть FluentSwitcher"
     // under them.
@@ -1148,8 +1148,20 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
 
 // The window's place and size (forum, 09.10.2026, AlexPORTrb: "чтобы окно настроек запоминало размер и положение"):
 // "settings_window" in FluentSwitcher.json - its normal rectangle (GetWindowPlacement: workspace coordinates, screen
-// points) and whether it was maximized, "left,top,right,bottom,maximized". Written on closing, this field alone, into
-// the file as it is on the disk then: what the window did not save stays unsaved. The engine keeps it (Settings.h).
+// points) and whether it was maximized, and the section it was on (Dmitry, 26.10.2026: as in FluentClipper, it opens
+// where it was closed), "left,top,right,bottom,maximized,section" (until 1.5.19 without the section: the first one).
+// Written on closing, this field alone, into the file as it is on the disk then: what the window did not save stays
+// unsaved. The engine keeps it (Settings.h).
+int SettingsFrame::LastSection() const
+{
+    wxStringTokenizer parts(m_saved.GetString("settings_window", wxString()), ",");
+    long section = 0;
+    for (int i = 0; i < 6; i++)
+        if (!parts.HasMoreTokens() || !parts.GetNextToken().ToLong(&section))
+            return 0;
+    return (int)section; // ShowSection: one that is not there - the first
+}
+
 bool SettingsFrame::RestorePlacement()
 {
     long v[5] = {};
@@ -1181,7 +1193,8 @@ void SettingsFrame::SavePlacement()
     const bool maximized = wp.showCmd == SW_SHOWMAXIMIZED ||
                            (wp.showCmd == SW_SHOWMINIMIZED && (wp.flags & WPF_RESTORETOMAXIMIZED));
     const RECT& r = wp.rcNormalPosition;
-    const wxString value = wxString::Format("%ld,%ld,%ld,%ld,%d", r.left, r.top, r.right, r.bottom, maximized ? 1 : 0);
+    const wxString value =
+        wxString::Format("%ld,%ld,%ld,%ld,%d,%d", r.left, r.top, r.right, r.bottom, maximized ? 1 : 0, m_section);
     if (value == m_saved.GetString("settings_window", wxString()) || !wxFileExists(m_saved.Path()))
         return;
     ConfigLock lock;

@@ -39,6 +39,9 @@ void StartGui() {
 		ULONGLONG at = 0;
 	};
 	std::map<std::string, Learned> lastLearned; // по имени списка: слово, которое только что ушло туда (uncount)
+	// Слово ушло в исключения - запись "Переключать всегда", ушедшая оттуда с ним, и была ли у неё отметка "выучено": взяли
+	// это назад (uncount - 2) - она возвращается.
+	std::map<std::string, std::pair<std::string, bool>> leftForced;
 	auto countToList = [&](std::map<std::string, int>& counts, std::vector<std::string>& list, const char* name,
 	                       const std::wstring& word, const char* title, const char* text, const char* warnTitle = nullptr,
 	                       const char* warnText = nullptr) {
@@ -328,8 +331,12 @@ void StartGui() {
 				                                 "Once more and \"{}\" will not be switched any more",
 				                                 "You switched it back for the second time. By mistake? Fix it again within 10 seconds");
 				saveWord("autoswitch_exceptions", word);
-				if (learned && !forced.empty() && std::erase(conf_gui()->autoswitch_force, StrUtils::Convert(forced))) {
-					std::erase(conf_gui()->learned["autoswitch_force"], StrUtils::Convert(forced));
+				const std::string entry = StrUtils::Convert(forced);
+				auto& marks = conf_gui()->learned["autoswitch_force"];
+				const bool marked = std::ranges::find(marks, entry) != marks.end();
+				if (learned && !forced.empty() && std::erase(conf_gui()->autoswitch_force, entry)) {
+					std::erase(marks, entry);
+					leftForced[StrUtils::Convert(word)] = { entry, marked };
 					LOG_ANY(L"autoswitch: {} left Always switch for the exceptions", forced);
 					saveWord("autoswitch_force", forced);
 				}
@@ -374,9 +381,23 @@ void StartGui() {
 				// Отмену тут же исправили обратно ("Shift дважды" по привычке после автопереключения, потом ещё раз): переключение
 				// было верным - отмена не в счёт.
 				std::unique_ptr<std::wstring> word(reinterpret_cast<std::wstring*>(lParam));
-				if (uncount(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions", *word)) {
+				const int undone = uncount(conf_gui()->autoswitch_undo, conf_gui()->autoswitch_exceptions, "autoswitch_exceptions",
+				                           *word);
+				if (undone) {
 					LOG_ANY(L"autoswitch: {} fixed again after switching back, not counted", *word);
 					saveWord("autoswitch_exceptions", *word);
+				}
+				// Слово вышло из исключений (третий возврат взяли назад) - запись "Переключать всегда", ушедшая с ним, - обратно,
+				// с отметкой "выучено", если была.
+				if (const auto it = leftForced.find(StrUtils::Convert(*word)); undone == 2 && it != leftForced.end()) {
+					const auto [entry, marked] = it->second;
+					leftForced.erase(it);
+					auto& list = conf_gui()->autoswitch_force;
+					if (std::ranges::find(list, entry) == list.end()) list.push_back(entry);
+					auto& marks = conf_gui()->learned["autoswitch_force"];
+					if (marked && std::ranges::find(marks, entry) == marks.end()) marks.push_back(entry);
+					LOG_ANY("autoswitch: {} is back in Always switch", entry);
+					saveWord("autoswitch_force", StrUtils::Convert(entry));
 				}
 				return 0;
 			}

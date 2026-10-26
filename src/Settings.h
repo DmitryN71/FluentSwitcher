@@ -91,9 +91,13 @@ public:
     }
     // Впереди - окно самого FluentSwitcher (настройки и окна их списков - тот же FluentSwitcher.exe, --settings): слова там
     // набирают как есть - "ghbdtn" в "Не переключать", "ДВе" в исключения ДВух ЗАглавных, - их не переключают и не
-    // исправляют (Дмитрий, 26.10.2026: набирал в окне списка - переключилось).
+    // исправляют (Дмитрий, 26.10.2026: набирал в окне списка - переключилось). Кроме поля, где набирают обычный текст, -
+    // поиска по настройкам: окно ставит ему свойство "FluentSwitcher.AutoSwitch" (settings/src/textfield.h,
+    // AllowAutoSwitch), там - как везде.
     static bool OwnWindowTop() {
-        const DWORD pid = Utils::GetFocusedWndInfo().pid_top;
+        const auto info = Utils::GetFocusedWndInfo();
+        if (info.hwnd_top && GetPropW(info.hwnd_top, L"FluentSwitcher.AutoSwitch")) return false;
+        const DWORD pid = info.pid_top;
         if (pid == GetCurrentProcessId()) return true;
         static const std::wstring self = [] {
             std::wstring path, name;

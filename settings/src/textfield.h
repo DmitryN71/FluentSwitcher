@@ -5,6 +5,7 @@
 #include "fluent_ui.h"
 
 #include <wx/dcbuffer.h>
+#include <wx/msw/wrapwin.h> // SetPropW: AllowAutoSwitch
 #include <wx/textctrl.h>
 
 #include <functional>
@@ -74,6 +75,18 @@ public:
     wxString Value() const { return m_text->GetValue(); }
     void Clear() { m_text->Clear(); } // onChange too
     void SetHint(const wxString& hint) { m_text->SetHint(hint); }
+    // The engine switches the layout of a word in this box as in any other program (the search of the settings). In its
+    // other boxes it does not: words are typed into the lists as they are, "ghbdtn" too (Settings.h, OwnWindowTop - the
+    // name of the property is the same there).
+    void AllowAutoSwitch()
+    {
+        const HWND hwnd = (HWND)m_text->GetHWND();
+        SetPropW(hwnd, L"FluentSwitcher.AutoSwitch", (HANDLE)1);
+        m_text->Bind(wxEVT_DESTROY, [hwnd](wxWindowDestroyEvent& e) {
+            RemovePropW(hwnd, L"FluentSwitcher.AutoSwitch");
+            e.Skip();
+        });
+    }
     // An icon at the right end, grey: the magnifier of the search, as in Windows' own Settings (a Fluent path).
     void SetIcon(const char* path)
     {

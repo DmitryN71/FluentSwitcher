@@ -921,6 +921,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     // The search above the sections, as in Windows' own Settings: the results replace the page while it has text.
     m_search = new TextField(this, wxString(), 160, true, 100);
     m_search->SetHint(T("Найти параметр"));
+    m_search->AllowAutoSwitch(); // a query, not a word for a list (Dmitry, 26.10.2026)
     m_search->SetIcon(kIconSearch);
     m_search->onChange = [this] { Search(); };
     m_search->onEnter = [this] {

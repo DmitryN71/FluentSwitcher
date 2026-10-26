@@ -85,12 +85,23 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
     switch (key.type) {
         case KEYTYPE_BACKSPACE: {
             // Опечатку поправили в набираемом слове - оно проверяется как обычно: буфер стёр ту же букву (Дмитрий,
-            // 13.10.2026: "афсс", Backspace, "удшаею" - "facelift." не переключалось никогда). Не проверяется слово, где
-            // Backspace стёр больше него (пробел, слово перед ним: на экране может быть не то, что в буфере), или то, что
-            // движок в нём уже переключил посреди набора (стирают, может быть, его ошибку).
+            // 13.10.2026: "афсс", Backspace, "удшаею" - "facelift." не переключалось никогда). Стирают то, что движок
+            // переключил, - посреди этого слова или раньше (клавиша из переключённых: Total до неё в их пределах), -
+            // исправляют, может быть, его ошибку: это слово не проверяется. Стёрли больше слова, но не его (пробел, своё
+            // слово перед ним, выделенный адрес в браузере): на экране может быть не то, что в буфере, - как после щелчка,
+            // спросить поле, что перед курсором (WorldTroll на форуме, 26.10.2026: стёр адрес Backspace - первое слово до
+            // пробела не переключалось).
             const bool inWord = !m_cycleList.TrailingWordKeys().empty();
             const bool switchedHere = m_autoSwitched.early && m_autoSwitched.ends == m_wordEnds;
-            if (!inWord || switchedHere) m_autoWord.backspace = true;
+            const size_t total = m_cycleList.Total();
+            const bool intoSwitched = m_cycleList.Size() > 0 && !m_autoSwitched.word.empty() &&
+                total <= m_autoSwitched.total && total + m_autoSwitched.span > m_autoSwitched.total;
+            if (switchedHere || intoSwitched)
+                m_autoWord.backspace = true;
+            else if (!inWord) {
+                m_autoWord.moved = true;
+                m_autoWord.boundary = -1;
+            }
             m_cycleList.DeleteLastSymbol();
             break;
         }
@@ -469,7 +480,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
     };
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return no("a password, a console or an excluded program", false);
-    if (m_autoWord.backspace) return no("Backspace past the word or in what was switched in it");
+    if (m_autoWord.backspace) return no("Backspace in what was switched");
     if (m_autoWord.undone) return no("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
@@ -741,7 +752,7 @@ void WorkerImplement::AutoSwitchEarly() {
     if (!cfg->autoswitch || !KeyHold::Allowed(m_holdId)) return never("off or too late");
     if (cfg->IsSkipProgramTop() || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop())
         return never("a password, a console or an excluded program");
-    if (m_autoWord.backspace) return never("Backspace past the word or in what was switched in it");
+    if (m_autoWord.backspace) return never("Backspace in what was switched");
     if (m_autoWord.undone) return never("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();

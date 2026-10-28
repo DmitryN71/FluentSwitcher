@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -88,6 +89,65 @@ inline std::string_view Word(const List& l, uint32_t start) {
 	if (!w.empty() && w.back() == '\r') w.remove_suffix(1); // список с переводами строк Windows
 	return w;
 }
+
+// Номер буквы в таблицах сочетаний (Combos): 0 - край слова, русские и украинские буквы, латиница; не буква - -1.
+inline int LetterIndex(wchar_t c) {
+	c = (wchar_t)(UINT_PTR)CharLowerW((LPWSTR)(UINT_PTR)c);
+	if (c == L'ё') c = L'е';
+	if (c >= L'а' && c <= L'я') return 1 + (c - L'а'); // 1..32
+	switch (c) {
+	case L'і': return 33;
+	case L'ї': return 34;
+	case L'є': return 35;
+	case L'ґ': return 36;
+	}
+	if (c >= L'a' && c <= L'z') return 37 + (c - L'a'); // 37..62
+	return -1;
+}
+
+// Во скольких словах списка есть каждое сочетание двух и трёх букв (с краями слова: "^ф", "щк$").
+struct Combos {
+	static constexpr size_t kLetters = 64;
+	std::vector<uint32_t> two = std::vector<uint32_t>(kLetters * kLetters);
+	std::vector<uint32_t> three = std::vector<uint32_t>(kLetters * kLetters * kLetters);
+};
+}
+
+// Сочетания букв языка - по полному списку его слов (AutoSwitch::Implausible): строятся при первом вопросе (на русском
+// списке - доли секунды; WorkerImplement::WarmUpEarly - заранее). Нет списка - nullptr.
+inline const impl::Combos* Combos(const std::wstring& language) {
+	static std::map<std::wstring, std::unique_ptr<impl::Combos>> all;
+	const impl::List* l = impl::For(language);
+	if (!l) return nullptr;
+	auto& combos = all[Lower(language.substr(0, 2))];
+	if (!combos) {
+		combos = std::make_unique<impl::Combos>();
+		constexpr size_t n = impl::Combos::kLetters;
+		std::wstring w;
+		std::vector<int> index;
+		std::vector<size_t> two, three;
+		for (uint32_t start : l->starts) {
+			const std::string_view u = impl::Word(*l, start);
+			w.resize(MultiByteToWideChar(CP_UTF8, 0, u.data(), (int)u.size(), nullptr, 0));
+			MultiByteToWideChar(CP_UTF8, 0, u.data(), (int)u.size(), w.data(), (int)w.size());
+			index.assign(1, 0);
+			for (wchar_t c : w) index.push_back(impl::LetterIndex(c));
+			index.push_back(0);
+			if (std::ranges::find(index, -1) != index.end()) continue;
+			// Каждое сочетание - раз на слово.
+			two.clear();
+			three.clear();
+			for (size_t i = 0; i + 1 < index.size(); i++) two.push_back(index[i] * n + index[i + 1]);
+			for (size_t i = 0; i + 2 < index.size(); i++) three.push_back((index[i] * n + index[i + 1]) * n + index[i + 2]);
+			for (auto* v : { &two, &three }) {
+				std::ranges::sort(*v);
+				v->erase(std::unique(v->begin(), v->end()), v->end());
+			}
+			for (size_t g : two) combos->two[g]++;
+			for (size_t g : three) combos->three[g]++;
+		}
+	}
+	return combos.get();
 }
 
 // Есть ли списки для языка (заодно - загрузить их заранее).

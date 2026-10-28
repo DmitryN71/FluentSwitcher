@@ -22,6 +22,8 @@
 //     одной буквой: "еру" (для словаря - русское слово) станет the, "ф" - a.
 //   - слово с Ы, Ь в начале, где словарь там его не знает, - и так, если только это не опечатка своего (NotRussian):
 //     "Ыфин" - Saby;
+//   - и слово, где словарь там его не знает, но в набранном много сочетаний букв, каких в своём языке почти нет, а там -
+//     мало (Implausible): "ФЗЛЬшккщк" - APKMirror, "Вшфвщс" - Diadoc;
 //   - слово через дефис, у которого не в той раскладке только часть после дефиса, - она одна (HyphenTail):
 //     "legacy-yfcnhjqrb" - "legacy-настройки".
 // Знаки по краям ("vs/" -> "мы.", "[jxe" -> "хочу") не мешают: проверяется буквенная часть, а перепечатываются
@@ -35,6 +37,7 @@
 #include "TwoCaps.h"
 #include "WinDictionary.h"
 #include "ShortWords.h"
+#include "WordStart.h"
 
 #include <algorithm>
 #include <string>
@@ -674,6 +677,79 @@ inline bool NotRussian(const std::wstring& typed, const std::wstring& there, con
 				const std::wstring sl = Lower(s);
 				if (!sl.empty() && sl.front() == g.front() && sl.back() == g.back() && OneEditApart(g, sl)) return false;
 			}
+	return true;
+}
+
+// ----- Сочетания букв, каких в языке нет -----
+// Набранное - не слово своего языка, и там не слово: название, имя, сокращение со словом - "ФЗЛЬшккщк" - APKMirror,
+// "ФЗЛЗгку" - APKPure, "Вшфвщс" - Diadoc, "ГтшпуеГШ" - UnigetUI, "Vjcvtnhj" - "Мосметро" (Дмитрий, 28.10.2026: "у Caramba
+// Switcher они бы переключились, а у нас нет"). Но в набранном много сочетаний букв, каких в своём языке почти нет ("^фз",
+// "ккщ", "кщк"), а там - мало: переключать. Сочетания - по полным спискам слов (WordStart::Combos), с краями слова: пара
+// редкая, когда она меньше чем в двух словах списка (и считается за две), тройка - меньше чем в пяти. Переключать, когда
+// там таких не больше kImplausibleThere, а в набранном - больше на kImplausibleMargin и больше. Проверено на журнале
+// Дмитрия и частотных списках FrequencyWords (28.10.2026): из 18 слов "там не слово" - 15; из 324 тысяч слов, которых
+// нет в списках словаря (имена, сленг, опечатки), трогает около 60 - мусор субтитров ("унпньн") и иностранные слова
+// латиницей (lgbtq, atque, Yevhen).
+// Решает, только когда обычное правило отказалось - там не слово (WorkerImplement::AutoSwitchLastWord). Только между
+// кириллицей и латиницей, буква в букву, от пяти букв, без цифр и знаков внутри (знак после слова - можно, как в
+// NotRussian). Не трогает:
+//   - растянутое ("шшшшш", "сыыыр" - буква трижды подряд) и повторы слогов ("blblbl" - разных букв не больше половины);
+//   - опечатку своего: словарь предлагает слово на одну правку ("лучще" - "лучше", "мыщцы" - "мышцы").
+// Сленг своего языка ("гифки") не трогается и так: редких сочетаний в нём мало (здесь - три тройки).
+// spellTyped - словарь своего языка (и для прописных), suggestTyped - его подсказки.
+inline constexpr size_t kImplausibleMin = 5;
+inline constexpr int kImplausibleThere = 3, kImplausibleMargin = 4;
+
+// Сколько сочетаний букв слова язык почти не знает (см. выше); -1 - не его буквы или нет списка.
+inline int UnusualCombos(const std::wstring& word, const std::wstring& language) {
+	const auto* combos = WordStart::Combos(language);
+	if (!combos) return -1;
+	constexpr size_t n = WordStart::impl::Combos::kLetters;
+	std::vector<int> index{ 0 };
+	for (wchar_t c : word) {
+		const int i = WordStart::impl::LetterIndex(c);
+		if (i < 0) return -1;
+		index.push_back(i);
+	}
+	index.push_back(0);
+	int unusual = 0;
+	for (size_t i = 0; i + 1 < index.size(); i++)
+		if (combos->two[index[i] * n + index[i + 1]] < 2) unusual += 2;
+	for (size_t i = 0; i + 2 < index.size(); i++)
+		if (combos->three[(index[i] * n + index[i + 1]) * n + index[i + 2]] < 5) unusual++;
+	return unusual;
+}
+
+inline bool Implausible(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                        const std::wstring& thereLanguage, auto&& spellTyped, auto&& suggestTyped) {
+	if (typed.size() != there.size()) return false;
+	for (wchar_t c : typed)
+		if (iswdigit(c)) return false;
+	const Part t = Letters(typed), a = Letters(there);
+	if (t.inner || a.inner || a.core.size() < kImplausibleMin || a.begin != t.begin || a.end > t.end) return false;
+	for (size_t i = a.end; i < t.end; i++)
+		if (!wcschr(kTrailSigns, there[i])) return false;
+	// Кириллица с одной стороны, латиница - с другой (русская и украинская раскладки - почти одни клавиши).
+	const auto script = [](const std::wstring& s) {
+		const auto first = TwoCaps::ScriptOf(s[0]);
+		for (wchar_t c : s)
+			if (TwoCaps::ScriptOf(c) != first) return TwoCaps::Script::Other;
+		return first;
+	};
+	const auto st = script(t.core), sa = script(a.core);
+	if (st == TwoCaps::Script::Other || sa == TwoCaps::Script::Other || st == sa) return false;
+	const std::wstring l = Lower(t.core);
+	// Растянутое и повторы слогов.
+	std::wstring letters = l;
+	std::ranges::sort(letters);
+	if (2 * (size_t)(std::unique(letters.begin(), letters.end()) - letters.begin()) <= l.size()) return false;
+	for (size_t i = 2; i < l.size(); i++)
+		if (l[i] == l[i - 1] && l[i] == l[i - 2]) return false;
+	const int here = UnusualCombos(l, typedLanguage), away = UnusualCombos(Lower(a.core), thereLanguage);
+	if (here < 0 || away < 0 || away > kImplausibleThere || here - away < kImplausibleMargin) return false;
+	if (spellTyped(t.core) != SpellCheck::Result::NotWord) return false;
+	for (const auto& s : suggestTyped(t.core))
+		if (OneEditApart(l, Lower(s))) return false;
 	return true;
 }
 

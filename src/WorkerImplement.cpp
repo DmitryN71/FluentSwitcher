@@ -588,7 +588,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
         const bool known = !address && AutoSwitch::KnownShort(typed, there, lang, otherLang, spellEvenCaps);
         const bool force = (address || known || AutoSwitch::Forced(typed, there, forced)) &&
                            !AutoSwitch::Excepted(typed, there, exceptions);
-        bool foreign = false;
+        const char* foreign = nullptr; // там не слово, но набранное - не своего языка: почему (для журнала)
         auto shortWord = AutoSwitch::Short::No;
         if (!force) {
             // ПРОПИСНЫМИ от четырёх букв ("DJPVTPLBZ" - "ВОЗМЕЗДИЯ") - по слову с заглавной, не аббревиатура.
@@ -602,12 +602,16 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
             // Аббревиатура своего языка перед дефисом ("PHP-yt"): целиком - нет, разве что часть после дефиса (ниже).
             if (!why && AutoSwitch::OwnAbbreviationPart(typed, there, lang, otherLang))
                 why = "an abbreviation of its own language before a hyphen";
-            // Там не слово - но с Ы, Ь в начале по-русски не пишут ("Ыфин" - Saby; AutoSwitch::NotRussian). После щелчка
-            // или стрелок - если перед словом в поле не буква: могли дописывать середину слова.
-            if (why && strcmp(why, "not a word in the other layout") == 0 &&
-                AutoSwitch::NotRussian(typed, there, lang, otherLang, spellEvenCaps, suggestions(lay)) && afterBoundary()) {
-                why = nullptr;
-                foreign = true;
+            // Там не слово - но с Ы, Ь в начале по-русски не пишут ("Ыфин" - Saby; AutoSwitch::NotRussian), или в набранном
+            // много сочетаний букв, каких в своём языке нет, а там - мало ("ФЗЛЬшккщк" - APKMirror; AutoSwitch::Implausible).
+            // После щелчка или стрелок - если перед словом в поле не буква: могли дописывать середину слова.
+            if (why && strcmp(why, "not a word in the other layout") == 0) {
+                if (AutoSwitch::NotRussian(typed, there, lang, otherLang, spellEvenCaps, suggestions(lay)))
+                    foreign = "not a Russian word";
+                else if (AutoSwitch::Implausible(typed, there, lang, otherLang, spellEvenCaps, suggestions(lay)))
+                    foreign = "letters unusual for its language";
+                if (foreign && !afterBoundary()) foreign = nullptr;
+                if (foreign) why = nullptr;
             }
             // На знаке посреди набора: буква там стала знаком после редкого слова ("Нуцж" - "Yew;") - опечатка в своём слове,
             // которое пишут дальше, а не слово там. Языку без списков частых слов - не судим.
@@ -684,8 +688,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
         if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
         KeyHold::Claimed claimed{ m_holdId };
         LOG_ANY(L"autoswitch: {} -> {}{}", typed, there,
-                !force ? (foreign ? L" (not a Russian word)" : L"") : address ? L" (an address)" :
-                known ? L" (a known abbreviation)" : L" (switch always)");
+                !force ? (foreign ? L" (" + StrUtils::Convert(std::string(foreign)) + L")" : std::wstring()) :
+                address ? L" (an address)" : known ? L" (a known abbreviation)" : L" (switch always)");
         m_autoNo = {};
         // Переводятся те же клавиши, что проверены (слово до пробела), с короткими словами перед ним.
         const size_t first = retro ? begin : wordBegin;
@@ -709,7 +713,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
         m_lastSwitchedTyped = AutoSwitch::Lower(AutoSwitch::Letters(typed).core);
         m_lastSwitchedEarly = false;
         RememberSwitch(typed, there);
-        Journal("switched", from, to, foreign ? "not a Russian word" : "");
+        Journal("switched", from, to, foreign ? foreign : "");
         return true;
     }
     return false;
@@ -886,8 +890,11 @@ void WorkerImplement::AutoSwitchEarly() {
 
 void WorkerImplement::WarmUpEarly() {
     GETCONF;
+    if (!cfg->autoswitch) return;
+    // Сочетания букв (AutoSwitch::Implausible: слово, которого нет в словаре там) - таблицы заранее, а не на пробеле.
+    for (HKL l : cfg->layouts_info.EnabledLayouts()) WordStart::Combos(Utils::GetNameForHKL_simple(l));
     // Начала слов нужны и словам "Переключать всегда", набранным целиком (AutoSwitchEarly: "реез" - начало "реестр").
-    if (!cfg->autoswitch || (!cfg->autoswitch_early && cfg->autoswitch_force.empty())) return;
+    if (!cfg->autoswitch_early && cfg->autoswitch_force.empty()) return;
     for (HKL l : cfg->layouts_info.EnabledLayouts()) WordStart::Available(Utils::GetNameForHKL_simple(l));
 }
 

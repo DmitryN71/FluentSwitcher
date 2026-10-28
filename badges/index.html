@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цвет плашки с буквами – FluentSwitcher</title>
+<meta name="description" content="Варианты цвета плашки с буквами раскладки у текстового курсора в FluentSwitcher: выберите понравившиеся и напишите номера в теме на форуме.">
+<style>
+:root {
+  --bg: #f3f3f3; --card: #ffffff; --text: #1b1b1b; --muted: #5f5f5f; --line: #e1e1e1;
+  --accent: #0067c0; --accent-text: #ffffff; --chip: #f0f0f0;
+  --doc-light: #ffffff; --doc-light-text: #1b1b1b; --doc-light-line: #dcdcdc;
+  --doc-dark: #1f1f1f; --doc-dark-text: #e6e6e6; --doc-dark-line: #333333;
+  --bw: 30px; --bh: 21px; --bf: 12px; --br: 5px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #202020; --card: #2b2b2b; --text: #f0f0f0; --muted: #a8a8a8; --line: #3a3a3a;
+    --accent: #4cc2ff; --accent-text: #00243a; --chip: #343434;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #202020; --card: #2b2b2b; --text: #f0f0f0; --muted: #a8a8a8; --line: #3a3a3a;
+  --accent: #4cc2ff; --accent-text: #00243a; --chip: #343434;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 56px; }
+a { color: var(--accent); }
+h1 { font-size: 28px; line-height: 1.25; margin: 0 0 10px; font-weight: 600; }
+.lead { color: var(--muted); max-width: 760px; margin: 0 0 18px; }
+.cta {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px;
+  background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 600;
+}
+.bar {
+  display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; margin: 26px 0 18px;
+  padding: 12px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+}
+.seg { display: inline-flex; background: var(--chip); border-radius: 6px; padding: 3px; gap: 2px; }
+.seg button {
+  border: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px;
+  padding: 4px 12px; border-radius: 4px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--card); box-shadow: 0 0 0 1px var(--line); font-weight: 600; }
+.bar label { color: var(--muted); font-size: 14px; margin-right: 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 4px; }
+.num {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--chip);
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+}
+.card h2 { font-size: 17px; margin: 0; font-weight: 600; }
+.desc { color: var(--muted); font-size: 14px; margin: 2px 0 12px 42px; }
+.docs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.doc { border-radius: 6px; padding: 10px 12px 14px; min-width: 0; }
+.doc.light { background: var(--doc-light); color: var(--doc-light-text); border: 1px solid var(--doc-light-line); }
+.doc.dark { background: var(--doc-dark); color: var(--doc-dark-text); border: 1px solid var(--doc-dark-line); }
+.line { position: relative; height: calc(var(--bh) + 26px); font-size: 14px; white-space: nowrap; }
+.caret { display: inline-block; width: 1.5px; height: 17px; background: currentColor; vertical-align: -3px; margin-left: 1px; }
+.line .b { position: absolute; top: 22px; }
+.big { display: flex; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+.big .note { color: var(--muted); font-size: 13px; margin-left: 4px; }
+.big .b { --bw: 60px; --bh: 40px; --bf: 22px; --br: 9px; }
+.b {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; overflow: hidden;
+  width: var(--bw); height: var(--bh); border-radius: var(--br);
+  font: 600 var(--bf)/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; letter-spacing: 0.02em;
+}
+.b > i { position: absolute; display: block; }
+.b > span { position: relative; }
+footer { margin-top: 36px; color: var(--muted); font-size: 14px; }
+@media (max-width: 560px) { .docs { grid-template-columns: 1fr; } .desc { margin-left: 0; } h1 { font-size: 24px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Плашка с буквами у курсора: какого она цвета?</h1>
+  <p class="lead">
+    FluentSwitcher может показывать раскладку буквами на плашке – у текстового курсора и на указателе мыши.
+    Сейчас плашка у всех языков одинаковая, тёмная. На форуме предложили различать языки цветом: тогда раскладку
+    видно краем глаза, не вчитываясь в буквы. Вот варианты. Напишите, пожалуйста, в теме на форуме номера тех, что
+    нравятся, – можно несколько.
+  </p>
+  <a class="cta" href="https://forum.ru-board.com/topic.cgi?forum=5&amp;topic=51833">Ответить в теме на форуме →</a>
+
+  <div class="bar">
+    <div><label>Размер в примерах</label><span class="seg" id="size">
+      <button type="button" data-size="1" aria-pressed="false">Как в приложении</button>
+      <button type="button" data-size="1.5" aria-pressed="true">Крупнее</button>
+      <button type="button" data-size="2" aria-pressed="false">Совсем крупно</button>
+    </span></div>
+    <div><label>Тема страницы</label><span class="seg" id="theme">
+      <button type="button" data-theme="" aria-pressed="true">Как в системе</button>
+      <button type="button" data-theme="light" aria-pressed="false">Светлая</button>
+      <button type="button" data-theme="dark" aria-pressed="false">Тёмная</button>
+    </span></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <p>В примерах плашка – под текстовым курсором, как в приложении; размер и прозрачность настраиваются отдельно, как сейчас.
+    Английский – с американским флагом (британский в приложении включается в настройках).</p>
+    <p><a href="../">Все обсуждения</a> · <a href="https://github.com/DmitryN71/FluentSwitcher">FluentSwitcher на GitHub</a></p>
+  </footer>
+</main>
+<script>
+const FLAGS = {
+  EN: [ ["#b22234", 0, 100], ["#ffffff", 14.3, 14.3], ["#ffffff", 42.9, 14.3], ["#ffffff", 71.4, 14.3] ],
+  RU: [ ["#ffffff", 0, 34], ["#0039a6", 33.3, 34], ["#d52b1e", 66.6, 33.4] ],
+  UK: [ ["#0057b7", 0, 50], ["#ffd700", 50, 50] ]
+};
+const EDGE = { EN: ["#b22234", "#ffffff", "#3c3b6e"], RU: ["#ffffff", "#0039a6", "#d52b1e"], UK: ["#0057b7", "#ffd700"] };
+const DARK = "#262626";
+
+// Each variant: the look of a badge for a language on a light or a dark document (caps - CapsLock is on).
+const VARIANTS = [
+  { title: "Как сейчас", desc: "Тёмная плашка у всех языков.",
+    look: () => ({ bg: "rgba(32,32,32,.85)", fg: "#fff" }) },
+  { title: "Оттенки серого", desc: "Идея Ludens: язык видно по яркости – английский светлый, русский тёмный, украинский посередине. Чёрно-серая гамма остаётся.",
+    look: l => ({ EN: { bg: "#dcdcdc", fg: "#1c1c1c", edge: "#b9b9b9" }, RU: { bg: "#363636", fg: "#fff" }, UK: { bg: "#8a8a8a", fg: "#fff" } })[l] },
+  { title: "Свой цвет у языка", desc: "Идея init0: цвет выбирается для каждой раскладки из спокойной палитры или любой свой. Цвет букв подбирается сам.",
+    look: l => ({ EN: { bg: "#2f5d9a", fg: "#fff" }, RU: { bg: "#a33a3a", fg: "#fff" }, UK: { bg: "#c99a06", fg: "#2a1f00" } })[l] },
+  { title: "Флаг сквозь дымку", desc: "Флаг под тёмным полупрозрачным стеклом, буквы поверх: флаг узнаётся краем глаза, буквы читаются, как сейчас.",
+    look: l => ({ fg: "#fff", flag: l, smoke: true }) },
+  { title: "Флажная кромка", desc: "Плашка прежняя, тёмная, а снизу – тонкая полоска цветов флага.",
+    look: l => ({ bg: DARK, fg: "#fff", edgeFlag: l }) },
+  { title: "Тихий свой, громкий чужой", desc: "Свой язык (здесь русский) почти не виден, остальные – цветом Windows: плашка заметна, только когда раскладка не та, что обычно.",
+    look: (l, dark) => l === "RU" ? (dark ? { bg: "rgba(150,150,150,.25)", fg: "#cfcfcf" } : { bg: "rgba(110,110,110,.3)", fg: "#3a3a3a" }) : { bg: "#0078d4", fg: "#fff" } },
+  { title: "Цветные буквы", desc: "Плашка тёмная, как сейчас, а цвет – у самих букв.",
+    look: l => ({ bg: DARK, fg: { EN: "#6cc8ff", RU: "#ff8a65", UK: "#ffd54f" }[l] }) },
+  { title: "Форма вместо цвета", desc: "Совсем без цвета, для тех, кто плохо различает цвета: английский – контур, русский – залитая плашка, украинский – капсула.",
+    look: (l, dark) => {
+      const fill = dark ? { bg: "#e6e6e6", fg: "#1c1c1c" } : { bg: DARK, fg: "#fff" };
+      if (l === "EN") return { bg: "transparent", fg: dark ? "#eeeeee" : "#222222", ring: dark ? "#aaaaaa" : "#555555" };
+      return l === "UK" ? { ...fill, pill: true } : fill;
+    } },
+  { title: "CapsLock на плашке", desc: "Отдельно от цвета: при включённом CapsLock сверху на плашке оранжевая полоска (просьба fttlov). В третьей строке примера CapsLock включён.",
+    look: (l, dark, caps) => ({ bg: DARK, fg: "#fff", caps }) }
+];
+
+const LINES = [
+  { lang: "EN", text: "Hello, world" },
+  { lang: "RU", text: "Привет, мир" },
+  { lang: "UK", text: "Привіт, світ" }
+];
+
+function badge(lang, v, dark, caps) {
+  const s = v.look(lang, dark, caps);
+  const b = document.createElement("span");
+  b.className = "b";
+  b.style.background = s.bg || "transparent";
+  b.style.color = s.fg;
+  if (s.pill) b.style.borderRadius = "999px";
+  const rings = [];
+  if (s.ring) rings.push(`inset 0 0 0 1.5px ${s.ring}`);
+  else if (s.edge && !dark) rings.push(`inset 0 0 0 1px ${s.edge}`);
+  else if (dark && !s.flag) rings.push("inset 0 0 0 1px rgba(255,255,255,.12)");
+  b.style.boxShadow = rings.join(",");
+  const piece = (css) => { const i = document.createElement("i"); i.style.cssText = css; b.appendChild(i); };
+  if (s.flag) {
+    for (const [c, top, h] of FLAGS[s.flag]) piece(`left:0;width:100%;top:${top}%;height:${h}%;background:${c}`);
+    if (s.flag === "EN") piece("left:0;top:0;width:45%;height:57%;background:#3c3b6e");
+    if (s.smoke) piece("left:0;top:0;width:100%;height:100%;background:rgba(18,18,18,.5)");
+  }
+  if (s.edgeFlag) {
+    const colors = EDGE[s.edgeFlag], w = 100 / colors.length;
+    colors.forEach((c, k) => piece(`bottom:0;height:14%;min-height:2px;left:${k * w}%;width:${w + 0.5}%;background:${c}`));
+  }
+  if (s.caps) piece("left:0;top:0;width:100%;height:14%;min-height:2px;background:#f5a623");
+  const t = document.createElement("span");
+  t.textContent = lang;
+  b.appendChild(t);
+  return b;
+}
+
+function doc(v, dark, n) {
+  const d = document.createElement("div");
+  d.className = "doc " + (dark ? "dark" : "light");
+  LINES.forEach((ln, k) => {
+    const caps = n === 8 && k === 2;
+    const row = document.createElement("div");
+    row.className = "line";
+    const text = document.createElement("span");
+    text.textContent = caps ? ln.text.toUpperCase() : ln.text;
+    const caret = document.createElement("span");
+    caret.className = "caret";
+    row.append(text, caret);
+    const b = badge(ln.lang, v, dark, caps);
+    row.appendChild(b);
+    d.appendChild(row);
+    requestAnimationFrame(() => { b.style.left = Math.max(0, caret.offsetLeft - 2) + "px"; });
+  });
+  return d;
+}
+
+const grid = document.getElementById("grid");
+const bigRows = [];
+VARIANTS.forEach((v, n) => {
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<div class="head"><span class="num">${n}</span><h2></h2></div><p class="desc"></p>`;
+  card.querySelector("h2").textContent = v.title;
+  card.querySelector(".desc").textContent = v.desc;
+  const docs = document.createElement("div");
+  docs.className = "docs";
+  docs.append(doc(v, false, n), doc(v, true, n));
+  card.appendChild(docs);
+  const big = document.createElement("div");
+  big.className = "big";
+  bigRows.push({ big, v, n });
+  card.appendChild(big);
+  grid.appendChild(card);
+});
+
+// The large badges sit on the page itself: as on a light or a dark document, whichever the page is now.
+function pageIsDark() {
+  const t = document.documentElement.getAttribute("data-theme");
+  return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+}
+function renderBig() {
+  const dark = pageIsDark();
+  for (const { big, v, n } of bigRows) {
+    big.replaceChildren();
+    for (const l of ["EN", "RU", "UK"]) big.appendChild(badge(l, v, dark, false));
+    if (n === 8) big.appendChild(badge("RU", v, dark, true));
+    const note = document.createElement("span");
+    note.className = "note";
+    note.textContent = n === 8 ? "крупно; последняя – RU с CapsLock" : "крупно";
+    big.appendChild(note);
+  }
+}
+renderBig();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderBig);
+
+function placeBadges() {
+  document.querySelectorAll(".line").forEach(row => {
+    const caret = row.querySelector(".caret"), b = row.querySelector(".b");
+    b.style.left = Math.max(0, caret.offsetLeft - 2) + "px";
+  });
+}
+
+function pick(groupId, attr, apply) {
+  const group = document.getElementById(groupId);
+  group.addEventListener("click", e => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    group.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+    apply(btn.dataset[attr]);
+  });
+}
+pick("size", "size", k => {
+  const r = document.documentElement.style;
+  r.setProperty("--bw", 20 * k + "px");
+  r.setProperty("--bh", 14 * k + "px");
+  r.setProperty("--bf", 8 * k + "px");
+  r.setProperty("--br", 3.5 * k + "px");
+  placeBadges();
+});
+pick("theme", "theme", t => {
+  if (t) document.documentElement.setAttribute("data-theme", t);
+  else document.documentElement.removeAttribute("data-theme");
+  renderBig();
+  try { t ? localStorage.setItem("theme", t) : localStorage.removeItem("theme"); } catch (e) {}
+});
+try {
+  const saved = localStorage.getItem("theme");
+  if (saved) document.querySelector(`#theme [data-theme="${saved}"]`).click();
+} catch (e) {}
+document.querySelector('#size [data-size="1.5"]').click();
+window.addEventListener("load", placeBadges);
+</script>
+</body>
+</html>

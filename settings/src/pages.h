@@ -44,6 +44,9 @@ private:
     // with the empty value: "as the one it follows" (the flag on the mouse pointer - as the flag at the cursor).
     wxWindow* FlagLook(const wxString& title, const wxString& description, const char* key, bool appIcon,
                        const char* inherit = "flagsSet", const wxString& follow = wxString());
+    // The colour of the badge with the letters, one for each layout (layouts_info[].badge, the engine's BadgeColor.h): a row
+    // for each layout - the badge as the flag shows it, the layout's name, the list of colours. Returns the card's rows.
+    wxWindow* BadgeColors();
     // A card with a list of words (the lists of the automatic switch, the exceptions of ДВе ЗАглавные): what it is for
     // and how many words it has; "Изменить…" opens the list in a window of its own (wordlist.h). key - the array in the
     // file; help - the text of that window; tip - the details, the tooltip of the title; defaults - the list while the
@@ -188,6 +191,8 @@ private:
     wxBoxSizer* m_commandsColumn = nullptr;
 
     FluentButton* m_apply = nullptr;
+    // The grid of colours ("Свой цвет…" of a badge) is open: its keys (ColourGrid::Key), true when taken; nullptr otherwise.
+    std::function<bool(int key)> m_gridKey;
     wxTimer m_savedTimer;
     bool m_savedShown = false;
     int m_section = 0;         // shown now

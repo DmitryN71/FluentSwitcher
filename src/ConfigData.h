@@ -74,6 +74,8 @@ struct LayoutInfo {
     bool enabled = true;
     CHotKey win_hotkey;
     CHotKeyList hotkey;
+    // Цвет плашки с буквами у курсора (BadgeColor.h): "" - тёмная, "windows" - акцент Windows, "#rrggbb".
+    std::string badge;
 };
 
 enum class CommandType {

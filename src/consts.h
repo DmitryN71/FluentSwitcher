@@ -27,6 +27,7 @@ static const UINT WM_UpdateStart = 0xBFFF - 16; // обновить сейчас
 static const UINT WM_UpdateDone = 0xBFFF - 15;  // lParam - Update::Installing* от потока обновления
 static const UINT WM_ForegroundChanged = 0xBFFF - 14; // окно впереди сменилось: флаг на указателе мыши "ненадолго"
                                                       // (MouseFlag.h)
+static const UINT WM_CapsLockNotif = 0xBFFF - 13; // отпустили CapsLock: полоса CapsLock на флаге (flag_capslock), gui2/main.cpp
 
 static const UINT c_timerKeyloggerDefence = 12;
 static const TChar c_sArgAutostart[] = L"/autostart";

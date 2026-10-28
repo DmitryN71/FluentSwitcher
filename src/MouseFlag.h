@@ -58,10 +58,12 @@ public:
 		const std::wstring id = Utils::GetNameForHKL_simple(m_lay);
 		const std::string look = cfg->mouse_flag_set.empty() ? cfg->caret_flag_set : cfg->mouse_flag_set;
 		const int opacity = std::clamp(cfg->mouse_flag_opacity, 10, 100);
+		const uint32_t fill = IconMgr::BadgeFill(m_lay); // цвет плашки (буквы) и полоса CapsLock
+		const bool caps = IconMgr::CapsShown();
 		const std::wstring key = id + L"|" + StrUtils::Convert(look) + (cfg->useBritishFlag ? L"|gb" : L"") + L"|" +
-			std::to_wstring(opacity);
+			std::to_wstring(opacity) + std::format(L"|{:06x}|{}", fill, caps);
 		// Картинки для этого флага нет (раскладка без флага в наборе) - не искать её снова на каждое событие.
-		if ((!m_applied || key != m_key) && key != m_failedKey) Apply(id, look, opacity, key);
+		if ((!m_applied || key != m_key) && key != m_failedKey) Apply(id, look, opacity, fill, caps, key);
 		// Те же пределы, что у флага у текстового курсора (CaretFlag::Brief): строка настройки у них одна.
 		if (mode == 2 && m_applied)
 			StartTimer((UINT)std::clamp(cfg->caret_flag_brief_ms, 300, 60000));
@@ -250,8 +252,9 @@ private:
 		return DefWindowProcW(wnd, msg, wParam, lParam);
 	}
 
-	// Указатель-текст Windows с флагом раскладки id вида look. nullptr - не вышло.
-	HCURSOR Make(const std::wstring& id, const std::string& look, int opacity) {
+	// Указатель-текст Windows с флагом раскладки id вида look (буквы - на плашке цвета fill; caps - с полосой CapsLock).
+	// nullptr - не вышло.
+	HCURSOR Make(const std::wstring& id, const std::string& look, int opacity, uint32_t fill, bool caps) {
 		if (!m_baseOk) {
 			MouseCursor::Picture windows;
 			if (!MouseCursor::Capture(LoadCursorW(nullptr, IDC_IBEAM), windows)) return nullptr;
@@ -264,16 +267,17 @@ private:
 		if (size < 6) return nullptr;
 		// Буквы - вдвое крупнее и уменьшены: на 16 точках, нарисованные сразу, они тонкие и угловатые (Дмитрий,
 		// 16.10.2026: "шрифт очень некрасивый"); флаги - своего размера, точка в точку.
-		auto img = IconMgr::Inst().GetImage(id.c_str(), LetterIcons::Is(look) ? size * 2 : size, false, look);
+		auto img = IconMgr::Inst().GetImage(id.c_str(), LetterIcons::Is(look) ? size * 2 : size, false, look, fill, caps);
 		if (!img || !img->IsOk()) return nullptr;
 		return MouseCursor::Compose(m_base, MouseCursor::Scaled(img->data, img->width, img->height, size), size, opacity);
 	}
 
 	// Готовые указатели - по ключу: "ненадолго" показывает тот же флаг много раз, картинку не собирать каждый раз заново
 	// (ревью 18.10.2026). Windows забирает себе копию.
-	HCURSOR Made(const std::wstring& id, const std::string& look, int opacity, const std::wstring& key) {
+	HCURSOR Made(const std::wstring& id, const std::string& look, int opacity, uint32_t fill, bool caps,
+	             const std::wstring& key) {
 		if (auto it = m_made.find(key); it != m_made.end()) return it->second;
-		HCURSOR cursor = Make(id, look, opacity);
+		HCURSOR cursor = Make(id, look, opacity, fill, caps);
 		if (!cursor) return nullptr;
 		if (m_made.size() >= 16) DropMade();
 		m_made[key] = cursor;
@@ -290,13 +294,13 @@ private:
 		m_failedKey.clear();
 	}
 
-	void Apply(const std::wstring& id, const std::string& look, int opacity, const std::wstring& key) {
+	void Apply(const std::wstring& id, const std::string& look, int opacity, uint32_t fill, bool caps, const std::wstring& key) {
 		// Основа - указатель Windows, не наш с прежним флагом: подменённый вернуть, прежде чем снимать.
 		if (!m_baseOk && m_applied) {
 			SystemParametersInfoW(SPI_SETCURSORS, 0, nullptr, 0);
 			m_applied = false;
 		}
-		HCURSOR made = Made(id, look, opacity, key);
+		HCURSOR made = Made(id, look, opacity, fill, caps, key);
 		if (!made) {
 			LOG_ANY(L"mouse flag: no picture for {}", LogPlain(id));
 			m_failedKey = key;

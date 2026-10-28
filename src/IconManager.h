@@ -179,14 +179,27 @@ public:
 		return std::make_shared<Images::ImageIcon::element_type>(); // empty
 	}
 
+	// Цвет плашки с буквами раскладки lay (layouts_info[].badge, BadgeColor.h); раскладки нет в списке - тёмная.
+	static uint32_t BadgeFill(HKL lay) {
+		auto cfg = conf_get_unsafe();
+		const auto* info = cfg->layouts_info.GetLayoutInfo(lay);
+		return info ? BadgeColor::Resolve(info->badge) : BadgeColor::kDark;
+	}
+	// Полоса CapsLock на флаге: включена в настройках (flag_capslock), и CapsLock горит.
+	static bool CapsShown() { return conf_get_unsafe()->flag_capslock && Utils::IsCapslockEnabled(); }
+
 	// Картинка флага (RGBA) для флажка у текстового курсора, его набора (caret_flag_set; или набора look - флаг на указателе
-	// мыши, MouseFlag.h): ближайшего к size размера (поровну - больший). Пусто - флага нет. Не кэшируется: флажок держит
-	// свою последнюю картинку сам.
-	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false, string look = {}) {
+	// мыши, MouseFlag.h): ближайшего к size размера (поровну - больший). Буквы - на плашке цвета fill (BadgeFill); caps -
+	// с полосой CapsLock (CapsShown). Пусто - флага нет. Не кэшируется: флажок держит свою последнюю картинку сам.
+	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false, string look = {},
+	                       uint32_t fill = BadgeColor::kDark, bool caps = false) {
 		const string set = look.empty() ? conf_get_unsafe()->caret_flag_set : look;
 		if (LetterIcons::Is(set)) { // буквы на плашке, высотой в три четверти размера
-			return ToImage(LetterIcons::Render(LetterIcons::Text(contry_id), size, (int)std::lround(size * 0.75),
-			                                   LetterIcons::Style::Badge, true, is_gray));
+			auto pic = LetterIcons::Render(LetterIcons::Text(contry_id), size, (int)std::lround(size * 0.75),
+			                               LetterIcons::Style::Badge, true, is_gray, fill);
+			const uint32_t plate = is_gray ? BadgeColor::Gray(fill) : fill; // как её рисует Render
+			if (caps) BadgeColor::CapsStripe(pic.rgba.data(), pic.width, pic.height, &plate);
+			return ToImage(std::move(pic));
 		}
 		wstring local_id = contry_id;
 		StrUtils::ToLower(local_id);
@@ -200,6 +213,7 @@ public:
 		for (auto& it : LoadImages(local_id, FolderName(set), is_gray)) {
 			if (better(it, best)) best = it;
 		}
+		if (caps && best && best->IsOk()) BadgeColor::CapsStripe(best->data, best->width, best->height); // своя копия из файла
 		return best;
 	}
 

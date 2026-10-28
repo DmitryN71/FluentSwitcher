@@ -1079,9 +1079,12 @@ private:
 		auto id = Utils::GetNameForHKL_simple(m_lay);
 		auto cfg = conf_get_unsafe();
 		const int opacity = std::clamp(cfg->caret_flag_opacity, 10, 100);
-		auto key = std::format(L"{}|{}|{}|{}|{}|{}", id, px, gray, StrUtils::Convert(cfg->caret_flag_set), cfg->useBritishFlag, opacity);
+		const uint32_t fill = IconMgr::BadgeFill(m_lay); // цвет плашки и CapsLock - тоже в ключе: сменились - картинка новая
+		const bool caps = IconMgr::CapsShown();
+		auto key = std::format(L"{}|{}|{}|{}|{}|{}|{:06x}|{}", id, px, gray, StrUtils::Convert(cfg->caret_flag_set),
+		                       cfg->useBritishFlag, opacity, fill, caps);
 		if (key == m_imgKey) return true;
-		auto img = IconMgr::Inst().GetImage(id.c_str(), px, gray);
+		auto img = IconMgr::Inst().GetImage(id.c_str(), px, gray, {}, fill, caps);
 		if (!img || !img->IsOk()) {
 			why = std::format("no flag picture for {} ({})", StrUtils::Convert(std::wstring(id)), cfg->caret_flag_set);
 			return false;

@@ -62,7 +62,8 @@ namespace nlohmann {
 		layout,
 		enabled,
 		win_hotkey,
-		hotkey
+		hotkey,
+		badge
 	)
 
 		void to_json(json& j, const LayoutInfoList& p) {
@@ -146,7 +147,8 @@ namespace nlohmann {
 		caret_flag_brief_ms, \
 		mouse_flag, \
 		mouse_flag_set, \
-		mouse_flag_opacity
+		mouse_flag_opacity, \
+		flag_capslock
 	//,inject_delay_after_lang_ms
 	template<typename BasicJsonType, nlohmann::detail::enable_if_t<nlohmann::detail::is_basic_json<BasicJsonType>::value, int> = 0>
 	void to_json(BasicJsonType& nlohmann_json_j, const ProgramConfig& nlohmann_json_t) {

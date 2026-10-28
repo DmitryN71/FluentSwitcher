@@ -1,8 +1,8 @@
 #pragma once
 
 // Буквы раскладки вместо флага: EN, RU. Значок в трее - буквы цвета текста панели задач на прозрачном фоне, как
-// у Windows; флажок у текстового курсора - буквы на тёмной плашке со светлой каймой, чтобы их было видно на любом
-// фоне. Рисует
+// у Windows; флажок у текстового курсора - буквы на плашке с каймой, чтобы их было видно на любом фоне: плашка тёмная или
+// своего цвета у раскладки (BadgeColor.h), буквы и кайма - белые или тёмные, какие на ней виднее. Рисует
 // Direct2D / DirectWrite в память (без окна), отдаёт RGBA без умножения на альфу - как картинки флагов
 // (IconManager.h). По высоте буквы ставятся посередине по тому, где легли их точки (метрики шрифта не точны, и на
 // мелком значке промах в полточки виден); по ширине их левый край - в одном столбце у всех раскладок. Только поток
@@ -12,6 +12,8 @@
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wrl/client.h>
+
+#include "BadgeColor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -91,8 +93,9 @@ namespace details {
 }
 
 // Буквы в картинке w x h. Plain - значок в трее, цветом текста панели задач: dark - тёмная панель (белые).
-// Badge - флажок у курсора, на плашке. gray - программа выключена: всё бледное.
-inline Picture Render(const std::wstring& text, int w, int h, Style style, bool dark, bool gray) {
+// Badge - флажок у курсора, на плашке цвета fill (0xRRGGBB). gray - программа выключена: всё бледное, плашка серая.
+inline Picture Render(const std::wstring& text, int w, int h, Style style, bool dark, bool gray,
+                      uint32_t fill = BadgeColor::kDark) {
 	using Microsoft::WRL::ComPtr;
 	Picture pic;
 	auto& d2d = details::D2D();
@@ -189,7 +192,10 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		const float cap = size * capShare;
 		float x = 0, y = std::round((h + cap) / 2) - line.baseline;
 
-		D2D1_COLOR_F ink = style == Style::Badge || dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
+		// На плашке буквы и кайма - белые или тёмные, какие на её цвете виднее (на тёмной - белые, как было).
+		const uint32_t plate = gray ? BadgeColor::Gray(fill) : fill;
+		const uint32_t onPlate = BadgeColor::Letters(plate);
+		D2D1_COLOR_F ink = style == Style::Badge ? D2D1::ColorF(onPlate) : dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
 		const float alpha = gray ? 0.45f : 1.0f;
 		auto draw = [&](bool shape, IDWriteTextLayout* drawn = nullptr) {
 			rt->BeginDraw();
@@ -197,9 +203,9 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
 			if (shape && style == Style::Badge) {
 				const float r = shapeH * 0.28f;
-				brush->SetColor(D2D1::ColorF(0x202020));
+				brush->SetColor(D2D1::ColorF(plate));
 				rt->FillRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, shapeH - 0.5f }, r, r }, brush.Get());
-				brush->SetColor(D2D1::ColorF(0xffffff, 0.28f));
+				brush->SetColor(D2D1::ColorF(onPlate, 0.28f));
 				rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, shapeH - 0.5f }, r, r }, brush.Get(), 1.0f);
 			}
 			D2D1_COLOR_F letters = ink;

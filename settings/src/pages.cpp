@@ -24,6 +24,8 @@
 #include "../../src/CanElevate.h"
 #include "../../src/ConfigLock.h"
 #include "../../src/AutoSwitch.h" // one word - one list: the engine's rule (Covers)
+#include "../../src/libtools/utils/LetterIcons.h" // the badge with the letters, as the engine draws it (BadgeColor.h)
+#include <wx/display.h>
 #include <shlwapi.h>         // SHLoadIndirectString: the names of keyboards
 #pragma comment(lib, "shlwapi.lib")
 #include <shlobj.h>           // the report to the developer: the desktop, Explorer
@@ -1032,6 +1034,8 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     });
     cancel->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Close(); });
     Bind(wxEVT_CHAR_HOOK, [this, save, cancel](wxKeyEvent& e) {
+        if (m_gridKey && m_gridKey(e.GetKeyCode())) // the grid of colours is open: its keys, not the window's
+            return;
         // Esc leaves the results (in the field it empties it first, TextField), otherwise closes the window.
         if (e.GetKeyCode() == WXK_ESCAPE && e.GetModifiers() == wxMOD_NONE)
         {
@@ -1311,6 +1315,179 @@ wxWindow* SettingsFrame::FlagLook(const wxString& title, const wxString& descrip
         now = "Flagpack";
     return Choice(title, description, names, values.Index(now),
                   [this, key, values](int i) { m_edit.SetString(key, values[i]); });
+}
+
+namespace
+{
+// The badge with a layout's letters as the flag at the cursor shows it (the engine's LetterIcons.h), in a colour of the list
+// (BadgeColor.h). Drawn point for point: a bitmap given to wxStaticBitmap would be stretched on a screen with a bigger scale.
+class BadgeSample : public wxPanel
+{
+public:
+    BadgeSample(wxWindow* parent, const std::wstring& letters) : wxPanel(parent), m_letters(letters)
+    {
+        SetBackgroundColour(parent->GetBackgroundColour());
+        SetMinSize(FromDIP(wxSize(kWidth, kWidth * 3 / 4)));
+        Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
+            wxPaintDC dc(this);
+            if (m_bitmap.IsOk())
+                dc.DrawBitmap(m_bitmap, 0, (GetClientSize().y - m_bitmap.GetHeight()) / 2, true);
+        });
+    }
+    // value: as in the file ("", "windows", "#rrggbb").
+    void SetColour(const std::string& value)
+    {
+        const int w = FromDIP(kWidth);
+        const LetterIcons::Picture pic = LetterIcons::Render(m_letters, w, (int)std::lround(w * 0.75),
+                                                             LetterIcons::Style::Badge, true, false, BadgeColor::Resolve(value));
+        m_bitmap = wxBitmap();
+        if (!pic.rgba.empty())
+        {
+            wxImage image(pic.width, pic.height);
+            image.InitAlpha();
+            unsigned char* rgb = image.GetData();
+            unsigned char* alpha = image.GetAlpha();
+            for (int p = 0; p < pic.width * pic.height; p++)
+            {
+                rgb[p * 3] = pic.rgba[p * 4];
+                rgb[p * 3 + 1] = pic.rgba[p * 4 + 1];
+                rgb[p * 3 + 2] = pic.rgba[p * 4 + 2];
+                alpha[p] = pic.rgba[p * 4 + 3];
+            }
+            m_bitmap = wxBitmap(image);
+        }
+        Refresh();
+    }
+
+private:
+    static const int kWidth = 24; // DIPs, a bit bigger than the flag's usual 20
+    std::wstring m_letters;
+    wxBitmap m_bitmap;
+};
+
+// The letters of a layout ("0x...419" -> "RU"), as the engine names it (Utils::GetNameForHKL_simple, LetterIcons::Text).
+std::wstring LayoutLetters(const wxString& hkl)
+{
+    unsigned long long value = 0;
+    wchar_t locale[LOCALE_NAME_MAX_LENGTH] = {};
+    if (!hkl.ToULongLong(&value, 16) || !LCIDToLocaleName(LOWORD(unsigned(value)), locale, LOCALE_NAME_MAX_LENGTH, 0))
+        return L"?";
+    return LetterIcons::Text(locale);
+}
+} // namespace
+
+wxWindow* SettingsFrame::BadgeColors()
+{
+    // The forum's vote on https://dmitryn71.github.io/FluentSwitcher/badges/ (28.10.2026): most for "a colour of its own
+    // for each language"; "as now" stays the first and the default (Maz). The list: the palette of the engine
+    // (BadgeColor::kPalette), Windows' accent, and "Свой цвет…" - the grid of Windows' colours, as FluentClipper's accent.
+    static const nlohmann::json kNoLayouts = nlohmann::json::array();
+    const auto& file = std::as_const(m_edit).Json();
+    const auto found = file.find("layouts_info");
+    const nlohmann::json& layouts = found != file.end() && found->is_array() ? *found : kNoLayouts;
+    const wxArrayString names = { T("Тёмная"), T("Серая"), T("Светлая"), T("Синяя"), T("Красная"), T("Жёлтая"),
+                                  T("Зелёная"), T("Фиолетовая"), T("Цвет Windows"), T("Свой цвет…") };
+    const int palette = (int)std::size(BadgeColor::kPalette), windows = palette, own = palette + 1;
+    auto colour = [](uint32_t rgb) { return wxColour(rgb >> 16 & 0xff, rgb >> 8 & 0xff, rgb & 0xff); };
+
+    wxPanel* rows = nullptr;
+    AddSettingsCard(m_page, m_column, T("Цвет плашки с буквами"),
+                    T("Когда вид флага – буквы: у каждой раскладки свой цвет. Буквы на плашке – белые или тёмные, какие "
+                      "на этом цвете виднее"),
+                    [&](wxWindow* card) {
+        rows = new wxPanel(card);
+        rows->SetBackgroundColour(card->GetBackgroundColour());
+        wxFlexGridSizer* grid = new wxFlexGridSizer(3, card->FromDIP(8), card->FromDIP(12));
+        grid->AddGrowableCol(1);
+        for (size_t i = 0; i < layouts.size(); i++)
+        {
+            if (!layouts[i].is_object())
+                continue;
+            const wxString hkl = FromUtf8(layouts[i].value("layout", std::string()));
+            const std::string value = layouts[i].value("badge", std::string());
+            // What the file has: an item of the palette (any case of the letters), Windows' accent or a colour of one's
+            // own; something else - the dark one, as the engine reads it.
+            auto ownColour = std::make_shared<std::string>();
+            int selection = 0;
+            uint32_t rgb = 0;
+            if (value == BadgeColor::kWindows)
+                selection = windows;
+            else if (BadgeColor::Parse(value, rgb))
+            {
+                selection = own;
+                for (int k = 1; k < palette; k++)
+                    if (BadgeColor::kPalette[k].rgb == rgb)
+                        selection = k;
+                if (selection == own)
+                    *ownColour = wxString(value).Lower().ToStdString();
+            }
+            auto shown = std::make_shared<int>(selection); // the item before "Свой цвет…" was picked
+
+            BadgeSample* sample = new BadgeSample(rows, LayoutLetters(hkl));
+            sample->SetColour(value);
+            FluentChoice* choice = new FluentChoice(rows, names, selection);
+            auto swatches = [=] {
+                std::vector<wxColour> dots;
+                for (const BadgeColor::Entry& e : BadgeColor::kPalette)
+                    dots.push_back(colour(e.rgb));
+                dots.push_back(colour(BadgeColor::Resolve(BadgeColor::kWindows)));
+                dots.push_back(ownColour->empty() ? wxColour() : colour(BadgeColor::Resolve(*ownColour)));
+                choice->SetSwatches(dots);
+            };
+            swatches();
+            auto save = [this, i, sample](const std::string& badge) {
+                m_edit.Json()["layouts_info"][i]["badge"] = badge;
+                sample->SetColour(badge);
+                Changed();
+            };
+            // "Свой цвет…": the grid under the list. Closed with no colour picked - the list goes back to what it was.
+            auto pick = [this, choice, ownColour, shown, swatches, save, own] {
+                ColourGrid* colours = new ColourGrid(this, ownColour->empty() ? wxColour()
+                                                                              : wxColour(wxString(*ownColour)));
+                colours->onPick = [=](const wxColour& c) {
+                    *ownColour = c.GetAsString(wxC2S_HTML_SYNTAX).Lower().ToStdString();
+                    *shown = own;
+                    swatches();
+                    save(*ownColour);
+                };
+                colours->onClosed = [this, choice, shown] {
+                    m_gridKey = nullptr; // the grid goes right after
+                    choice->SetPopupKeys(nullptr);
+                    choice->SetSelection(*shown);
+                };
+                // The focus stays where it was (a popup takes none): the keys go to the grid from there.
+                m_gridKey = [colours](int key) { return colours->Key(key); };
+                choice->SetPopupKeys(m_gridKey);
+                // Under the list, its right edge at the list's right edge; on the screen.
+                const wxSize size = colours->GetSize();
+                wxPoint pos = choice->ClientToScreen(wxPoint(choice->GetSize().x - size.x, choice->GetSize().y + FromDIP(4)));
+                const wxRect area = wxDisplay(choice).GetClientArea();
+                pos.x = wxMax(area.x, wxMin(pos.x, area.GetRight() - size.x));
+                if (pos.y + size.y > area.GetBottom()) // no room below: above
+                    pos.y = choice->ClientToScreen(wxPoint(0, 0)).y - size.y - FromDIP(4);
+                colours->OpenAt(pos);
+            };
+            choice->onChange = [this, choice, shown, save, pick, windows, own] {
+                const int item = choice->GetSelection();
+                if (item == own)
+                    return CallAfter(pick); // once the list is gone
+                *shown = item;
+                save(item == windows ? std::string(BadgeColor::kWindows) : std::string(BadgeColor::kPalette[item].key));
+            };
+            choice->onReselect = [pick, own](int item) {
+                if (item == own)
+                    pick();
+            };
+
+            grid->Add(sample, 0, wxALIGN_CENTER_VERTICAL);
+            grid->Add(FluentText(rows, LayoutName(hkl), 10, g.text), 0, wxALIGN_CENTER_VERTICAL);
+            grid->Add(choice, 0, wxALIGN_CENTER_VERTICAL);
+        }
+        rows->SetSizer(grid);
+        return rows;
+    }, true);
+    m_searchExtra[rows->GetParent()] = wxJoin(names, ' ', '\0');
+    return rows;
 }
 
 void SettingsFrame::BuildGeneral()
@@ -2249,8 +2426,16 @@ void SettingsFrame::BuildCaretFlag()
     wxWindow* brief = Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"),
                               "caret_flag_brief_ms", 2000, { 1000, 2000, 3000, 5000, 10000 },
                               { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
+    FluentChoice* caretLook = static_cast<FluentChoice*>(
+        FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на плашке"), "caret_flag_set", false));
+    // Both flags (the forum's vote, 28.10.2026): the colour of the badge for each layout, CapsLock on the flag.
+    wxWindow* badges = BadgeColors();
+    wxWindow* caps = Toggle(T("CapsLock на флаге"),
+                            T("Пока включён CapsLock, сверху на флаге – оранжевая полоса: у текстового курсора и на "
+                              "указателе мыши. Нажали CapsLock – флаг показывается и в режиме «ненадолго»"),
+                            "flag_capslock", false);
     const std::vector<wxWindow*> caretRows = {
-        FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на тёмной плашке"), "caret_flag_set", false),
+        caretLook,
         Numbers(T("Где показывать"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
                 { 0, 1 }, { T("Под курсором"), T("Над курсором") }),
         Numbers(T("Размер"), T("При масштабе 100 %; на экранах с большим масштабом он крупнее"), "caret_flag_size", 20,
@@ -2265,32 +2450,38 @@ void SettingsFrame::BuildCaretFlag()
                 T("Над текстом указатель мыши показывает флаг раскладки: всё время или ненадолго – после смены "
                   "раскладки, окна или поля ввода"),
                 "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
+    FluentChoice* mouseLook = static_cast<FluentChoice*>(
+        FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на плашке"), "mouse_flag_set",
+                 false, "caret_flag_set", T("Как у текстового курсора")));
     const std::vector<wxWindow*> mouseRows = {
-        FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на тёмной плашке"), "mouse_flag_set",
-                 false, "caret_flag_set", T("Как у текстового курсора")),
+        mouseLook,
         Numbers(T("Прозрачность флага на указателе"), T("Чтобы не отвлекал от текста"), "mouse_flag_opacity", 100,
                 { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
                 T("Максимальная") }),
     };
     // Pale while they mean nothing, as Windows 11 shows them (Dmitry, 16.10.2026: "если флаг не показываем, то и
     // настройки прозрачности и типа флагов ... должны быть grayed out"): a flag's own rows while it is not shown; "for a
-    // moment" while neither flag shows for a moment - the pointer's takes that time too.
-    const auto pale = [this, brief, caretRows, mouseRows] {
+    // moment" while neither flag shows for a moment - the pointer's takes that time too; CapsLock while neither flag is
+    // shown; the badges' colours while no flag shown is letters (as FlagLook and the engine read the looks).
+    const auto pale = [this, brief, caretRows, mouseRows, badges, caps] {
         const int caretMode = m_edit.GetInt("caret_flag", 1), mouseMode = m_edit.GetInt("mouse_flag", 0);
+        const auto letters = [](const wxString& look) { return look == "Letters" || look == "LettersFramed"; };
+        const wxString caretSet = m_edit.GetString("caret_flag_set", m_edit.GetString("flagsSet", "Flagpack"));
+        const wxString mouseSet = m_edit.GetString("mouse_flag_set", wxString());
         for (wxWindow* row : caretRows)
             EnableSettingsCard(row->GetParent(), caretMode != 0);
         for (wxWindow* row : mouseRows)
             EnableSettingsCard(row->GetParent(), mouseMode != 0);
         EnableSettingsCard(brief->GetParent(), caretMode == 2 || mouseMode == 2);
+        EnableSettingsCard(caps->GetParent(), caretMode != 0 || mouseMode != 0);
+        EnableSettingsCard(badges->GetParent(), (caretMode != 0 && letters(caretSet)) ||
+                                                    (mouseMode != 0 && letters(mouseSet.empty() ? caretSet : mouseSet)));
     };
-    caret->onChange = [pale, save = caret->onChange] {
-        save(); // caret_flag, and Apply lights up
-        pale();
-    };
-    mouse->onChange = [pale, save = mouse->onChange] {
-        save();
-        pale();
-    };
+    for (FluentChoice* choice : { caret, mouse, caretLook, mouseLook })
+        choice->onChange = [pale, save = choice->onChange] {
+            save(); // the setting, and Apply lights up
+            pale();
+        };
     pale();
     FinishPage();
 }

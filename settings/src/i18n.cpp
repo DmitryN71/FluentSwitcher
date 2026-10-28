@@ -153,7 +153,25 @@ const std::unordered_map<std::string, const char*>& English()
         { "Двойной клик по значку", "Double click on the icon" },
         { "Флаг у курсора", "Flag at the cursor" },
         { "Вид флага", "Look of the flag" },
-        { "Флаг раскладки или её буквы на тёмной плашке", "The layout's flag or its letters on a dark badge" },
+        { "Флаг раскладки или её буквы на плашке", "The layout's flag or its letters on a badge" },
+        { "Цвет плашки с буквами", "Color of the badge with the letters" },
+        { "Когда вид флага – буквы: у каждой раскладки свой цвет. Буквы на плашке – белые или тёмные, какие на этом "
+          "цвете виднее",
+          "When the flag's look is letters: each layout has a color of its own. The letters on the badge are white or "
+          "dark, whichever shows better on that color" },
+        { "Серая", "Gray" }, // "Тёмная", "Светлая" - at the theme
+        { "Синяя", "Blue" },
+        { "Красная", "Red" },
+        { "Жёлтая", "Yellow" },
+        { "Зелёная", "Green" },
+        { "Фиолетовая", "Purple" },
+        { "Цвет Windows", "Windows color" },
+        { "Свой цвет…", "Custom color…" },
+        { "CapsLock на флаге", "CapsLock on the flag" },
+        { "Пока включён CapsLock, сверху на флаге – оранжевая полоса: у текстового курсора и на указателе мыши. "
+          "Нажали CapsLock – флаг показывается и в режиме «ненадолго»",
+          "While CapsLock is on, an orange stripe runs along the top of the flag: at the text cursor and on the mouse "
+          "pointer. A press of CapsLock shows the flag, also in the “for a moment” mode" },
         { "Где показывать", "Where to show" },
         { "Размер", "Size" },
         { "Прозрачность", "Transparency" },

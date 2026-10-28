@@ -153,10 +153,24 @@ void StartGui() {
 		}
 	}, 60 * 1000);
 
+	// Полоса CapsLock на флаге (flag_capslock): CapsLock сменился - флаг на указателе собрать заново (флаг у текстового
+	// курсора берёт его при каждом показе сам) и показать, и "ненадолго". Отпускание CapsLock приходит из перехвата
+	// (WM_CapsLockNotif; флаг у текстового курсора перехват толкнул сам); переключённое иначе и прочитанное в тот миг
+	// по-старому - раз в 2 с ниже.
+	bool capsShown = IconMgr::CapsShown();
+	auto capsChanged = [&](bool pressed) {
+		const bool now = IconMgr::CapsShown();
+		if (now == capsShown && !pressed) return;
+		capsShown = now;
+		if (!pressed) CaretFlagPoke(0, true);
+		mouseFlag.OnLayout(0);
+	};
+
 	// Буквы вместо флага - цвета текста панели задач: сменилась её тема (светлая / тёмная) - перерисовать значок.
 	// Окна движка служебные (HWND_MESSAGE), WM_SETTINGCHANGE до них не доходит - смотрим раз в 2 с.
 	timer.CycleTimer([&, dark = FluentMenu::TaskbarDark()]() mutable {
 		mouseFlag.Watch(); // и указатели Windows: сменили схему, размер, цвет
+		capsChanged(false);
 		const bool now = FluentMenu::TaskbarDark();
 		if (now == dark) return;
 		dark = now;
@@ -419,6 +433,11 @@ void StartGui() {
 
 			if (msg == WM_ForegroundChanged) {
 				mouseFlag.OnWindow();
+				return 0;
+			}
+
+			if (msg == WM_CapsLockNotif) {
+				capsChanged(true);
 				return 0;
 			}
 

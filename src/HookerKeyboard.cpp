@@ -506,6 +506,14 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 
 	CaretFlagPoke(40); // набор и стрелки двигают каретку, Ctrl+Shift меняет раскладку
 
+	// Полоса CapsLock на флаге (flag_capslock): отпустили CapsLock (нажатый руками, наш "Нажать CapsLock", чужой) - он уже
+	// переключился: флаг у текстового курсора - заново и показаться ("ненадолго" - тоже), флаг на указателе - тоже.
+	if (const auto* k = (KBDLLHOOKSTRUCT*)lParam; k->vkCode == VK_CAPITAL && TestFlag(k->flags, LLKHF_UP) &&
+		conf_get_unsafe()->flag_capslock) {
+		CaretFlagPoke(60, true);
+		PostMessage(g_guiHandle, WM_CapsLockNotif, 0, 0);
+	}
+
 	if (need_disable_event && (g_enabled.IsEnabled() || msg_hotkey.hk == hk_ToggleEnabled)){
 		// делаем вид, что клавиша не была нажата.
 		return 1;

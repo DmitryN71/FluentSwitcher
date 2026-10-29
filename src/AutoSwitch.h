@@ -774,6 +774,17 @@ inline bool CamelWords(const std::wstring& core, auto&& spellThere) {
 	return true;
 }
 
+// Там строчными - слово, которое словарь знает только с заглавными: первая его подсказка - оно само ("пшерги" - github,
+// для словаря GitHub; "чкфн" - xray, Xray; "шзрщту" - iphone, iPhone; Дмитрий, 29.10.2026). От четырёх букв: на "ip"
+// словарь подсказывает "Ip". Любое строчное, известное словарю с заглавной, словом не считается (WinDictionary.h,
+// CapitalizedEnglish: больше ошибок на опечатках) - только это, по первой подсказке, и только там.
+inline bool KnownInOtherCase(const std::wstring& core, auto&& suggestThere) {
+	if (core.size() < 4 || !std::ranges::all_of(core, [](wchar_t c) { return TwoCaps::IsLetter(c) && !TwoCaps::IsUpper(c); }))
+		return false;
+	const auto suggestions = suggestThere(core);
+	return !suggestions.empty() && suggestions.front() != core && Lower(suggestions.front()) == core;
+}
+
 // Переключать ли (после Skip). spellTyped / spellThere - словарь языка набранного / другой раскладки
 // (SpellCheck::Result по слову). Набранное должно быть точно не словом: со знаком внутри ("j,]`v" - "объём") или из
 // одной буквы среди знаков (",s" - "бы") - не слово; иначе спрашиваем словарь (знаки по краям - знаки: "it." - слово
@@ -799,7 +810,7 @@ inline const char* DecideWhy(const std::wstring& typed, const std::wstring& ther
 	}
 	const auto inOther = spellThere(a.core);
 	if (inOther == SpellCheck::Result::Unknown) return "no dictionary of the other layout";
-	if (inOther == SpellCheck::Result::NotWord) {
+	if (inOther == SpellCheck::Result::NotWord && !KnownInOtherCase(a.core, suggestThere)) {
 		if (CamelWords(a.core, spellThere)) return nullptr;
 		return TypoThere(t, a, innerSign, spellTyped, suggestTyped, suggestThere) ? nullptr : "not a word in the other layout";
 	}

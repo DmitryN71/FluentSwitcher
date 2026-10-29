@@ -21,7 +21,9 @@ class IconMgr {
 	}
 	// Значок в трее буквами (LetterIcons.h): цвет - как текст панели задач (её тема - в ключе: сменилась - новый значок).
 	// У раскладки lay выбран цвет плашки - буквы на плашке этого цвета во весь значок (jexx85 на форуме, 29.10.2026: "в
-	// трее цвета раскладки не меняются?"); тёмная, как по умолчанию, - буквы как были, без плашки.
+	// трее цвета раскладки не меняются?"); тёмная, как по умолчанию, - буквы как были, без плашки. Плашка - своя, не как у
+	// флажка у курсора (Tile): та в квадрате значка сжимала буквы до 7 точек на 20 (maK на форуме, 29.10.2026: "в трэе что-то
+	// все испортилось").
 	Images::ImageIcon LetterIcon(TStr locale, Vec_i2 size, bool is_gray, HKL lay) {
 		const bool dark = FluentMenu::TaskbarDark();
 		const auto text = LetterIcons::Text(locale);
@@ -30,13 +32,8 @@ class IconMgr {
 		const auto key = std::format(L"letters|{}|{}x{}|{}|{}|{}|{:06x}", text, size.x, size.y, dark, is_gray, badge, fill);
 		auto it = icons.find(key);
 		if (it != icons.end() && !it->second.empty()) return it->second.front();
-		auto pic = LetterIcons::Render(text, size.x, size.y, badge ? LetterIcons::Style::Badge : LetterIcons::Style::Plain,
+		auto pic = LetterIcons::Render(text, size.x, size.y, badge ? LetterIcons::Style::Tile : LetterIcons::Style::Plain,
 		                               dark, is_gray, fill);
-		// Плашка бывает на точку ниже (поля над буквами и под ними равны): значок - ровно своего размера, строка снизу пустая.
-		if (pic.width == size.x && pic.height > 0 && pic.height < size.y) {
-			pic.rgba.resize((size_t)size.x * size.y * 4, 0);
-			pic.height = size.y;
-		}
 		auto icon = Images::ImageToIconConsume(ToImage(std::move(pic)));
 		icons[key] = { icon };
 		return icon;

@@ -3,7 +3,7 @@
 [Русский](README.md)
 
 A keyboard layout switcher for Windows 10 and 11. It fixes text typed in the wrong layout and shows the current
-layout with a flag by the clock and at the text cursor. The settings window is in the Windows 11 style.
+layout with an icon in the tray and a flag at the text cursor. The settings window is in the Windows 11 style.
 
 FluentSwitcher is a modified version of [SimpleSwitcher](https://github.com/Aegel5/SimpleSwitcher) by Aegel5,
 free and open source under GPL-3.0.
@@ -84,7 +84,7 @@ free and open source under GPL-3.0.
   The settings window opens where and as large as it was closed. The search of the settings (Ctrl+F) finds a
   setting by the words of its title, description, list items and the hotkeys set, also typed in the other layout.
 - **One-click update**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
-  it tells about a new version with a notification by the clock. A click on it (or "Update" in "About") downloads
+  it tells about a new version with a notification from the tray. A click on it (or "Update" in "About") downloads
   the new version from GitHub, checks its SHA-256 checksum and installs it without questions - with the installer
   or, for the version without installation (zip), by replacing the files in its folder; FluentSwitcher restarts by itself, and the
   downloaded file is deleted. The check is turned off in "About", where "Check now" is too.

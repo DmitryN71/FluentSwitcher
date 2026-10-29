@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #pragma comment(lib, "dwmapi.lib")
@@ -124,19 +125,44 @@ inline uint32_t Gray(uint32_t rgb) {
 // ширину CapsLock придётся увеличить»). Полоса - по форме картинки (скруглённые углы плашки остаются), в 20 % её видимой
 // высоты, не тоньше трёх точек: в 14 %, как на странице вариантов, на флаге обычного размера она была в одну заметную
 // точку. Оранжевая; на плашке (plate - её цвет) почти той же яркости - цвета букв: на жёлтой и светлой оранжевую не видно.
-// На флаге (plate - nullptr) под полосой - тёмная черта в точку: флаг бывает и оранжевым сверху. rgba - без умножения на
-// альфу, w x h.
+// На флаге (plate - nullptr) полоса - над ним, через пустую строку, а флаг - ниже: поверх она закрывала его верхнюю полосу,
+// и российский становился жёлто-сине-красным (снимки Дмитрия, 29.10.2026). Места в картинке хватает: у Flagpack она
+// квадратная, флаг в ней ниже её на четверть. Не хватает (своя папка флагов) - поверх, и под полосой тёмная черта в точку:
+// флаг бывает и оранжевым сверху. rgba - без умножения на альфу, w x h.
 inline void CapsStripe(unsigned char* rgba, int w, int h, const uint32_t* plate = nullptr) {
 	if (!rgba || w <= 0 || h <= 0) return;
-	int top = h, bottom = -1;
+	int top = h, bottom = -1, left = w, right = -1;
 	for (int y = 0; y < h; y++)
 		for (int x = 0; x < w; x++)
 			if (rgba[(y * w + x) * 4 + 3] > 40) {
 				top = (std::min)(top, y);
 				bottom = (std::max)(bottom, y);
+				left = (std::min)(left, x);
+				right = (std::max)(right, x);
 			}
 	if (bottom < 0) return;
 	const int thick = (std::max)(3, (int)std::lround((bottom - top + 1) * 0.2));
+	if (!plate && thick + 1 + (bottom - top + 1) <= h) {
+		// Полоса, пустая строка и флаг - посередине картинки по высоте: флаг сдвигается на shift строк (вниз - плюс).
+		const int start = (h - (thick + 1 + (bottom - top + 1))) / 2, shift = start + thick + 1 - top;
+		const size_t row = (size_t)w * 4;
+		if (shift > 0) {
+			std::memmove(rgba + shift * row, rgba, (h - shift) * row);
+			std::memset(rgba, 0, shift * row);
+		} else if (shift < 0) {
+			std::memmove(rgba, rgba - shift * row, (h + shift) * row);
+			std::memset(rgba + (h + shift) * row, 0, -shift * row);
+		}
+		for (int y = start; y < start + thick; y++)
+			for (int x = left; x <= right; x++) {
+				unsigned char* p = rgba + y * row + x * 4;
+				p[0] = kCaps >> 16 & 0xff;
+				p[1] = kCaps >> 8 & 0xff;
+				p[2] = kCaps & 0xff;
+				p[3] = 255;
+			}
+		return;
+	}
 	const uint32_t stripe = plate && Contrast(kCaps, *plate) < 1.6 ? Letters(*plate) : kCaps;
 	const int last = (std::min)(bottom, top + thick - (plate ? 1 : 0));
 	for (int y = top; y <= last; y++) {

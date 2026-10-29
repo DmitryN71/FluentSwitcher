@@ -149,7 +149,7 @@ public:
 		LOG_ANY(L"mainguid new layout: {}, name={}", (void*)lay, LogPlain(id));
 
 		if (!id.empty()) {
-			auto icon = IconMgr::Inst().GetIcon(id.c_str(), GetSize(), !g_enabled.IsEnabled());
+			auto icon = IconMgr::Inst().GetIcon(id.c_str(), GetSize(), !g_enabled.IsEnabled(), curlay);
 			if (icon->IsOk()) {
 				tray.SetIcon(icon->hicon);
 				return;

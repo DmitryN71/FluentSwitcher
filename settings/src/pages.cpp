@@ -1224,6 +1224,15 @@ void SettingsFrame::Section(const char* icon, const wxString& title)
     m_nav->AddSection(icon, title);
 }
 
+void SettingsFrame::Group(const wxString& title)
+{
+    // Not a card: the search finds the cards only, and the heading stays out of its results. Space above it - after the
+    // cards of the group before.
+    if (!m_column->IsEmpty())
+        m_column->AddSpacer(FromDIP(14));
+    m_column->Add(FluentText(m_page, title, 10, g.text, true), 0, wxLEFT | wxBOTTOM, FromDIP(4));
+}
+
 wxWindow* SettingsFrame::Toggle(const wxString& title, const wxString& description, const char* key, bool def)
 {
     ToggleSwitch* toggle = nullptr;
@@ -1393,7 +1402,7 @@ wxWindow* SettingsFrame::BadgeColors()
     wxPanel* rows = nullptr;
     AddSettingsCard(m_page, m_column, T("Цвет плашки с буквами"),
                     T("Когда вид флага – буквы: у каждой раскладки свой цвет. Буквы на плашке – белые или тёмные, какие "
-                      "на этом цвете виднее"),
+                      "на этом цвете виднее. Буквы в трее – на плашке любого цвета, кроме тёмной"),
                     [&](wxWindow* card) {
         rows = new wxPanel(card);
         rows->SetBackgroundColour(card->GetBackgroundColour());
@@ -1519,7 +1528,7 @@ void SettingsFrame::BuildGeneral()
         Changed();
     };
     AddSettingsCard(m_page, m_column, T("Запускать вместе с Windows"),
-                    T("Приложение стартует при входе в Windows, видно только значок у часов"),
+                    T("Приложение стартует при входе в Windows, видно только значок в трее"),
                     [&](wxWindow* card) { return m_autostartSwitch = new ToggleSwitch(card, m_autostart); });
     m_autostartSwitch->onChange = [this] {
         m_autostart = m_autostartSwitch->IsOn();
@@ -1551,7 +1560,7 @@ void SettingsFrame::BuildGeneral()
     const wxArrayString langValues = { "Russian", "English", "Ukrainian" };
     const wxArrayString langNames = { wxString::FromUTF8("Русский"), wxString("English"),
                                       wxString::FromUTF8("Українська") };
-    Choice(T("Язык"), T("Этого окна и меню значка у часов. Окно откроется на новом языке после сохранения"), langNames,
+    Choice(T("Язык"), T("Этого окна и меню значка в трее. Окно откроется на новом языке после сохранения"), langNames,
            (int)CurrentLanguage(), [this, langValues](int i) { m_edit.SetString("gui_lang", langValues[i]); });
 
     // "" - as Windows; main.cpp reads it when the window starts.
@@ -1559,7 +1568,7 @@ void SettingsFrame::BuildGeneral()
     const wxArrayString themeNames = { T("Как в Windows"), T("Светлая"), T("Тёмная") };
     const int theme = themeValues.Index(m_edit.GetString("ui_theme", wxString()));
     Choice(T("Тема"),
-           T("Этого окна и меню у значка у часов. «Как в Windows»: окно – как приложения, меню – как панель задач. "
+           T("Этого окна и меню значка в трее. «Как в Windows»: окно – как приложения, меню – как панель задач. "
              "Окно откроется в новой теме после сохранения"),
            themeNames,
            theme == wxNOT_FOUND ? 0 : theme, [this, themeValues](int i) { m_edit.SetString("ui_theme", themeValues[i]); });
@@ -2370,7 +2379,7 @@ void SettingsFrame::BuildLayouts()
     };
 
     // The flag of English in the tray and at the text cursor (the engine's IconManager.h): the US or the British one.
-    Choice(T("Флаг английской раскладки"), T("У часов и у текстового курсора"), { T("Американский"), T("Британский") },
+    Choice(T("Флаг английской раскладки"), T("В трее и у текстового курсора"), { T("Американский"), T("Британский") },
            m_edit.GetBool("useBritishFlag", false) ? 1 : 0, [this](int i) { m_edit.SetBool("useBritishFlag", i == 1); });
     FinishPage();
 }
@@ -2379,10 +2388,10 @@ void SettingsFrame::BuildTray()
 {
     // The icon in the notification area, by the clock (the engine's TrayIcon.h): whether it shows, which, its clicks.
     // Apart from the flag at the text cursor since 07.10.2026 (forum: hiding the tray icon hid that flag too).
-    Section(kIconTray, T("Значок у часов"));
+    Section(kIconTray, T("Значок в трее"));
     ToggleSwitch* shown = nullptr;
-    AddSettingsCard(m_page, m_column, T("Показывать значок у часов"),
-                    T("В области уведомлений, у часов: раскладка, меню и уведомления FluentSwitcher. Без значка "
+    AddSettingsCard(m_page, m_column, T("Показывать значок в трее"),
+                    T("В трее (области уведомлений Windows): раскладка, меню и уведомления FluentSwitcher. Без значка "
                       "настройки открывает сочетание «Открыть настройки»"),
                     [&](wxWindow* card) {
                         return shown = new ToggleSwitch(card, m_edit.GetBool("tray_icon", true) &&
@@ -2420,20 +2429,14 @@ void SettingsFrame::BuildCaretFlag()
 {
     // The flag at the text cursor (the engine's CaretFlag.h), with its own look.
     Section(kIconFlags, T("Флаг у курсора"));
+    // Three groups (gutasiho on the forum, 29.10.2026): the page is full, and the rows of both flags among the cursor's
+    // ones looked like a heading for the rows under them.
+    Group(T("У текстового курсора"));
     FluentChoice* caret = static_cast<FluentChoice*>(
         Numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
                 { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
-    wxWindow* brief = Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"),
-                              "caret_flag_brief_ms", 2000, { 1000, 2000, 3000, 5000, 10000 },
-                              { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
     FluentChoice* caretLook = static_cast<FluentChoice*>(
         FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на плашке"), "caret_flag_set", false));
-    // Both flags (the forum's vote, 28.10.2026): the colour of the badge for each layout, CapsLock on the flag.
-    wxWindow* badges = BadgeColors();
-    wxWindow* caps = Toggle(T("CapsLock на флаге"),
-                            T("Пока включён CapsLock, сверху на флаге – оранжевая полоса: у текстового курсора и на "
-                              "указателе мыши. Нажали CapsLock – флаг показывается и в режиме «ненадолго»"),
-                            "flag_capslock", false);
     const std::vector<wxWindow*> caretRows = {
         caretLook,
         Numbers(T("Где показывать"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
@@ -2445,6 +2448,7 @@ void SettingsFrame::BuildCaretFlag()
                 T("Максимальная") }),
     };
     // The flag on the mouse pointer over text (the engine's MouseFlag.h; Dmitry, 16.10.2026).
+    Group(T("На указателе мыши"));
     FluentChoice* mouse = static_cast<FluentChoice*>(
         Numbers(T("Флаг на указателе мыши"),
                 T("Над текстом указатель мыши показывает флаг раскладки: всё время или ненадолго – после смены "
@@ -2459,22 +2463,35 @@ void SettingsFrame::BuildCaretFlag()
                 { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
                 T("Максимальная") }),
     };
+    // Both flags: "for a moment" (the pointer's takes that time too); the colour of the badge for each layout and
+    // CapsLock on the flag (the forum's vote, 28.10.2026).
+    Group(T("Для обоих флагов"));
+    wxWindow* brief = Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"),
+                              "caret_flag_brief_ms", 2000, { 1000, 2000, 3000, 5000, 10000 },
+                              { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
+    wxWindow* badges = BadgeColors();
+    wxWindow* caps = Toggle(T("CapsLock на флаге"),
+                            T("Пока включён CapsLock, сверху на флаге – оранжевая полоса: у текстового курсора и на "
+                              "указателе мыши. Нажали CapsLock – флаг показывается и в режиме «ненадолго»"),
+                            "flag_capslock", false);
     // Pale while they mean nothing, as Windows 11 shows them (Dmitry, 16.10.2026: "если флаг не показываем, то и
     // настройки прозрачности и типа флагов ... должны быть grayed out"): a flag's own rows while it is not shown; "for a
     // moment" while neither flag shows for a moment - the pointer's takes that time too; CapsLock while neither flag is
-    // shown; the badges' colours while no flag shown is letters (as FlagLook and the engine read the looks).
+    // shown; the badges' colours while no flag shown is letters (as FlagLook and the engine read the looks), nor the tray
+    // icon - it takes a chosen colour too (its look is on another page: as it was when this one was built or changed).
     const auto pale = [this, brief, caretRows, mouseRows, badges, caps] {
         const int caretMode = m_edit.GetInt("caret_flag", 1), mouseMode = m_edit.GetInt("mouse_flag", 0);
         const auto letters = [](const wxString& look) { return look == "Letters" || look == "LettersFramed"; };
         const wxString caretSet = m_edit.GetString("caret_flag_set", m_edit.GetString("flagsSet", "Flagpack"));
         const wxString mouseSet = m_edit.GetString("mouse_flag_set", wxString());
+        const bool trayLetters = m_edit.GetBool("tray_icon", true) && letters(m_edit.GetString("flagsSet", "Flagpack"));
         for (wxWindow* row : caretRows)
             EnableSettingsCard(row->GetParent(), caretMode != 0);
         for (wxWindow* row : mouseRows)
             EnableSettingsCard(row->GetParent(), mouseMode != 0);
         EnableSettingsCard(brief->GetParent(), caretMode == 2 || mouseMode == 2);
         EnableSettingsCard(caps->GetParent(), caretMode != 0 || mouseMode != 0);
-        EnableSettingsCard(badges->GetParent(), (caretMode != 0 && letters(caretSet)) ||
+        EnableSettingsCard(badges->GetParent(), trayLetters || (caretMode != 0 && letters(caretSet)) ||
                                                     (mouseMode != 0 && letters(mouseSet.empty() ? caretSet : mouseSet)));
     };
     for (FluentChoice* choice : { caret, mouse, caretLook, mouseLook })
@@ -2491,7 +2508,7 @@ void SettingsFrame::BuildSounds()
     // The engine's LayoutSound.h: sound_switch, sound_fix - per cent, 0 - none.
     Section(kIconSounds, T("Звуки"));
     Numbers(T("Звук при переключении раскладки"),
-            T("Сочетанием FluentSwitcher или Windows, кликом по значку у часов. Звук – switch.wav в папке sounds рядом "
+            T("Сочетанием FluentSwitcher или Windows, кликом по значку в трее. Звук – switch.wav в папке sounds рядом "
               "с приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой"),
             "sound_switch", 0, { 0, 30, 60, 100 }, { T("Нет"), T("Тихий"), T("Средний"), T("Громкий") });
     Numbers(T("Звук при исправлении текста"),

@@ -202,7 +202,9 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			rt->Clear(D2D1::ColorF(0, 0, 0, 0));
 			rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
 			if (shape && style == Style::Badge) {
-				const float r = shapeH * 0.28f;
+				// Скругление - около восьмой части высоты, как у кнопок Windows 11 (было 0,28: gutasiho и WorldTroll на
+				// форуме, 29.10.2026 - на маленькой плашке круглые углы делают её хуже, лучше прямые).
+				const float r = shapeH * 0.14f;
 				brush->SetColor(D2D1::ColorF(plate));
 				rt->FillRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, shapeH - 0.5f }, r, r }, brush.Get());
 				brush->SetColor(D2D1::ColorF(onPlate, 0.28f));

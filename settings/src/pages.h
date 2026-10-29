@@ -32,6 +32,8 @@ public:
 private:
     // Pages and cards.
     void Section(const char* icon, const wxString& title);
+    // A heading over the cards that follow it on the page, as the groups of Windows 11 Settings.
+    void Group(const wxString& title);
     void FinishPage();
     wxWindow* Toggle(const wxString& title, const wxString& description, const char* key, bool def);
     wxWindow* Choice(const wxString& title, const wxString& description, const wxArrayString& items, int selection,

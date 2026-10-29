@@ -20,14 +20,24 @@ class IconMgr {
 		return img;
 	}
 	// Значок в трее буквами (LetterIcons.h): цвет - как текст панели задач (её тема - в ключе: сменилась - новый значок).
-	Images::ImageIcon LetterIcon(TStr locale, Vec_i2 size, bool is_gray) {
+	// У раскладки lay выбран цвет плашки - буквы на плашке этого цвета во весь значок (jexx85 на форуме, 29.10.2026: "в
+	// трее цвета раскладки не меняются?"); тёмная, как по умолчанию, - буквы как были, без плашки.
+	Images::ImageIcon LetterIcon(TStr locale, Vec_i2 size, bool is_gray, HKL lay) {
 		const bool dark = FluentMenu::TaskbarDark();
 		const auto text = LetterIcons::Text(locale);
-		const auto key = std::format(L"letters|{}|{}x{}|{}|{}", text, size.x, size.y, dark, is_gray);
+		uint32_t fill = BadgeColor::kDark;
+		const bool badge = BadgeChosen(lay, fill);
+		const auto key = std::format(L"letters|{}|{}x{}|{}|{}|{}|{:06x}", text, size.x, size.y, dark, is_gray, badge, fill);
 		auto it = icons.find(key);
 		if (it != icons.end() && !it->second.empty()) return it->second.front();
-		auto icon = Images::ImageToIconConsume(ToImage(
-			LetterIcons::Render(text, size.x, size.y, LetterIcons::Style::Plain, dark, is_gray)));
+		auto pic = LetterIcons::Render(text, size.x, size.y, badge ? LetterIcons::Style::Badge : LetterIcons::Style::Plain,
+		                               dark, is_gray, fill);
+		// Плашка бывает на точку ниже (поля над буквами и под ними равны): значок - ровно своего размера, строка снизу пустая.
+		if (pic.width == size.x && pic.height > 0 && pic.height < size.y) {
+			pic.rgba.resize((size_t)size.x * size.y * 4, 0);
+			pic.height = size.y;
+		}
+		auto icon = Images::ImageToIconConsume(ToImage(std::move(pic)));
 		icons[key] = { icon };
 		return icon;
 	}
@@ -148,9 +158,9 @@ public:
 		return inst;
 	}
 
-	// Значок в трее (flagsSet).
-	Images::ImageIcon GetIcon(TStr contry_id, Vec_i2 size, bool is_gray = false) {
-		if (LetterIcons::Is(conf_get_unsafe()->flagsSet)) return LetterIcon(contry_id, size, is_gray);
+	// Значок в трее (flagsSet) раскладки lay.
+	Images::ImageIcon GetIcon(TStr contry_id, Vec_i2 size, bool is_gray = false, HKL lay = 0) {
+		if (LetterIcons::Is(conf_get_unsafe()->flagsSet)) return LetterIcon(contry_id, size, is_gray, lay);
 
 		// приоритет: 1) все границы равны. 2) 1 граница равна, другая меньше 3) самый большой размер
 		const auto& bndl = GetBundle(contry_id, is_gray);
@@ -184,6 +194,14 @@ public:
 		auto cfg = conf_get_unsafe();
 		const auto* info = cfg->layouts_info.GetLayoutInfo(lay);
 		return info ? BadgeColor::Resolve(info->badge) : BadgeColor::kDark;
+	}
+	// Цвет плашки раскладки lay выбран (не тёмная, как по умолчанию): fill - он.
+	static bool BadgeChosen(HKL lay, uint32_t& fill) {
+		auto cfg = conf_get_unsafe();
+		const auto* info = lay ? cfg->layouts_info.GetLayoutInfo(lay) : nullptr;
+		if (!info || info->badge.empty()) return false;
+		fill = BadgeColor::Resolve(info->badge);
+		return fill != BadgeColor::kDark;
 	}
 	// Полоса CapsLock на флаге: включена в настройках (flag_capslock), и CapsLock горит.
 	static bool CapsShown() { return conf_get_unsafe()->flag_capslock && Utils::IsCapslockEnabled(); }

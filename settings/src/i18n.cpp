@@ -54,7 +54,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Включить / выключить FluentSwitcher", "Turn FluentSwitcher on / off" },
         { "Работает и когда приложение выключено", "Works even while the app is off" },
         { "Включить / выключить автопереключение", "Turn the auto switch on / off" },
-        { "Включено ли – видно в меню у значка у часов, там же его можно и переключить",
+        { "Включено ли – видно в меню значка в трее, там же его можно и переключить",
           "Whether it is on shows in the tray icon's menu, where it can be switched too" },
         { "Открыть настройки", "Open settings" },
         { "Это окно", "This window" },
@@ -105,7 +105,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Выключенный не исправляет текст и не отвечает на сочетания, кроме «Включить / выключить»",
           "When off, it fixes no text and answers no hotkeys except “Turn on / off”" },
         { "Запускать вместе с Windows", "Start with Windows" },
-        { "Приложение стартует при входе в Windows, видно только значок у часов",
+        { "Приложение стартует при входе в Windows, видно только значок в трее",
           "Starts when you sign in to Windows; only the tray icon shows" },
         { "Работать в приложениях, запущенных от имени администратора", "Work in apps run as administrator" },
         { "FluentSwitcher тогда работает с правами администратора: Windows спросит разрешения один раз, дальше "
@@ -138,11 +138,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Обычный", "Normal" },
         { "Крупный", "Large" },
         { "Очень крупный", "Extra large" },
-        { "Значок у часов", "Tray icon" },
-        { "Показывать значок у часов", "Show the tray icon" },
-        { "В области уведомлений, у часов: раскладка, меню и уведомления FluentSwitcher. Без значка настройки "
+        { "Значок в трее", "Tray icon" },
+        { "Показывать значок в трее", "Show the tray icon" },
+        { "В трее (области уведомлений Windows): раскладка, меню и уведомления FluentSwitcher. Без значка настройки "
           "открывает сочетание «Открыть настройки»",
-          "In the notification area, by the clock: the layout, the menu and the notifications of FluentSwitcher. "
+          "In the tray (the notification area of Windows): the layout, the menu and the notifications of FluentSwitcher. "
           "Without the icon, the settings open with the \"Open settings\" hotkey" },
         { "Вид значка", "Look of the icon" },
         { "Флаг раскладки, её буквы или значок FluentSwitcher", "The layout's flag, its letters or the FluentSwitcher icon" },
@@ -152,13 +152,16 @@ const std::unordered_map<std::string, const char*>& English()
         { "Клик по значку", "Click on the icon" },
         { "Двойной клик по значку", "Double click on the icon" },
         { "Флаг у курсора", "Flag at the cursor" },
+        { "У текстового курсора", "At the text cursor" },
+        { "На указателе мыши", "On the mouse pointer" },
+        { "Для обоих флагов", "For both flags" },
         { "Вид флага", "Look of the flag" },
         { "Флаг раскладки или её буквы на плашке", "The layout's flag or its letters on a badge" },
         { "Цвет плашки с буквами", "Color of the badge with the letters" },
         { "Когда вид флага – буквы: у каждой раскладки свой цвет. Буквы на плашке – белые или тёмные, какие на этом "
-          "цвете виднее",
+          "цвете виднее. Буквы в трее – на плашке любого цвета, кроме тёмной",
           "When the flag's look is letters: each layout has a color of its own. The letters on the badge are white or "
-          "dark, whichever shows better on that color" },
+          "dark, whichever shows better on that color. The letters in the tray get a badge of any color but the dark one" },
         { "Серая", "Gray" }, // "Тёмная", "Светлая" - at the theme
         { "Синяя", "Blue" },
         { "Красная", "Red" },
@@ -177,7 +180,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Прозрачность", "Transparency" },
         { "Звуки", "Sounds" },
         { "Флаг английской раскладки", "Flag of the English layout" },
-        { "У часов и у текстового курсора", "In the tray and at the text cursor" },
+        { "В трее и у текстового курсора", "In the tray and at the text cursor" },
         { "Американский", "American" },
         { "Британский", "British" },
         { "Браузер: назад", "Browser back" },
@@ -314,7 +317,7 @@ const std::unordered_map<std::string, const char*>& English()
         { "Средний", "Medium" },
         { "Громкий", "Loud" },
         { "Звук при переключении раскладки", "Sound when the layout is switched" },
-        { "Сочетанием FluentSwitcher или Windows, кликом по значку у часов. Звук – switch.wav в папке sounds рядом с "
+        { "Сочетанием FluentSwitcher или Windows, кликом по значку в трее. Звук – switch.wav в папке sounds рядом с "
           "приложением; положите туда en.wav, ru.wav – и у каждого языка будет свой",
           "With a hotkey of FluentSwitcher or Windows, with a click on the tray icon. The sound is switch.wav in the "
           "sounds folder next to the app; put en.wav, ru.wav there for a sound of each language" },
@@ -336,10 +339,10 @@ const std::unordered_map<std::string, const char*>& English()
         { "При масштабе 100 %; на экранах с большим масштабом он крупнее",
           "At 100 % scale; on screens with a larger scale it is larger" },
         { "Язык", "Language" },
-        { "Этого окна и меню значка у часов. Окно откроется на новом языке после сохранения",
+        { "Этого окна и меню значка в трее. Окно откроется на новом языке после сохранения",
           "Of this window and of the tray icon's menu. The window reopens in the new language after saving" },
         { "Тема", "Theme" },
-        { "Этого окна и меню у значка у часов. «Как в Windows»: окно – как приложения, меню – как панель задач. Окно откроется в новой теме после сохранения",
+        { "Этого окна и меню значка в трее. «Как в Windows»: окно – как приложения, меню – как панель задач. Окно откроется в новой теме после сохранения",
           "Of this window and the tray icon's menu. \"As in Windows\": the window as the apps, the menu as the taskbar. "
           "The window reopens in the new theme after saving" },
         { "Как в Windows", "As in Windows" },

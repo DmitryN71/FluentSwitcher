@@ -21,7 +21,10 @@ free and open source under GPL-3.0.
   "d-nhtnmb[" - "в-третьих". A word in CAPITALS from four letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
   "ЗИМА ВОЗМЕЗДИЯ", in the middle of the word from the fifth letter. A site or mail address typed in the wrong layout too: "еюьу" - "t.me", "нфюкг" - "ya.ru". Frequent
   abbreviations of a built-in list too - "ГЫИ" - "USB", "BYY" - "ИНН", "зды" - "pls", and hotkeys: "Секд+А" - "Ctrl+F".
-  A word with Ы or Ь first - no Russian word begins so - goes without a dictionary too: "Ыфин" - "Saby". In a word with
+  A word with Ы or Ь first - no Russian word begins so - goes without a dictionary too: "Ыфин" - "Saby". Names no
+  dictionary knows - when the typed word has many letter combinations its language hardly has: "ФЗЛЬшккщк" -
+  "APKMirror", "Вшфвщс" - "Diadoc". A word the dictionary knows only with capitals, typed in lowercase, too: "пшерги" -
+  "github", "чкфн" - "xray". In a word with
   a hyphen where only the part after the hyphen is in the wrong layout, only that part is fixed: "legacy-yfcnhjqrb" -
   "legacy-настройки", and so does Shift twice.
   English with an apostrophe: "Шэь" - "I'm", "вщтэе" - "don't". Words run together with capitals: "СфзыДщсл" -
@@ -51,15 +54,17 @@ free and open source under GPL-3.0.
   "ZIMA" - "ЗИМА"). The table for Russian is a choice: reversible (Ob''yavlenie), as in Wikipedia (Obyavleniye), as
   in the Moscow Metro (Obyavlenie) or as in a passport (Obieiavlenie).
 - **A flag at the text cursor**: always or for a moment - after a change of layout, window or text field and after
-  a mouse click; a flag (regular or waving) or the letters on a dark badge, below or above the cursor, four sizes, transparency. In
-  browsers only in text fields. Set apart from the tray icon.
+  a mouse click; a flag (regular or waving) or the letters on a badge - dark or of a color of its own for each layout,
+  below or above the cursor, four sizes, transparency. While CapsLock is on - a red arrow up to the right of the flag
+  (if you like). In browsers only in text fields. Set apart from the tray icon.
 - **A flag on the mouse pointer** (if you like): over text the pointer shows the flag of the layout – always or for a
   moment, after a change of layout, window or input field; its own look and transparency or those of the flag at the
-  cursor. Windows draws it itself, with no work on every move of the mouse; none in the apps of "Don't work in apps".
+  cursor, the CapsLock arrow to the left of the beam. Windows draws it itself, with no work on every move of the mouse;
+  none in the apps of "Don't work in apps".
 - **A tray icon**: flags for 74 languages (Flagpack, each size on the screen's pixels), regular or waving – with folds and a shadow, the British flag for English
-  if you like, the letters EN, RU in the taskbar's text color or the app's icon; it can be hidden. A click and a
-  double click on it do what you choose: the menu, the next layout (of the window you were typing in), on / off,
-  settings.
+  if you like, the letters EN, RU in the taskbar's text color or on a badge of the layout's color, the app's icon; it
+  can be hidden. A click and a double click on it do what you choose: the menu, the next layout (of the window you were
+  typing in), on / off, settings. The icon and both flags are set in one section - "Layout indicators".
 - **A Windows 11 style menu by the icon**: rounded corners, icons, "Enabled" and "Auto switch" toggles that keep the
   menu open; the theme follows the taskbar.
 - **Sounds**, as in Punto: a click when the layout is switched (with a hotkey of FluentSwitcher or Windows, with a

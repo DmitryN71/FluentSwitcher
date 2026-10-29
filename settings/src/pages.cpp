@@ -2471,7 +2471,7 @@ void SettingsFrame::BuildCaretFlag()
                               { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
     wxWindow* badges = BadgeColors();
     wxWindow* caps = Toggle(T("CapsLock на флаге"),
-                            T("Пока включён CapsLock, сверху на флаге – оранжевая полоса: у текстового курсора и на "
+                            T("Пока включён CapsLock, над флагом – оранжевая полоса: у текстового курсора и на "
                               "указателе мыши. Нажали CapsLock – флаг показывается и в режиме «ненадолго»"),
                             "flag_capslock", false);
     // Pale while they mean nothing, as Windows 11 shows them (Dmitry, 16.10.2026: "если флаг не показываем, то и

@@ -215,8 +215,7 @@ public:
 		if (LetterIcons::Is(set)) { // буквы на плашке, высотой в три четверти размера
 			auto pic = LetterIcons::Render(LetterIcons::Text(contry_id), size, (int)std::lround(size * 0.75),
 			                               LetterIcons::Style::Badge, true, is_gray, fill);
-			const uint32_t plate = is_gray ? BadgeColor::Gray(fill) : fill; // как её рисует Render
-			if (caps) BadgeColor::CapsStripe(pic.rgba.data(), pic.width, pic.height, &plate);
+			if (caps) BadgeColor::CapsStripe(pic.rgba, pic.width, pic.height); // над плашкой: картинка выше
 			return ToImage(std::move(pic));
 		}
 		wstring local_id = contry_id;
@@ -231,7 +230,12 @@ public:
 		for (auto& it : LoadImages(local_id, FolderName(set), is_gray)) {
 			if (better(it, best)) best = it;
 		}
-		if (caps && best && best->IsOk()) BadgeColor::CapsStripe(best->data, best->width, best->height); // своя копия из файла
+		if (caps && best && best->IsOk()) { // над флагом; картинка бывает и выше (своя папка флагов, впритык)
+			LetterIcons::Picture pic{ best->width, best->height,
+			                          { best->data, best->data + (size_t)best->width * best->height * 4 } };
+			BadgeColor::CapsStripe(pic.rgba, pic.width, pic.height);
+			return ToImage(std::move(pic));
+		}
 		return best;
 	}
 

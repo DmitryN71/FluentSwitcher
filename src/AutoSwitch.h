@@ -406,7 +406,9 @@ inline constexpr const wchar_t* kShortEn[] = {
 	L"brb", L"omg", L"msg", L"npm", L"src", L"cmd", L"ls", L"pwd", L"sudo", L"env", L"js", L"ts", L"py", L"cpp", L"php",
 	L"db", L"ctrl", L"alt", L"esc", L"del", L"ins", L"pgup", L"pgdn", L"prtsc", L"fn", L"ghz", L"mhz", L"khz", L"kb",
 	L"mb", L"gb", L"tb", L"px", L"dpi", L"fps", L"rpm", L"wb", L"ym", L"ozon", L"fbo", L"fbs", L"dbs", L"rfbs", L"sms",
-	L"roi", L"oem", L"kpi", L"ctr", L"cpc", L"cpm", L"cpa", L"erp", L"cdn", L"sso", L"otp" };
+	L"roi", L"oem", L"kpi", L"ctr", L"cpc", L"cpm", L"cpa", L"erp", L"cdn", L"sso", L"otp",
+	// Из «Переключать всегда» WinnyS (форум, 29.10.2026; остальное из его списка переключается и так).
+	L"rdp", L"fs", L"ms", L"tnx", L"drweb" };
 inline constexpr const wchar_t* kShortEnKeep[] = {
 	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"it", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
 	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd" };

@@ -58,7 +58,7 @@ public:
 		const std::wstring id = Utils::GetNameForHKL_simple(m_lay);
 		const std::string look = cfg->mouse_flag_set.empty() ? cfg->caret_flag_set : cfg->mouse_flag_set;
 		const int opacity = std::clamp(cfg->mouse_flag_opacity, 10, 100);
-		const uint32_t fill = IconMgr::BadgeFill(m_lay); // цвет плашки (буквы) и полоса CapsLock
+		const uint32_t fill = IconMgr::BadgeFill(m_lay); // цвет плашки (буквы) и стрелка CapsLock
 		const bool caps = IconMgr::CapsShown();
 		const std::wstring key = id + L"|" + StrUtils::Convert(look) + (cfg->useBritishFlag ? L"|gb" : L"") + L"|" +
 			std::to_wstring(opacity) + std::format(L"|{:06x}|{}", fill, caps);
@@ -252,8 +252,8 @@ private:
 		return DefWindowProcW(wnd, msg, wParam, lParam);
 	}
 
-	// Указатель-текст Windows с флагом раскладки id вида look (буквы - на плашке цвета fill; caps - с полосой CapsLock).
-	// nullptr - не вышло.
+	// Указатель-текст Windows с флагом раскладки id вида look (буквы - на плашке цвета fill; caps - со стрелкой CapsLock
+	// слева от палочки). nullptr - не вышло.
 	HCURSOR Make(const std::wstring& id, const std::string& look, int opacity, uint32_t fill, bool caps) {
 		if (!m_baseOk) {
 			MouseCursor::Picture windows;
@@ -267,9 +267,21 @@ private:
 		if (size < 6) return nullptr;
 		// Буквы - вдвое крупнее и уменьшены: на 16 точках, нарисованные сразу, они тонкие и угловатые (Дмитрий,
 		// 16.10.2026: "шрифт очень некрасивый"); флаги - своего размера, точка в точку.
-		auto img = IconMgr::Inst().GetImage(id.c_str(), LetterIcons::Is(look) ? size * 2 : size, false, look, fill, caps);
+		// Стрелка CapsLock - не в картинке флага (та вписывается в квадрат, и флаг стал бы мельче), а слева от палочки.
+		auto img = IconMgr::Inst().GetImage(id.c_str(), LetterIcons::Is(look) ? size * 2 : size, false, look, fill);
 		if (!img || !img->IsOk()) return nullptr;
-		return MouseCursor::Compose(m_base, MouseCursor::Scaled(img->data, img->width, img->height, size), size, opacity);
+		const auto flag = MouseCursor::Scaled(img->data, img->width, img->height, size);
+		MouseCursor::Arrow arrow;
+		if (const int body = caps ? MouseCursor::FlagBody(flag, size) : 0) {
+			arrow.h = CapsArrow::Height(body);
+			arrow.gap = CapsArrow::Gap(body);
+			const auto rgba = CapsArrow::Draw(arrow.h, arrow.w);
+			arrow.argb.resize((size_t)arrow.w * arrow.h);
+			for (size_t i = 0; i < arrow.argb.size(); i++)
+				arrow.argb[i] = (uint32_t)rgba[i * 4 + 3] << 24 | (uint32_t)rgba[i * 4] << 16 | (uint32_t)rgba[i * 4 + 1] << 8 |
+					rgba[i * 4 + 2];
+		}
+		return MouseCursor::Compose(m_base, flag, size, opacity, arrow.w ? &arrow : nullptr);
 	}
 
 	// Готовые указатели - по ключу: "ненадолго" показывает тот же флаг много раз, картинку не собирать каждый раз заново

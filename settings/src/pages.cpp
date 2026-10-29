@@ -2494,15 +2494,16 @@ void SettingsFrame::BuildCaretFlag()
                 { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
                 T("Максимальная") }),
     };
-    // Both flags: "for a moment" (the pointer's takes that time too) and CapsLock on the flag (the forum's vote,
+    // Both flags: "for a moment" (the pointer's takes that time too) and CapsLock by the flag (the forum's vote,
     // 28.10.2026). The colour of the badge for each layout is on "Раскладки": it colours the tray too.
     Group(T("Для обоих флагов"));
     wxWindow* brief = Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"),
                               "caret_flag_brief_ms", 2000, { 1000, 2000, 3000, 5000, 10000 },
                               { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
-    wxWindow* caps = Toggle(T("CapsLock на флаге"),
-                            T("Пока включён CapsLock, над флагом – оранжевая полоса: у текстового курсора и на "
-                              "указателе мыши. Нажали CapsLock – флаг показывается и в режиме «ненадолго»"),
+    wxWindow* caps = Toggle(T("CapsLock у флага"),
+                            T("Пока включён CapsLock, у флага – красная стрелка вверх: у текстового курсора справа от "
+                              "флага, на указателе мыши – слева от палочки. Нажали CapsLock – флаг показывается и в "
+                              "режиме «ненадолго»"),
                             "flag_capslock", false);
     // Pale while they mean nothing, as Windows 11 shows them (Dmitry, 16.10.2026: "если флаг не показываем, то и
     // настройки прозрачности и типа флагов ... должны быть grayed out"): a flag's own rows while it is not shown; "for a

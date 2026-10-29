@@ -182,9 +182,29 @@ inline Placement Place(const Picture& p) {
 }
 inline int FlagSize(const Picture& p) { return Place(p).size; }
 
+// Стрелка CapsLock (CapsArrow.h рисует её движку) - слева от палочки: справа от неё флаг, места нет. Картинка w x h
+// (0xAARRGGBB) и зазор до палочки.
+struct Arrow {
+	int w = 0, h = 0, gap = 1;
+	std::vector<uint32_t> argb;
+};
+// Высота непрозрачной части флага (квадрат size x size, 0xAARRGGBB) - по ней стрелка CapsLock; 0 - её нет.
+inline int FlagBody(const std::vector<uint32_t>& flag, int size) {
+	int top = size, bottom = -1;
+	for (int y = 0; y < size; y++)
+		for (int x = 0; x < size; x++)
+			if ((size_t)y * size + x < flag.size() && (flag[(size_t)y * size + x] >> 24) > 200) {
+				top = (std::min)(top, y);
+				bottom = (std::max)(bottom, y);
+			}
+	return bottom < 0 ? 0 : bottom - top + 1;
+}
+
 // Указатель base (ARGB - Argb) с флагом flag (квадрат size x size, 0xAARRGGBB; флаг в нём - видимой частью) - где
-// Place; opacity - непрозрачность флага в процентах. nullptr - не вышло.
-inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, int size, int opacity = 100) {
+// Place; opacity - непрозрачность флага в процентах; arrow - и стрелка CapsLock: слева от палочки, посередине
+// непрозрачной части флага по высоте (места слева мало - у самого края). nullptr - не вышло.
+inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, int size, int opacity = 100,
+                       const Arrow* arrow = nullptr) {
 	opacity = (std::max)(0, (std::min)(100, opacity));
 	const int w = base.w, h = base.h;
 	if (!base.alpha) return nullptr;
@@ -205,24 +225,37 @@ inline HCURSOR Compose(const Picture& base, const std::vector<uint32_t>& flag, i
 	const int fy = pl.below ? drawn.bottom + 1 - top : drawn.bottom - bottom;
 	auto color = base.color;
 	auto andMask = base.andMask;
-	for (int y = top; y <= bottom; y++) {
-		for (int x = 0; x < size; x++) {
-			const int X = fx + x, Y = fy + y;
-			if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
-			const uint32_t s = flag[(size_t)y * size + x];
-			const uint32_t sa = (s >> 24) * (uint32_t)opacity / 100;
-			const size_t i = (size_t)Y * w + X;
-			// Прозрачность указателя - обычная (не умноженная на цвет): смешать.
-			const uint32_t d = color[i], da = d >> 24;
-			const uint32_t oa = sa + da * (255 - sa) / 255;
-			if (!oa) continue;
-			auto mix = [&](int shift) {
-				const uint32_t sc = (s >> shift) & 0xFF, dc = (d >> shift) & 0xFF;
-				return ((sc * sa + dc * da * (255 - sa) / 255) / oa) << shift;
-			};
-			color[i] = (oa << 24) | mix(16) | mix(8) | mix(0);
-			andMask[i] = 0;
-		}
+	// Точка s (0xAARRGGBB) поверх указателя в X, Y.
+	auto over = [&](int X, int Y, uint32_t s) {
+		if (X < 0 || Y < 0 || X >= w || Y >= h) return;
+		const uint32_t sa = (s >> 24) * (uint32_t)opacity / 100;
+		const size_t i = (size_t)Y * w + X;
+		// Прозрачность указателя - обычная (не умноженная на цвет): смешать.
+		const uint32_t d = color[i], da = d >> 24;
+		const uint32_t oa = sa + da * (255 - sa) / 255;
+		if (!oa) return;
+		auto mix = [&](int shift) {
+			const uint32_t sc = (s >> shift) & 0xFF, dc = (d >> shift) & 0xFF;
+			return ((sc * sa + dc * da * (255 - sa) / 255) / oa) << shift;
+		};
+		color[i] = (oa << 24) | mix(16) | mix(8) | mix(0);
+		andMask[i] = 0;
+	};
+	for (int y = top; y <= bottom; y++)
+		for (int x = 0; x < size; x++) over(fx + x, fy + y, flag[(size_t)y * size + x]);
+	if (arrow && arrow->w > 0 && arrow->h > 0 && arrow->argb.size() == (size_t)arrow->w * arrow->h) {
+		int solidTop = size, solidBottom = -1;
+		for (int y = top; y <= bottom; y++)
+			for (int x = 0; x < size; x++)
+				if ((flag[(size_t)y * size + x] >> 24) > 200) {
+					solidTop = (std::min)(solidTop, y);
+					solidBottom = (std::max)(solidBottom, y);
+				}
+		if (solidBottom < 0) solidTop = top, solidBottom = bottom;
+		const int ax = (std::max)(0, drawn.left - arrow->gap - arrow->w);
+		const int ay = fy + solidTop + (solidBottom - solidTop + 1 - arrow->h) / 2;
+		for (int y = 0; y < arrow->h; y++)
+			for (int x = 0; x < arrow->w; x++) over(ax + x, ay + y, arrow->argb[(size_t)y * arrow->w + x]);
 	}
 	HDC dc = GetDC(nullptr);
 	BITMAPINFO bi{};

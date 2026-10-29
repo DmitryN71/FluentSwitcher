@@ -3,8 +3,8 @@
 // Цвет плашки с буквами раскладки - у каждой раскладки свой (layouts_info[].badge; форум, 28.10.2026: из девяти вариантов
 // https://dmitryn71.github.io/FluentSwitcher/badges/ больше всех голосов у «свой цвет у языка»). Значение в настройках:
 // "" - тёмная, как было всегда; "windows" - цвет акцента Windows; "#rrggbb" - из палитры ниже или свой (сетка цветов Windows
-// в окне настроек). Буквы - белые или тёмные, какие на этом цвете виднее. И полоса CapsLock на флаге (flag_capslock). Нужен
-// и движку (LetterIcons.h, IconManager.h), и окну настроек (образец плашки у выбора цвета).
+// в окне настроек). Буквы - белые или тёмные, какие на этом цвете виднее. Нужен и движку (LetterIcons.h, IconManager.h),
+// и окну настроек (образец плашки у выбора цвета). Стрелка CapsLock у флага - CapsArrow.h.
 
 #include <windows.h>
 #include <dwmapi.h>
@@ -24,8 +24,6 @@ namespace BadgeColor {
 inline constexpr uint32_t kDark = 0x202020;
 inline constexpr uint32_t kWhiteLetters = 0xffffff, kDarkLetters = 0x1c1c1c;
 inline constexpr const char* kWindows = "windows";
-// Полоса CapsLock - оранжевая, как на странице вариантов (вариант 8).
-inline constexpr uint32_t kCaps = 0xf5a623;
 
 // Палитра окна настроек: значение в файле и его цвет. Синий, красный, жёлтый - со страницы вариантов (jexx85 на форуме,
 // 28.10.2026: «именно в указанных цветах»); серые - для тех, кто голосовал за оттенки серого.
@@ -119,65 +117,6 @@ inline uint32_t Letters(uint32_t fill) {
 inline uint32_t Gray(uint32_t rgb) {
 	const uint32_t l = (uint32_t)std::lround(0.299 * (rgb >> 16 & 0xff) + 0.587 * (rgb >> 8 & 0xff) + 0.114 * (rgb & 0xff));
 	return l << 16 | l << 8 | l;
-}
-
-// CapsLock включён (flag_capslock): над картинкой - флагом или плашкой с буквами - оранжевая полоса через пустую строку,
-// сама картинка не тронута (gutasiho на форуме, 28.10.2026: «CapsLock должен хорошо просматриваться на индикаторах любой
-// раскладки»). Поверх флага полоса закрывала его верхнюю полосу - российский становился жёлто-сине-красным, а на плашке
-// съедала поле над буквами (снимки Дмитрия, 29.10.2026: «почему флаг становится выше, а у букв полоса отнимает место?»):
-// теперь у обоих одинаково. Толщина - 20 % высоты флага, не тоньше трёх точек (в 14 %, как на странице вариантов, на
-// обычном размере - одна заметная точка); ширина - как у самого флага, без тени и полупрозрачного края (у флага с
-// переливом полоса выходила на тень справа). Свободных строк в картинке не хватает (плашка - впритык; у Flagpack картинка
-// квадратная, флаг в ней ниже на четверть - хватает) - она выше: h растёт. Полоса, строка и флаг - посередине по высоте.
-// rgba - без умножения на альфу, w x h.
-inline void CapsStripe(std::vector<unsigned char>& rgba, int w, int& h) {
-	if (w <= 0 || h <= 0 || rgba.size() < (size_t)w * h * 4) return;
-	const size_t row = (size_t)w * 4;
-	int top = h, bottom = -1;                                      // видимое, с тенью: его не обрезать
-	int solidTop = h, solidBottom = -1, left = w, right = -1;      // сам флаг
-	for (int y = 0; y < h; y++)
-		for (int x = 0; x < w; x++) {
-			const unsigned a = rgba[y * row + x * 4 + 3];
-			if (a > 40) {
-				top = (std::min)(top, y);
-				bottom = (std::max)(bottom, y);
-			}
-			if (a > 200) {
-				solidTop = (std::min)(solidTop, y);
-				solidBottom = (std::max)(solidBottom, y);
-				left = (std::min)(left, x);
-				right = (std::max)(right, x);
-			}
-		}
-	if (bottom < 0) return;
-	if (right < 0) { // непрозрачного нет - по видимому
-		solidTop = top, solidBottom = bottom, left = 0, right = w - 1;
-	}
-	const int thick = (std::max)(3, (int)std::lround((solidBottom - solidTop + 1) * 0.2));
-	const int group = thick + 1 + (bottom - top + 1);
-	if (group > h) { // выше на недостающие строки - сверху
-		const int more = group - h;
-		rgba.insert(rgba.begin(), (size_t)more * row, 0);
-		h += more, top += more, bottom += more;
-	}
-	// Флаг сдвигается на shift строк (вниз - плюс); ниже видимого - только почти прозрачное.
-	const int start = (h - group) / 2, shift = start + thick + 1 - top;
-	unsigned char* data = rgba.data();
-	if (shift > 0) {
-		std::memmove(data + shift * row, data, (h - shift) * row);
-		std::memset(data, 0, shift * row);
-	} else if (shift < 0) {
-		std::memmove(data, data - shift * row, (h + shift) * row);
-		std::memset(data + (h + shift) * row, 0, -shift * row);
-	}
-	for (int y = start; y < start + thick; y++)
-		for (int x = left; x <= right; x++) {
-			unsigned char* p = data + y * row + x * 4;
-			p[0] = kCaps >> 16 & 0xff;
-			p[1] = kCaps >> 8 & 0xff;
-			p[2] = kCaps & 0xff;
-			p[3] = 255;
-		}
 }
 
 }

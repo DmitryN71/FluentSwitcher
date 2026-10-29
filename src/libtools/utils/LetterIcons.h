@@ -207,6 +207,7 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		// видно, а без нужды она лишь шумит у краёв букв.
 		const bool rim = style == Style::Badge ||
 			(style == Style::Tile && BadgeColor::Contrast(plate, dark ? BadgeColor::kDark : 0xf3f3f3) < 1.5);
+		float plateW = (float)w, plateH = (float)h; // плашка: у флажка - высотой shapeH, во весь значок - бывает на точку уже
 		auto draw = [&](bool shape, IDWriteTextLayout* drawn = nullptr) {
 			rt->BeginDraw();
 			rt->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -214,14 +215,14 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			if (shape && style != Style::Plain) {
 				// Скругление - около восьмой части высоты, как у кнопок Windows 11 (было 0,28: gutasiho и WorldTroll на
 				// форуме, 29.10.2026 - на маленькой плашке круглые углы делают её хуже, лучше прямые).
-				const float r = shapeH * 0.14f;
+				const float r = plateH * 0.14f;
 				brush->SetColor(D2D1::ColorF(plate));
 				if (rim) {
-					rt->FillRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, shapeH - 0.5f }, r, r }, brush.Get());
+					rt->FillRoundedRectangle({ { 0.5f, 0.5f, plateW - 0.5f, plateH - 0.5f }, r, r }, brush.Get());
 					brush->SetColor(D2D1::ColorF(onPlate, 0.28f));
-					rt->DrawRoundedRectangle({ { 0.5f, 0.5f, w - 0.5f, shapeH - 0.5f }, r, r }, brush.Get(), 1.0f);
+					rt->DrawRoundedRectangle({ { 0.5f, 0.5f, plateW - 0.5f, plateH - 0.5f }, r, r }, brush.Get(), 1.0f);
 				} else
-					rt->FillRoundedRectangle({ { 0, 0, (float)w, (float)shapeH }, r, r }, brush.Get());
+					rt->FillRoundedRectangle({ { 0, 0, plateW, plateH }, r, r }, brush.Get());
 			}
 			D2D1_COLOR_F letters = ink;
 			letters.a = shape ? alpha : 1.0f; // одни буквы - чтобы мерить: и у бледных (выключено) там же
@@ -341,6 +342,48 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 					shapeH = height;
 				}
 				y += (float)((shapeH - inkH) / 2 - top);
+			}
+			plateH = (float)shapeH;
+			// Во весь значок поля - поровну с каждой стороны, как их видит глаз (бледный крайний столбец - часть точки).
+			// Буквы стоят там, где без плашки, - левым краем в одном столбце у всех раскладок, а рамка плашки выдаёт, что
+			// они не посередине: на 20 точках у "EN" слева 1, справа 2,15 (Дмитрий, 29.10.2026: "Почему-то буквы прижаты
+			// к левому краю"); снизу на точку больше, чем сверху. Буквы сдвигаются только на целые точки (иначе штрихи
+			// расплываются), а плашка - на точку уже или ниже, если так поровну ближе.
+			if (style == Style::Tile && draw(false)) {
+				std::vector<unsigned> col(w), row(h);
+				for (int yy = 0; yy < h; yy++)
+					for (int xx = 0; xx < w; xx++) {
+						const unsigned a = px[(yy * w + xx) * 4 + 3];
+						col[xx] = (std::max)(col[xx], a);
+						row[yy] = (std::max)(row[yy], a);
+					}
+				// Сдвиг букв и на сколько (0 или 1) плашка короче, при которых поля различаются меньше всего; меньшее поле не
+				// становится ещё меньше (широкое "UK" на 16 точках иначе встало вплотную к краю), поровну - плашка во весь значок.
+				auto centre = [](const std::vector<unsigned>& v, int& shift, int& cut) {
+					shift = 0, cut = 0;
+					int first = -1, last = -1;
+					for (int i = 0; i < (int)v.size(); i++)
+						if (v[i] > 32) {
+							if (first < 0) first = i;
+							last = i;
+						}
+					if (first < 0) return;
+					const double before = first + 1 - v[first] / 255.0, after = (int)v.size() - last - v[last] / 255.0;
+					const double least = (std::min)(before, after) - 0.01;
+					double fewest = 1e9;
+					for (int c = 0; c <= 1; c++)
+						for (int k = -2; k <= 2; k++) {
+							const double b = before + k, a = after - k - c;
+							if (b < least || a < least) continue;
+							const double cost = std::abs(b - a) + 0.05 * c + 0.01 * std::abs(k);
+							if (cost < fewest) fewest = cost, shift = k, cut = c;
+						}
+				};
+				int dx = 0, cutX = 0, dy = 0, cutY = 0;
+				centre(col, dx, cutX);
+				centre(row, dy, cutY);
+				x += dx, y += dy;
+				plateW = (float)(w - cutX), plateH = (float)(h - cutY);
 			}
 			ok = draw(true);
 		}

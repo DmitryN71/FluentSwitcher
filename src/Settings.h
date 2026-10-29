@@ -272,8 +272,9 @@ public:
 	int mouse_flag = 0;
 	string mouse_flag_set;
 	int mouse_flag_opacity = 100; // непрозрачность флага на указателе, в процентах (как caret_flag_opacity)
-	// Пока включён CapsLock, над флагом у курсора и на указателе - оранжевая полоса (BadgeColor::CapsStripe; форум,
-	// 28.10.2026: вариант 8, просьба fttlov). Нажали CapsLock - флаг перерисовывается и показывается и "ненадолго".
+	// Пока включён CapsLock, у флага у курсора справа и на указателе слева от палочки - красная стрелка (CapsArrow.h;
+	// просьба fttlov, форум, 28-29.10.2026: стрелка вместо полосы, красная, форма 6). Нажали CapsLock - флаг
+	// перерисовывается и показывается и "ненадолго".
 	bool flag_capslock = false;
 
     std::vector< CHotKeySet> hotkeysList;

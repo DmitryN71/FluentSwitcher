@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "utils/Images.h"
 #include "utils/LetterIcons.h"
+#include "utils/CapsArrow.h"
 #include "utils/FluentMenu.h"
 
 class IconMgr {
@@ -200,19 +201,20 @@ public:
 		fill = BadgeColor::Resolve(info->badge);
 		return fill != BadgeColor::kDark;
 	}
-	// Полоса CapsLock на флаге: включена в настройках (flag_capslock), и CapsLock горит.
+	// Стрелка CapsLock у флага: включена в настройках (flag_capslock), и CapsLock горит.
 	static bool CapsShown() { return conf_get_unsafe()->flag_capslock && Utils::IsCapslockEnabled(); }
 
 	// Картинка флага (RGBA) для флажка у текстового курсора, его набора (caret_flag_set; или набора look - флаг на указателе
 	// мыши, MouseFlag.h): ближайшего к size размера (поровну - больший). Буквы - на плашке цвета fill (BadgeFill); caps -
-	// с полосой CapsLock (CapsShown). Пусто - флага нет. Не кэшируется: флажок держит свою последнюю картинку сам.
+	// со стрелкой CapsLock справа (CapsShown; на указателе мыши она слева от палочки - там caps не просят). Пусто - флага
+	// нет. Не кэшируется: флажок держит свою последнюю картинку сам.
 	Images::Image GetImage(TStr contry_id, int size, bool is_gray = false, string look = {},
 	                       uint32_t fill = BadgeColor::kDark, bool caps = false) {
 		const string set = look.empty() ? conf_get_unsafe()->caret_flag_set : look;
 		if (LetterIcons::Is(set)) { // буквы на плашке, высотой в три четверти размера
 			auto pic = LetterIcons::Render(LetterIcons::Text(contry_id), size, (int)std::lround(size * 0.75),
 			                               LetterIcons::Style::Badge, true, is_gray, fill);
-			if (caps) BadgeColor::CapsStripe(pic.rgba, pic.width, pic.height); // над плашкой: картинка выше
+			if (caps) CapsArrow::Beside(pic.rgba, pic.width, pic.height); // справа от плашки: картинка шире
 			return ToImage(std::move(pic));
 		}
 		wstring local_id = contry_id;
@@ -227,10 +229,10 @@ public:
 		for (auto& it : LoadImages(local_id, FolderName(set), is_gray)) {
 			if (better(it, best)) best = it;
 		}
-		if (caps && best && best->IsOk()) { // над флагом; картинка бывает и выше (своя папка флагов, впритык)
+		if (caps && best && best->IsOk()) { // справа от флага
 			LetterIcons::Picture pic{ best->width, best->height,
 			                          { best->data, best->data + (size_t)best->width * best->height * 4 } };
-			BadgeColor::CapsStripe(pic.rgba, pic.width, pic.height);
+			CapsArrow::Beside(pic.rgba, pic.width, pic.height);
 			return ToImage(std::move(pic));
 		}
 		return best;

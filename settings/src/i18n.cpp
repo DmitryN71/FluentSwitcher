@@ -174,11 +174,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Фиолетовая", "Purple" },
         { "Цвет Windows", "Windows color" },
         { "Свой цвет…", "Custom color…" },
-        { "CapsLock на флаге", "CapsLock on the flag" },
-        { "Пока включён CapsLock, над флагом – оранжевая полоса: у текстового курсора и на указателе мыши. "
-          "Нажали CapsLock – флаг показывается и в режиме «ненадолго»",
-          "While CapsLock is on, an orange stripe shows above the flag: at the text cursor and on the mouse "
-          "pointer. A press of CapsLock shows the flag, also in the “for a moment” mode" },
+        { "CapsLock у флага", "CapsLock by the flag" },
+        { "Пока включён CapsLock, у флага – красная стрелка вверх: у текстового курсора справа от флага, на указателе "
+          "мыши – слева от палочки. Нажали CapsLock – флаг показывается и в режиме «ненадолго»",
+          "While CapsLock is on, a red arrow up shows by the flag: at the text cursor to the right of the flag, on the "
+          "mouse pointer to the left of the beam. A press of CapsLock shows the flag, also in the “for a moment” mode" },
         { "Где показывать", "Where to show" },
         { "Размер", "Size" },
         { "Прозрачность", "Transparency" },

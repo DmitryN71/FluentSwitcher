@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стрелка CapsLock – FluentSwitcher</title>
+<meta name="description" content="Варианты стрелки CapsLock у флага раскладки в FluentSwitcher: выберите понравившиеся и напишите номера в теме на форуме.">
+<style>
+:root {
+  --bg: #f3f3f3; --card: #ffffff; --text: #1b1b1b; --muted: #5f5f5f; --line: #e1e1e1;
+  --accent: #0067c0; --accent-text: #ffffff; --chip: #f0f0f0;
+  --doc-light: #ffffff; --doc-light-text: #1b1b1b; --doc-light-line: #dcdcdc;
+  --doc-dark: #1f1f1f; --doc-dark-text: #e6e6e6; --doc-dark-line: #333333;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #202020; --card: #2b2b2b; --text: #f0f0f0; --muted: #a8a8a8; --line: #3a3a3a;
+    --accent: #4cc2ff; --accent-text: #00243a; --chip: #343434;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #202020; --card: #2b2b2b; --text: #f0f0f0; --muted: #a8a8a8; --line: #3a3a3a;
+  --accent: #4cc2ff; --accent-text: #00243a; --chip: #343434;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 56px; }
+a { color: var(--accent); }
+h1 { font-size: 28px; line-height: 1.25; margin: 0 0 10px; font-weight: 600; }
+.lead { color: var(--muted); max-width: 760px; margin: 0 0 18px; }
+.cta {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px;
+  background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 600;
+}
+.bar {
+  display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; margin: 26px 0 18px;
+  padding: 12px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+}
+.seg { display: inline-flex; background: var(--chip); border-radius: 6px; padding: 3px; gap: 2px; }
+.seg button {
+  border: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px;
+  padding: 4px 12px; border-radius: 4px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--card); box-shadow: 0 0 0 1px var(--line); font-weight: 600; }
+.bar label { color: var(--muted); font-size: 14px; margin-right: 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 4px; }
+.num {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--chip);
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+}
+.card h2 { font-size: 17px; margin: 0; font-weight: 600; }
+.desc { color: var(--muted); font-size: 14px; margin: 2px 0 12px 42px; }
+.docs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.doc { border-radius: 6px; padding: 10px 12px 14px; min-width: 0; overflow: hidden; }
+.doc.light { background: var(--doc-light); color: var(--doc-light-text); border: 1px solid var(--doc-light-line); }
+.doc.dark { background: var(--doc-dark); color: var(--doc-dark-text); border: 1px solid var(--doc-dark-line); }
+.line { position: relative; font-size: 14px; white-space: nowrap; }
+.caret { display: inline-block; width: 1.5px; height: 17px; background: currentColor; vertical-align: -3px; margin-left: 1px; }
+.line .px { position: absolute; top: 22px; }
+.px { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+.big { display: flex; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+.big .note { color: var(--muted); font-size: 13px; }
+footer { margin-top: 36px; color: var(--muted); font-size: 14px; }
+@media (max-width: 560px) {
+  .docs { grid-template-columns: 1fr; } .desc { margin-left: 0; } h1 { font-size: 24px; }
+  .bar label { display: block; margin: 0 0 4px; } .seg { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>CapsLock у флага: какая стрелка?</h1>
+  <p class="lead">
+    Пока включён CapsLock, FluentSwitcher может показывать это у флага раскладки – у текстового курсора и на указателе
+    мыши. В бете 1.5.20-beta3 это оранжевая полоса над флагом. AlexPORTrb предложил другое: стрелку вверх справа от
+    флага, как на клавише Shift, – флаг и плашка с буквами остаются как есть. Вот варианты стрелки. Напишите,
+    пожалуйста, в теме на форуме номера тех, что нравятся, – можно несколько.
+  </p>
+  <a class="cta" href="https://forum.ru-board.com/topic.cgi?forum=5&amp;topic=51833">Ответить в теме на форуме →</a>
+
+  <div class="bar">
+    <div><label>Размер в примерах</label><span class="seg" id="size">
+      <button type="button" data-size="1" aria-pressed="false">Как в приложении</button>
+      <button type="button" data-size="2" aria-pressed="true">Крупнее</button>
+      <button type="button" data-size="3" aria-pressed="false">Совсем крупно</button>
+    </span></div>
+    <div><label>Тема страницы</label><span class="seg" id="theme">
+      <button type="button" data-theme="" aria-pressed="true">Как в системе</button>
+      <button type="button" data-theme="light" aria-pressed="false">Светлая</button>
+      <button type="button" data-theme="dark" aria-pressed="false">Тёмная</button>
+    </span></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <p>Картинки – такие, как их рисует FluentSwitcher при размере «Обычный» и масштабе 100 % (на экранах с большим
+    масштабом – крупнее). В примерах CapsLock включён. Плашки – тёмная, как по умолчанию, и цветные из «Цвета плашки с
+    буквами». На указателе мыши стрелка будет слева от палочки: справа от неё места нет.</p>
+    <p><a href="../">Все обсуждения</a> · <a href="../badges/">Цвет плашки с буквами</a> ·
+      <a href="https://github.com/DmitryN71/FluentSwitcher">FluentSwitcher на GitHub</a></p>
+  </footer>
+</main>
+<script>
+const VARIANTS = [
+  { title: "Белая с тёмной каймой", desc: "На светлом фоне выглядит контурной, как значок на клавише Shift, на тёмном – сплошной белой. Видна на любом фоне и не спорит с цветом флага." },
+  { title: "Тёмная с белой каймой", desc: "Наоборот: на светлом фоне сплошная тёмная, на тёмном – контурная." },
+  { title: "Красная", desc: "Самая заметная: CapsLock включён – как предупреждение." },
+  { title: "Тёмная клавиша", desc: "Белая стрелка на тёмном квадратике – как плашка с буквами: рядом с ней выглядит второй клавишей." },
+  { title: "Клавиша цвета плашки", desc: "Квадратик того же цвета, что плашка раскладки: рядом с синей EN – синий, рядом со светлой – светлый. У флагов – тёмный." }
+];
+// In the documents: CapsLock is on, the badge (or the flag) under the caret.
+const LINES = [
+  { text: "HELLO, WORLD", img: "en" },
+  { text: "ПРИВЕТ, МИР", img: "ru-red" },
+  { text: "ПРИВЕТ, МИР", img: "ru-flag" }
+];
+const BIG = ["en", "en-blue", "ru-red", "uk-yellow", "en-light", "ru-flag", "us-flag", "ua-flag", "ru-waving"];
+let scale = 2;
+
+function picture(n, name, k) {
+  const img = new Image();
+  img.className = "px";
+  img.alt = "";
+  img.dataset.k = k;
+  img.addEventListener("load", () => fit(img));
+  img.src = `img/${n}-${name}.png`;
+  return img;
+}
+// Point for point, k times: the arrow is drawn by points, smoothing would blur it.
+function fit(img) {
+  if (!img.naturalWidth) return;
+  const k = img.dataset.k === "big" ? Math.max(3, scale + 1) : scale;
+  img.style.width = img.naturalWidth * k + "px";
+  img.style.height = img.naturalHeight * k + "px";
+  const row = img.closest(".line");
+  if (row) {
+    row.style.height = 26 + img.naturalHeight * k + "px";
+    const caret = row.querySelector(".caret");
+    img.style.left = Math.max(0, caret.offsetLeft - 1) + "px";
+  }
+}
+function doc(n, dark) {
+  const d = document.createElement("div");
+  d.className = "doc " + (dark ? "dark" : "light");
+  for (const ln of LINES) {
+    const row = document.createElement("div");
+    row.className = "line";
+    const text = document.createElement("span");
+    text.textContent = ln.text;
+    const caret = document.createElement("span");
+    caret.className = "caret";
+    row.append(text, caret, picture(n, ln.img, "doc"));
+    d.appendChild(row);
+  }
+  return d;
+}
+
+const grid = document.getElementById("grid");
+VARIANTS.forEach((v, i) => {
+  const n = i + 1;
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<div class="head"><span class="num">${n}</span><h2></h2></div><p class="desc"></p>`;
+  card.querySelector("h2").textContent = v.title;
+  card.querySelector(".desc").textContent = v.desc;
+  const docs = document.createElement("div");
+  docs.className = "docs";
+  docs.append(doc(n, false), doc(n, true));
+  card.appendChild(docs);
+  // Large, on the page itself: as on a light or a dark document, whichever the page is now.
+  const big = document.createElement("div");
+  big.className = "big";
+  for (const name of BIG) big.appendChild(picture(n, name, "big"));
+  const note = document.createElement("span");
+  note.className = "note";
+  note.textContent = "крупно: плашки разных цветов, флаги – обычные и с переливом";
+  big.appendChild(note);
+  card.appendChild(big);
+  grid.appendChild(card);
+});
+
+function refit() { document.querySelectorAll("img.px").forEach(fit); }
+function pick(groupId, attr, apply) {
+  const group = document.getElementById(groupId);
+  group.addEventListener("click", e => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    group.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+    apply(btn.dataset[attr]);
+  });
+}
+pick("size", "size", k => { scale = Number(k); refit(); });
+pick("theme", "theme", t => {
+  if (t) document.documentElement.setAttribute("data-theme", t);
+  else document.documentElement.removeAttribute("data-theme");
+  try { t ? localStorage.setItem("theme", t) : localStorage.removeItem("theme"); } catch (e) {}
+});
+try {
+  const saved = localStorage.getItem("theme");
+  if (saved) document.querySelector(`#theme [data-theme="${saved}"]`).click();
+} catch (e) {}
+window.addEventListener("load", refit);
+</script>
+</body>
+</html>

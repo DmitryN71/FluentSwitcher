@@ -145,7 +145,9 @@ const std::unordered_map<std::string, const char*>& English()
           "In the tray (the notification area of Windows): the layout, the menu and the notifications of FluentSwitcher. "
           "Without the icon, the settings open with the \"Open settings\" hotkey" },
         { "Вид значка", "Look of the icon" },
-        { "Флаг раскладки, её буквы или значок FluentSwitcher", "The layout's flag, its letters or the FluentSwitcher icon" },
+        { "Флаг раскладки, её буквы или значок FluentSwitcher. Цвет плашки с буквами – в разделе «Раскладки»",
+          "The layout's flag, its letters or the FluentSwitcher icon. The color of the badge with the letters is in "
+          "Layouts" },
         { "Обычные флаги", "Regular flags" },
         { "Флаги с переливом", "Waving flags" },
         { "Значок приложения", "App icon" },
@@ -156,12 +158,14 @@ const std::unordered_map<std::string, const char*>& English()
         { "На указателе мыши", "On the mouse pointer" },
         { "Для обоих флагов", "For both flags" },
         { "Вид флага", "Look of the flag" },
-        { "Флаг раскладки или её буквы на плашке", "The layout's flag or its letters on a badge" },
+        { "Флаг раскладки или её буквы на плашке. Цвет плашки – в разделе «Раскладки»",
+          "The layout's flag or its letters on a badge. The badge's color is in Layouts" },
         { "Цвет плашки с буквами", "Color of the badge with the letters" },
-        { "Когда вид флага – буквы: у каждой раскладки свой цвет. Буквы на плашке – белые или тёмные, какие на этом "
-          "цвете виднее. Буквы в трее – на плашке любого цвета, кроме тёмной",
-          "When the flag's look is letters: each layout has a color of its own. The letters on the badge are white or "
-          "dark, whichever shows better on that color. The letters in the tray get a badge of any color but the dark one" },
+        { "Когда раскладка показана буквами – в трее, у текстового курсора или на указателе мыши: у каждой раскладки "
+          "свой цвет. Буквы – белые или тёмные, какие на этом цвете виднее. В трее тёмная – буквы без плашки",
+          "When a layout is shown as letters – in the tray, at the text cursor or on the mouse pointer: each layout has "
+          "a color of its own. The letters are white or dark, whichever shows better on that color. In the tray the "
+          "dark one means the letters without a badge" },
         { "Серая", "Gray" }, // "Тёмная", "Светлая" - at the theme
         { "Синяя", "Blue" },
         { "Красная", "Red" },

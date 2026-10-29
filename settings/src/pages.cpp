@@ -1401,8 +1401,9 @@ wxWindow* SettingsFrame::BadgeColors()
 
     wxPanel* rows = nullptr;
     AddSettingsCard(m_page, m_column, T("Цвет плашки с буквами"),
-                    T("Когда вид флага – буквы: у каждой раскладки свой цвет. Буквы на плашке – белые или тёмные, какие "
-                      "на этом цвете виднее. Буквы в трее – на плашке любого цвета, кроме тёмной"),
+                    T("Когда раскладка показана буквами – в трее, у текстового курсора или на указателе мыши: у каждой "
+                      "раскладки свой цвет. Буквы – белые или тёмные, какие на этом цвете виднее. В трее тёмная – "
+                      "буквы без плашки"),
                     [&](wxWindow* card) {
         rows = new wxPanel(card);
         rows->SetBackgroundColour(card->GetBackgroundColour());
@@ -1497,6 +1498,22 @@ wxWindow* SettingsFrame::BadgeColors()
     }, true);
     m_searchExtra[rows->GetParent()] = wxJoin(names, ' ', '\0');
     return rows;
+}
+
+void SettingsFrame::PaleBadgeColors()
+{
+    // As FlagLook and the engine read the looks: the flag on the mouse pointer without a look of its own - as the flag
+    // at the cursor, that one without its own - as the tray icon.
+    if (!m_badgeColors)
+        return;
+    const auto letters = [](const wxString& look) { return look == "Letters" || look == "LettersFramed"; };
+    const wxString traySet = m_edit.GetString("flagsSet", "Flagpack");
+    const wxString caretSet = m_edit.GetString("caret_flag_set", traySet);
+    const wxString mouseSet = m_edit.GetString("mouse_flag_set", wxString());
+    const bool tray = m_edit.GetBool("tray_icon", true) && letters(traySet);
+    const bool caret = m_edit.GetInt("caret_flag", 1) != 0 && letters(caretSet);
+    const bool mouse = m_edit.GetInt("mouse_flag", 0) != 0 && letters(mouseSet.empty() ? caretSet : mouseSet);
+    EnableSettingsCard(m_badgeColors->GetParent(), tray || caret || mouse);
 }
 
 void SettingsFrame::BuildGeneral()
@@ -2381,6 +2398,10 @@ void SettingsFrame::BuildLayouts()
     // The flag of English in the tray and at the text cursor (the engine's IconManager.h): the US or the British one.
     Choice(T("Флаг английской раскладки"), T("В трее и у текстового курсора"), { T("Американский"), T("Британский") },
            m_edit.GetBool("useBritishFlag", false) ? 1 : 0, [this](int i) { m_edit.SetBool("useBritishFlag", i == 1); });
+    // The colour of each layout's badge - here, not with the flags (Dmitry, 29.10.2026: on "Флаг у курсора" it coloured the
+    // tray too): one for the tray and both flags. Pale - as the looks on the other pages are (PaleBadgeColors).
+    m_badgeColors = BadgeColors();
+    PaleBadgeColors();
     FinishPage();
 }
 
@@ -2402,8 +2423,16 @@ void SettingsFrame::BuildTray()
         if (m_edit.GetString("flagsSet", "") == "Nothing") // hidden the old way (before 1.5.0): the flags again
             m_edit.SetString("flagsSet", "Flagpack");
         Changed();
+        PaleBadgeColors();
     };
-    FlagLook(T("Вид значка"), T("Флаг раскладки, её буквы или значок FluentSwitcher"), "flagsSet", true);
+    FluentChoice* look = static_cast<FluentChoice*>(
+        FlagLook(T("Вид значка"),
+                 T("Флаг раскладки, её буквы или значок FluentSwitcher. Цвет плашки с буквами – в разделе «Раскладки»"),
+                 "flagsSet", true));
+    look->onChange = [this, save = look->onChange] {
+        save(); // the setting, and Apply lights up
+        PaleBadgeColors();
+    };
 
     // Clicks on the icon (tray_click, tray_double_click).
     const wxArrayString clickValues = { wxString(), wxString("menu"), wxString("next_layout"), wxString("toggle"),
@@ -2436,7 +2465,8 @@ void SettingsFrame::BuildCaretFlag()
         Numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
                 { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
     FluentChoice* caretLook = static_cast<FluentChoice*>(
-        FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на плашке"), "caret_flag_set", false));
+        FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на плашке. Цвет плашки – в разделе «Раскладки»"),
+                 "caret_flag_set", false));
     const std::vector<wxWindow*> caretRows = {
         caretLook,
         Numbers(T("Где показывать"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
@@ -2455,7 +2485,8 @@ void SettingsFrame::BuildCaretFlag()
                   "раскладки, окна или поля ввода"),
                 "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
     FluentChoice* mouseLook = static_cast<FluentChoice*>(
-        FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на плашке"), "mouse_flag_set",
+        FlagLook(T("Вид флага на указателе"),
+                 T("Флаг раскладки или её буквы на плашке. Цвет плашки – в разделе «Раскладки»"), "mouse_flag_set",
                  false, "caret_flag_set", T("Как у текстового курсора")));
     const std::vector<wxWindow*> mouseRows = {
         mouseLook,
@@ -2463,13 +2494,12 @@ void SettingsFrame::BuildCaretFlag()
                 { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
                 T("Максимальная") }),
     };
-    // Both flags: "for a moment" (the pointer's takes that time too); the colour of the badge for each layout and
-    // CapsLock on the flag (the forum's vote, 28.10.2026).
+    // Both flags: "for a moment" (the pointer's takes that time too) and CapsLock on the flag (the forum's vote,
+    // 28.10.2026). The colour of the badge for each layout is on "Раскладки": it colours the tray too.
     Group(T("Для обоих флагов"));
     wxWindow* brief = Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"),
                               "caret_flag_brief_ms", 2000, { 1000, 2000, 3000, 5000, 10000 },
                               { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
-    wxWindow* badges = BadgeColors();
     wxWindow* caps = Toggle(T("CapsLock на флаге"),
                             T("Пока включён CapsLock, над флагом – оранжевая полоса: у текстового курсора и на "
                               "указателе мыши. Нажали CapsLock – флаг показывается и в режиме «ненадолго»"),
@@ -2477,22 +2507,16 @@ void SettingsFrame::BuildCaretFlag()
     // Pale while they mean nothing, as Windows 11 shows them (Dmitry, 16.10.2026: "если флаг не показываем, то и
     // настройки прозрачности и типа флагов ... должны быть grayed out"): a flag's own rows while it is not shown; "for a
     // moment" while neither flag shows for a moment - the pointer's takes that time too; CapsLock while neither flag is
-    // shown; the badges' colours while no flag shown is letters (as FlagLook and the engine read the looks), nor the tray
-    // icon - it takes a chosen colour too (its look is on another page: as it was when this one was built or changed).
-    const auto pale = [this, brief, caretRows, mouseRows, badges, caps] {
+    // shown; the badges' colours on "Раскладки" while nothing shows letters (PaleBadgeColors).
+    const auto pale = [this, brief, caretRows, mouseRows, caps] {
         const int caretMode = m_edit.GetInt("caret_flag", 1), mouseMode = m_edit.GetInt("mouse_flag", 0);
-        const auto letters = [](const wxString& look) { return look == "Letters" || look == "LettersFramed"; };
-        const wxString caretSet = m_edit.GetString("caret_flag_set", m_edit.GetString("flagsSet", "Flagpack"));
-        const wxString mouseSet = m_edit.GetString("mouse_flag_set", wxString());
-        const bool trayLetters = m_edit.GetBool("tray_icon", true) && letters(m_edit.GetString("flagsSet", "Flagpack"));
         for (wxWindow* row : caretRows)
             EnableSettingsCard(row->GetParent(), caretMode != 0);
         for (wxWindow* row : mouseRows)
             EnableSettingsCard(row->GetParent(), mouseMode != 0);
         EnableSettingsCard(brief->GetParent(), caretMode == 2 || mouseMode == 2);
         EnableSettingsCard(caps->GetParent(), caretMode != 0 || mouseMode != 0);
-        EnableSettingsCard(badges->GetParent(), trayLetters || (caretMode != 0 && letters(caretSet)) ||
-                                                    (mouseMode != 0 && letters(mouseSet.empty() ? caretSet : mouseSet)));
+        PaleBadgeColors();
     };
     for (FluentChoice* choice : { caret, mouse, caretLook, mouseLook })
         choice->onChange = [pale, save = choice->onChange] {

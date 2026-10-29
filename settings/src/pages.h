@@ -49,6 +49,10 @@ private:
     // The colour of the badge with the letters, one for each layout (layouts_info[].badge, the engine's BadgeColor.h): a row
     // for each layout - the badge as the flag shows it, the layout's name, the list of colours. Returns the card's rows.
     wxWindow* BadgeColors();
+    // That card (on "Раскладки") pale while nothing shows letters: neither the tray icon nor a flag shown. The looks are
+    // on the pages of the tray and of the flags - each change of them calls this.
+    void PaleBadgeColors();
+    wxWindow* m_badgeColors = nullptr;
     // A card with a list of words (the lists of the automatic switch, the exceptions of ДВе ЗАглавные): what it is for
     // and how many words it has; "Изменить…" opens the list in a window of its own (wordlist.h). key - the array in the
     // file; help - the text of that window; tip - the details, the tooltip of the title; defaults - the list while the

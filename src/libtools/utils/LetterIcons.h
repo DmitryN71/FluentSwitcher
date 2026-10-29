@@ -34,8 +34,8 @@ inline constexpr const char* kPlain = "Letters";
 
 inline bool Is(const std::string& set) { return set == kPlain; }
 
-// Plain - буквы без плашки (трей), Badge - на плашке с каймой (флажок у курсора), Tile - на плашке во весь значок (трей у
-// раскладки со своим цветом).
+// Plain - буквы без плашки (трей), Badge - на плашке с каймой (флажок у курсора), Tile - те же буквы, что Plain, на
+// плашке во весь значок (трей у раскладки со своим цветом).
 enum class Style { Plain, Badge, Tile };
 
 // "en-US" -> "EN".
@@ -62,38 +62,22 @@ namespace details {
 		if (!f) DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)f.GetAddressOf());
 		return f;
 	}
-	inline bool Installed(const wchar_t* name) {
-		ComPtr<IDWriteFontCollection> fonts;
-		UINT32 i = 0;
-		BOOL exists = FALSE;
-		return DWrite() && SUCCEEDED(DWrite()->GetSystemFontCollection(&fonts)) &&
-			SUCCEEDED(fonts->FindFamilyName(name, &i, &exists)) && exists;
-	}
 	inline std::wstring Family() {
 		static std::wstring family = [] {
-			for (auto n : { L"Segoe UI Variable Display", L"Segoe UI" })
-				if (Installed(n)) return std::wstring(n);
+			ComPtr<IDWriteFontCollection> fonts;
+			if (DWrite() && SUCCEEDED(DWrite()->GetSystemFontCollection(&fonts))) {
+				for (auto n : { L"Segoe UI Variable Display", L"Segoe UI" }) {
+					UINT32 i = 0;
+					BOOL exists = FALSE;
+					if (SUCCEEDED(fonts->FindFamilyName(n, &i, &exists)) && exists) return std::wstring(n);
+				}
+			}
 			return std::wstring(L"Segoe UI");
 		}();
 		return family;
 	}
-	struct Face {
-		std::wstring family;
-		DWRITE_FONT_WEIGHT weight;
-		DWRITE_FONT_STRETCH stretch;
-	};
-	// Шрифт букв. На плашке во весь значок - узкий жирный Bahnschrift (шрифт Windows с 10 1709): буквы в квадрате на 16-24
-	// точки выходят той же высоты, что и без плашки, и по бокам остаётся место (у Caramba - широкие, впритык к краям;
-	// Дмитрий на форуме, 29.10.2026: "буквы того и гляди разорвут свою желтую оболочку"). На 20 точках заглавные - 12
-	// точек, как без плашки (у Segoe UI на той же ширине - 9). Нет его - наш, полужирный.
-	inline const Face& FaceOf(Style style) {
-		static const Face ours{ Family(), DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STRETCH_NORMAL };
-		static const Face tile = Installed(L"Bahnschrift")
-			? Face{ L"Bahnschrift", DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_STRETCH_CONDENSED } : ours;
-		return style == Style::Tile ? tile : ours;
-	}
 	// Высота заглавных в долях кегля - для кегля; посередине буквы ставятся по их точкам.
-	inline float CapHeight(const Face& face) {
+	inline float CapHeight(DWRITE_FONT_WEIGHT weight) {
 		ComPtr<IDWriteFontCollection> fonts;
 		ComPtr<IDWriteFontFamily> family;
 		ComPtr<IDWriteFont> font;
@@ -101,9 +85,9 @@ namespace details {
 		BOOL exists = FALSE;
 		DWRITE_FONT_METRICS m{};
 		if (SUCCEEDED(DWrite()->GetSystemFontCollection(&fonts)) &&
-			SUCCEEDED(fonts->FindFamilyName(face.family.c_str(), &i, &exists)) && exists &&
+			SUCCEEDED(fonts->FindFamilyName(Family().c_str(), &i, &exists)) && exists &&
 			SUCCEEDED(fonts->GetFontFamily(i, &family)) &&
-			SUCCEEDED(family->GetFirstMatchingFont(face.weight, face.stretch, DWRITE_FONT_STYLE_NORMAL, &font))) {
+			SUCCEEDED(family->GetFirstMatchingFont(weight, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, &font))) {
 			font->GetMetrics(&m);
 			if (m.designUnitsPerEm) return (float)m.capHeight / m.designUnitsPerEm;
 		}
@@ -136,25 +120,24 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 	HGDIOBJ old = SelectObject(mem, bmp);
 	const auto* px = (const unsigned char*)bits;
 
-	// Кегль: заглавные не выше 62 % высоты (на плашке - 58 % её внутренней части, без каймы в точку; во весь значок -
-	// 60 %), и буквы не шире места. Поля по бокам: на плашке - кайма и 0,14 высоты; во весь значок каймы нет - 0,12
-	// размера, с точностью до полточки (16 - 2, 20 - 2,5, 24 - 3).
+	// Кегль: заглавные не выше 62 % высоты (на плашке - 58 % её внутренней части, без каймы в точку), и буквы не шире
+	// места. Во весь значок (Tile) буквы - ровно те, что без плашки, той же величины и там же (Дмитрий, 29.10.2026, на
+	// test5 с узким шрифтом и полями: "Буквы выглядят ужасно... Почему их нельзя сделать ТОЧНО такими же, как на тёмной
+	// иконке, но красить цветом поверх?"): меняется только цвет под ними.
 	const float stroke = 1.0f;
-	const details::Face& face = details::FaceOf(style);
-	const float capShare = details::CapHeight(face);
+	const DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_SEMI_BOLD;
+	const float capShare = details::CapHeight(weight);
 	const float inner = style == Style::Badge ? h - 2 * stroke : (float)h;
-	const float padX = style == Style::Plain ? 0
-		: style == Style::Tile ? (std::max)(1.0f, std::round(h * 0.24f) / 2)
-		: stroke + (std::max)(1.0f, std::round(h * 0.14f));
-	float size = inner * (style == Style::Badge ? 0.58f : style == Style::Tile ? 0.6f : 0.62f) / capShare;
+	const float padX = style == Style::Badge ? stroke + (std::max)(1.0f, std::round(h * 0.14f)) : 0;
+	float size = inner * (style == Style::Badge ? 0.58f : 0.62f) / capShare;
 	ComPtr<IDWriteTextFormat> format;
 	ComPtr<IDWriteTextLayout> layout;
 	auto measure = [&](const std::wstring& t, float s) {
 		layout.Reset();
 		format.Reset();
 		DWRITE_TEXT_METRICS m{};
-		if (FAILED(dw->CreateTextFormat(face.family.c_str(), nullptr, face.weight, DWRITE_FONT_STYLE_NORMAL, face.stretch,
-		                                s, L"", &format)) ||
+		if (FAILED(dw->CreateTextFormat(details::Family().c_str(), nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
+		                                DWRITE_FONT_STRETCH_NORMAL, s, L"", &format)) ||
 			FAILED(dw->CreateTextLayout(t.c_str(), (UINT32)t.size(), format.Get(), 1000, 1000, &layout)) ||
 			FAILED(layout->GetMetrics(&m)))
 			return 0.0f;
@@ -221,7 +204,7 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 		D2D1_COLOR_F ink = style != Style::Plain ? D2D1::ColorF(onPlate) : dark ? D2D1::ColorF(0xffffff) : D2D1::ColorF(0x1b1b1b);
 		const float alpha = gray ? 0.45f : 1.0f;
 		// Во весь значок кайма - только на цвете, почти неотличимом от панели задач (светлая на светлой): иначе плашки не
-		// видно, а без нужды кайма отнимает у букв по точке с каждой стороны.
+		// видно, а без нужды она лишь шумит у краёв букв.
 		const bool rim = style == Style::Badge ||
 			(style == Style::Tile && BadgeColor::Contrast(plate, dark ? BadgeColor::kDark : 0xf3f3f3) < 1.5);
 		auto draw = [&](bool shape, IDWriteTextLayout* drawn = nullptr) {
@@ -307,10 +290,8 @@ inline Picture Render(const std::wstring& text, int w, int h, Style style, bool 
 			}
 			margins[key] = margin;
 		}
-		// Надписи шире не хватает места до правого края (на плашке - до точки перед каймой, во весь значок - до поля) - она
-		// посередине.
-		const float right = style == Style::Plain ? 0 : style == Style::Tile ? std::floor(padX) : stroke + 1;
-		if (margin + textWidth > w - right) margin = (int)std::lround((w - textWidth) / 2);
+		// Надписи шире не хватает места до правого края (на плашке - до точки перед каймой) - она посередине.
+		if (margin + textWidth > w - (style == Style::Badge ? stroke + 1 : 0)) margin = (int)std::lround((w - textWidth) / 2);
 		x = inked ? alignAt(nullptr, textLeft, margin) : 0;
 		// По ширине левый край букв - ровно на точке отступа (x выше): левый штрих R, E, D, U чёткий и у всех раскладок
 		// в одном столбце. По высоте сначала одни буквы - со сдвигом на восьмую долю точки, при котором горизонтальные

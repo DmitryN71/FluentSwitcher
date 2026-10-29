@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Стрелка CapsLock – FluentSwitcher</title>
-<meta name="description" content="Варианты стрелки CapsLock у флага раскладки в FluentSwitcher: выберите понравившиеся и напишите номера в теме на форуме.">
+<meta name="description" content="Стрелка CapsLock у флага раскладки в FluentSwitcher: цвет выбран – красная, теперь её форма. Напишите номер в теме на форуме.">
 <style>
 :root {
   --bg: #f3f3f3; --card: #ffffff; --text: #1b1b1b; --muted: #5f5f5f; --line: #e1e1e1;
@@ -47,6 +47,8 @@ h1 { font-size: 28px; line-height: 1.25; margin: 0 0 10px; font-weight: 600; }
 .seg button[aria-pressed="true"] { background: var(--card); box-shadow: 0 0 0 1px var(--line); font-weight: 600; }
 .bar label { color: var(--muted); font-size: 14px; margin-right: 8px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 16px; }
+.sec { font-size: 20px; font-weight: 600; margin: 30px 0 4px; }
+.sec-lead { color: var(--muted); margin: 0 0 14px; max-width: 760px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
 .head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 4px; }
 .num {
@@ -78,8 +80,8 @@ footer { margin-top: 36px; color: var(--muted); font-size: 14px; }
   <p class="lead">
     Пока включён CapsLock, FluentSwitcher может показывать это у флага раскладки – у текстового курсора и на указателе
     мыши. В бете 1.5.20-beta3 это оранжевая полоса над флагом. AlexPORTrb предложил другое: стрелку вверх справа от
-    флага, как на клавише Shift, – флаг и плашка с буквами остаются как есть. Вот варианты стрелки. Напишите,
-    пожалуйста, в теме на форуме номера тех, что нравятся, – можно несколько.
+    флага, как на клавише Shift, – флаг и плашка с буквами остаются как есть. Цвет выбрали – красная (3). Теперь её
+    форма: напишите, пожалуйста, в теме на форуме, какая лучше – 6 или 7.
   </p>
   <a class="cta" href="https://forum.ru-board.com/topic.cgi?forum=5&amp;topic=51833">Ответить в теме на форуме →</a>
 
@@ -96,18 +98,27 @@ footer { margin-top: 36px; color: var(--muted); font-size: 14px; }
     </span></div>
   </div>
 
+  <h2 class="sec" id="shape">Форма красной стрелки</h2>
+  <p class="sec-lead">Обе сглажены, как буквы на плашке, ствол толще, чем был у тройки.</p>
+  <div class="grid" id="grid-shape"></div>
+
+  <h2 class="sec" id="color">Первое голосование: цвет</h2>
+  <p class="sec-lead">Выбрали красную – 3. Её форму здесь и заменят 6 или 7.</p>
   <div class="grid" id="grid"></div>
 
   <footer>
     <p>Картинки – такие, как их рисует FluentSwitcher при размере «Обычный» и масштабе 100 % (на экранах с большим
     масштабом – крупнее). В примерах CapsLock включён. Плашки – тёмная, как по умолчанию, и цветные из «Цвета плашки с
-    буквами». На указателе мыши стрелка будет слева от палочки: справа от неё места нет.</p>
+    буквами». На указателе мыши стрелка будет слева от палочки: справа от неё места нет. Тройка нарисована по точкам,
+    6 и 7 – сглажены; на экранах с масштабом 125 % и больше сглаживание видно лучше.</p>
     <p><a href="../">Все обсуждения</a> · <a href="../badges/">Цвет плашки с буквами</a> ·
       <a href="https://github.com/DmitryN71/FluentSwitcher">FluentSwitcher на GitHub</a></p>
   </footer>
 </main>
 <script>
 const VARIANTS = [
+  { n: 6, grid: "grid-shape", title: "Красная, толстая", desc: "Ствол в половину ширины, наконечник с прямым углом – как стрелка на клавише Shift, только плотнее." },
+  { n: 7, grid: "grid-shape", title: "Красная, линией", desc: "Толстая линия с наконечником, концы круглые – так нарисованы стрелки в значках Windows 11." },
   { title: "Белая с тёмной каймой", desc: "На светлом фоне выглядит контурной, как значок на клавише Shift, на тёмном – сплошной белой. Видна на любом фоне и не спорит с цветом флага." },
   { title: "Тёмная с белой каймой", desc: "Наоборот: на светлом фоне сплошная тёмная, на тёмном – контурная." },
   { title: "Красная", desc: "Самая заметная: CapsLock включён – как предупреждение." },
@@ -161,9 +172,9 @@ function doc(n, dark) {
   return d;
 }
 
-const grid = document.getElementById("grid");
 VARIANTS.forEach((v, i) => {
-  const n = i + 1;
+  const n = v.n || i - 1; // 6 and 7 first, then 1-5 of the first vote
+  const grid = document.getElementById(v.grid || "grid");
   const card = document.createElement("section");
   card.className = "card";
   card.innerHTML = `<div class="head"><span class="num">${n}</span><h2></h2></div><p class="desc"></p>`;

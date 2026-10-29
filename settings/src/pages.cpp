@@ -955,8 +955,7 @@ SettingsFrame::SettingsFrame(const Config& config, const wxString& folder, unsig
     BuildTyping();
     BuildHotkeys();
     BuildLayouts();
-    BuildTray();
-    BuildCaretFlag();
+    BuildIndicators();
     BuildSounds();
     BuildCommands();
     BuildAdvanced();
@@ -2394,22 +2393,21 @@ void SettingsFrame::BuildLayouts()
                     "например правый Ctrl, задайте в разделе «Сочетания клавиш» – «Следующая раскладка»"),
                   true);
     };
-
-    // The flag of English in the tray and at the text cursor (the engine's IconManager.h): the US or the British one.
-    Choice(T("Флаг английской раскладки"), T("В трее и у текстового курсора"), { T("Американский"), T("Британский") },
-           m_edit.GetBool("useBritishFlag", false) ? 1 : 0, [this](int i) { m_edit.SetBool("useBritishFlag", i == 1); });
-    // The colour of each layout's badge - here, not with the flags (Dmitry, 29.10.2026: on "Флаг у курсора" it coloured the
-    // tray too): one for the tray and both flags. Pale - as the looks on the other pages are (PaleBadgeColors).
-    m_badgeColors = BadgeColors();
-    PaleBadgeColors();
     FinishPage();
 }
 
-void SettingsFrame::BuildTray()
+void SettingsFrame::BuildIndicators()
 {
+    // How the layout is shown - in one section (Dmitry, 29.10.2026: "я чувствую себя неуютно, когда флаги разбросаны по
+    // разным разделам... раздел назовём Layout Indicators и туда эти все настройки перенесём"): the tray icon, the flag at
+    // the text cursor, the flag on the mouse pointer, and what they share. Before - "Значок в трее", "Флаг у курсора" and
+    // two rows on "Раскладки". Groups (gutasiho on the forum, 29.10.2026): the page is full, and the shared rows among the
+    // cursor's ones looked like a heading for the rows under them.
+    Section(kIconFlags, T("Индикаторы раскладки"));
+
     // The icon in the notification area, by the clock (the engine's TrayIcon.h): whether it shows, which, its clicks.
     // Apart from the flag at the text cursor since 07.10.2026 (forum: hiding the tray icon hid that flag too).
-    Section(kIconTray, T("Значок в трее"));
+    Group(T("В трее"));
     ToggleSwitch* shown = nullptr;
     AddSettingsCard(m_page, m_column, T("Показывать значок в трее"),
                     T("В трее (области уведомлений Windows): раскладка, меню и уведомления FluentSwitcher. Без значка "
@@ -2426,14 +2424,11 @@ void SettingsFrame::BuildTray()
         PaleBadgeColors();
     };
     FluentChoice* look = static_cast<FluentChoice*>(
-        FlagLook(T("Вид значка"),
-                 T("Флаг раскладки, её буквы или значок FluentSwitcher. Цвет плашки с буквами – в разделе «Раскладки»"),
-                 "flagsSet", true));
+        FlagLook(T("Вид значка"), T("Флаг раскладки, её буквы или значок FluentSwitcher"), "flagsSet", true));
     look->onChange = [this, save = look->onChange] {
         save(); // the setting, and Apply lights up
         PaleBadgeColors();
     };
-
     // Clicks on the icon (tray_click, tray_double_click).
     const wxArrayString clickValues = { wxString(), wxString("menu"), wxString("next_layout"), wxString("toggle"),
                                         wxString("settings") };
@@ -2451,22 +2446,14 @@ void SettingsFrame::BuildTray()
     Choice(T("Двойной клик по значку"), T("Правый клик всегда открывает меню"), clickNames,
            clickIndex("tray_double_click", "settings"),
            [this, clickValues](int i) { m_edit.SetString("tray_double_click", clickValues[i]); });
-    FinishPage();
-}
 
-void SettingsFrame::BuildCaretFlag()
-{
     // The flag at the text cursor (the engine's CaretFlag.h), with its own look.
-    Section(kIconFlags, T("Флаг у курсора"));
-    // Three groups (gutasiho on the forum, 29.10.2026): the page is full, and the rows of both flags among the cursor's
-    // ones looked like a heading for the rows under them.
     Group(T("У текстового курсора"));
     FluentChoice* caret = static_cast<FluentChoice*>(
         Numbers(T("Флаг у текстового курсора"), T("Показывает раскладку там, где вы печатаете"), "caret_flag", 1,
                 { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
     FluentChoice* caretLook = static_cast<FluentChoice*>(
-        FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на плашке. Цвет плашки – в разделе «Раскладки»"),
-                 "caret_flag_set", false));
+        FlagLook(T("Вид флага"), T("Флаг раскладки или её буквы на плашке"), "caret_flag_set", false));
     const std::vector<wxWindow*> caretRows = {
         caretLook,
         Numbers(T("Где показывать"), T("Если у края экрана места нет – с другой стороны строки"), "caret_flag_place", 0,
@@ -2485,18 +2472,23 @@ void SettingsFrame::BuildCaretFlag()
                   "раскладки, окна или поля ввода"),
                 "mouse_flag", 0, { 1, 2, 0 }, { T("Всегда"), T("Ненадолго"), T("Не показывать") }));
     FluentChoice* mouseLook = static_cast<FluentChoice*>(
-        FlagLook(T("Вид флага на указателе"),
-                 T("Флаг раскладки или её буквы на плашке. Цвет плашки – в разделе «Раскладки»"), "mouse_flag_set",
-                 false, "caret_flag_set", T("Как у текстового курсора")));
+        FlagLook(T("Вид флага на указателе"), T("Флаг раскладки или её буквы на плашке"), "mouse_flag_set", false,
+                 "caret_flag_set", T("Как у текстового курсора")));
     const std::vector<wxWindow*> mouseRows = {
         mouseLook,
         Numbers(T("Прозрачность флага на указателе"), T("Чтобы не отвлекал от текста"), "mouse_flag_opacity", 100,
                 { 100, 80, 60, 40, 25, 15 }, { T("Нет"), T("Слабая"), T("Средняя"), T("Сильная"), T("Очень сильная"),
                 T("Максимальная") }),
     };
-    // Both flags: "for a moment" (the pointer's takes that time too) and CapsLock by the flag (the forum's vote,
-    // 28.10.2026). The colour of the badge for each layout is on "Раскладки": it colours the tray too.
-    Group(T("Для обоих флагов"));
+
+    // What they share: the flag of English (the engine's IconManager.h: the US or the British one - in the tray and both
+    // flags), the colour of each layout's badge (the tray too), "for a moment" (the pointer's takes that time too) and
+    // CapsLock by the flag (the forum's vote, 28.10.2026).
+    Group(T("Для всех"));
+    Choice(T("Флаг английской раскладки"), T("В трее, у текстового курсора и на указателе мыши"),
+           { T("Американский"), T("Британский") }, m_edit.GetBool("useBritishFlag", false) ? 1 : 0,
+           [this](int i) { m_edit.SetBool("useBritishFlag", i == 1); });
+    m_badgeColors = BadgeColors();
     wxWindow* brief = Numbers(T("Сколько показывать «ненадолго»"), T("После смены раскладки, окна или поля ввода"),
                               "caret_flag_brief_ms", 2000, { 1000, 2000, 3000, 5000, 10000 },
                               { T("1 секунду"), T("2 секунды"), T("3 секунды"), T("5 секунд"), T("10 секунд") });
@@ -2508,7 +2500,7 @@ void SettingsFrame::BuildCaretFlag()
     // Pale while they mean nothing, as Windows 11 shows them (Dmitry, 16.10.2026: "если флаг не показываем, то и
     // настройки прозрачности и типа флагов ... должны быть grayed out"): a flag's own rows while it is not shown; "for a
     // moment" while neither flag shows for a moment - the pointer's takes that time too; CapsLock while neither flag is
-    // shown; the badges' colours on "Раскладки" while nothing shows letters (PaleBadgeColors).
+    // shown; the badges' colours while nothing shows letters (PaleBadgeColors).
     const auto pale = [this, brief, caretRows, mouseRows, caps] {
         const int caretMode = m_edit.GetInt("caret_flag", 1), mouseMode = m_edit.GetInt("mouse_flag", 0);
         for (wxWindow* row : caretRows)

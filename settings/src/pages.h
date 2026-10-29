@@ -49,8 +49,8 @@ private:
     // The colour of the badge with the letters, one for each layout (layouts_info[].badge, the engine's BadgeColor.h): a row
     // for each layout - the badge as the flag shows it, the layout's name, the list of colours. Returns the card's rows.
     wxWindow* BadgeColors();
-    // That card (on "Раскладки") pale while nothing shows letters: neither the tray icon nor a flag shown. The looks are
-    // on the pages of the tray and of the flags - each change of them calls this.
+    // That card pale while nothing shows letters: neither the tray icon nor a flag shown. Each change of the looks, of
+    // the tray icon shown and of the flags shown calls this.
     void PaleBadgeColors();
     wxWindow* m_badgeColors = nullptr;
     // A card with a list of words (the lists of the automatic switch, the exceptions of ДВе ЗАглавные): what it is for
@@ -82,8 +82,7 @@ private:
     void BuildTyping();
     void BuildHotkeys();
     void BuildLayouts();
-    void BuildTray();
-    void BuildCaretFlag();
+    void BuildIndicators(); // the tray icon and the flags at the cursors
     void BuildSounds();
     void BuildCommands();
     void FillCommands(); // the cards of the commands again (one added, removed, its kind changed)

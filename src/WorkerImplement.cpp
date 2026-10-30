@@ -142,7 +142,12 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
 
     if (keyData.hold) {
         // Хук придерживает нажатия после этого пробела (или буквы посреди слова): решить и отпустить, что бы ни случилось.
+        // Нажатый модификатор (Shift при наборе ПРОПИСНЫМИ: "ЦУФЕРУК" - "WEATHER", "GJUJLF" - "ПОГОДА"; Дмитрий, 30.10.2026)
+        // на время стирания и смены раскладки отпускается (LiftHeldMods) и нажимается снова до отпускания придержки.
         Release release{ keyData.holdId };
+        m_heldMods.clear();
+        for (TKeyCode k : keyData.cur_hotKey)
+            if (CHotKey::IsKnownMods(k)) m_heldMods.push_back(k);
         if (keyData.sign || keyData.early) {
             // Знак после слова в другой раскладке - слово целиком; не он - посреди слова, если это буква там.
             const bool switched = keyData.sign && AutoSwitchAtSign();
@@ -152,6 +157,13 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         }
         else if (!AutoSwitchLastWord())
             FixTwoCaps();
+        if (m_heldModsUp && KeyHold::Allowed(keyData.holdId)) {
+            InputSender sender;
+            for (TKeyCode k : m_heldMods) sender.Add(k, KEY_STATE_DOWN);
+            sender.Send();
+        }
+        m_heldMods.clear();
+        m_heldModsUp = false;
     }
     if (key.type == KEYTYPE_SPACE) AutoWordEnd();
 }
@@ -255,6 +267,14 @@ int StartedAfterBoundary(const std::wstring& typed) {
     return AutoSwitch::StartedAfterBoundary(before, typed, atStart);
 }
 
+// В поле в фокусе сейчас выделен текст (подставленное продолжение в адресной строке браузера: "ЦУФЕР[ук]", "GJUJL[f]"):
+// первое нажатие Backspace сотрёт его, и чтобы стереть само набранное слово, нужен ещё один Backspace.
+bool HasSelectionUia(const std::wstring& typed) {
+    IUIAutomation* uia = Uia();
+    CComPtr<IUIAutomationElement> el;
+    return uia && SUCCEEDED(uia->GetFocusedElement(&el)) && el && FieldText::HasSelection(el, typed);
+}
+
 // Программа впереди: имя файла (для журнала автопереключения).
 std::wstring ForegroundProgram() {
     DWORD pid = 0;
@@ -289,6 +309,8 @@ bool IsCodeEditor() {
     return false;
 }
 }
+
+bool WorkerImplement::IsNotepad() const { return ForegroundProgram() == L"notepad.exe"; }
 
 namespace {
 // Текст клавиш набранного [begin, end) в раскладке lay; клавиша - не один знак - пусто.
@@ -359,13 +381,13 @@ void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL res
     for (size_t i = begin; i < middle && i < m_cycleList.Size(); i++) a.push_back(m_cycleList.TypedAt(i));
     for (size_t i = middle; i < m_cycleList.Size(); i++) b.push_back(m_cycleList.KeyAt(i));
     if (a.empty() && b.empty()) return;
-    const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+    const int delay = RetypeDelay();
     m_twoCaps = {}; // слово перепечатано заново - отменять прежнее исправление уже нечего
     TextFixed();
     LiftHeldMods();
     const auto stop = CaretStop();
     InputSender::SendVkKeyPaced(VK_BACK, (int)(a.size() + b.size()), delay, stop);
-    Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
+    PauseAfterErase(); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
     InputSender::SendKeysAsText(a, first, m_is_last_caps, delay, stop);
     InputSender::SendKeysAsText(b, rest, m_is_last_caps, delay, stop);
     if (stop()) LOG_ANY("retype stopped: the caret moved");
@@ -442,7 +464,6 @@ bool WorkerImplement::SwitchTail(size_t begin, HKL to, bool wordEnded) {
     TwoCapsInKeys(list, to);
     m_twoCaps = {}; // слово перепечатано заново - отменять прежнее исправление уже нечего
     TextFixed();
-    LiftHeldMods();
     IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = to,
                             .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_SetLang | SW_CLIENT_BACKSPACE, .bufferBegin = begin }));
     // Щелчок или другое окно посреди перепечатки: её бросили (ProcessRevert) - не записывать как переключение.
@@ -462,7 +483,6 @@ bool WorkerImplement::FixNumberSigns(size_t begin, HKL as) {
     TKeyRevert list = m_cycleList.KeysFrom(begin);
     if (list.empty()) return false;
     TextFixed();
-    LiftHeldMods();
     IFS_LOG(ProcessRevert({ .keylist = std::move(list), .lay = as, .flags = SW_CLIENT_PUTTEXT | SW_CLIENT_BACKSPACE,
                             .bufferBegin = begin }));
     if (CaretStop()()) {
@@ -595,23 +615,30 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
             const bool caps = AutoSwitch::CapsWord(typed, there);
             const std::wstring typedAs = caps ? AutoSwitch::Titled(typed) : typed;
             const std::wstring thereAs = caps ? AutoSwitch::Titled(there) : there;
-            const char* why = AutoSwitch::Skip(typedAs, thereAs, minLetters(there), exceptions);
+            const char* why = AutoSwitch::Skip(typedAs, thereAs, 2, exceptions);
             if (!why)
                 why = AutoSwitch::DecideWhy(typedAs, thereAs, dictionary(lay), dictionary(other), suggestions(lay),
                                             suggestions(other), ShortWords::TrustDictionary(lang));
             // Аббревиатура своего языка перед дефисом ("PHP-yt"): целиком - нет, разве что часть после дефиса (ниже).
             if (!why && AutoSwitch::OwnAbbreviationPart(typed, there, lang, otherLang))
                 why = "an abbreviation of its own language before a hyphen";
-            // Там не слово - но с Ы, Ь в начале по-русски не пишут ("Ыфин" - Saby; AutoSwitch::NotRussian), или в набранном
-            // много сочетаний букв, каких в своём языке нет, а там - мало ("ФЗЛЬшккщк" - APKMirror; AutoSwitch::Implausible).
+            if (!why && AutoSwitch::Letters(there).core.size() < minLetters(there))
+                why = "too short";
+            // Там не слово (или после щелчка/стрелок в поле без TextPattern три буквы сочли короткими) - но с Ы, Ь в начале
+            // по-русски не пишут ("Ыфин" - Saby; AutoSwitch::NotRussian), или в набранном сочетания букв, каких в своём языке
+            // не бывает, а там - обычные ("ФЗЛЬшккщк" - APKMirror, "фив" - abd; AutoSwitch::Implausible).
             // После щелчка или стрелок - если перед словом в поле не буква: могли дописывать середину слова.
-            if (why && strcmp(why, "not a word in the other layout") == 0) {
+            if (why && (strcmp(why, "not a word in the other layout") == 0 || strcmp(why, "too short") == 0)) {
+                const bool wasNotWord = strcmp(why, "not a word in the other layout") == 0;
                 if (AutoSwitch::NotRussian(typed, there, lang, otherLang, spellEvenCaps, suggestions(lay)))
                     foreign = "not a Russian word";
                 else if (AutoSwitch::Implausible(typed, there, lang, otherLang, spellEvenCaps, suggestions(lay)))
                     foreign = "letters unusual for its language";
-                if (foreign && !afterBoundary()) foreign = nullptr;
-                if (foreign) why = nullptr;
+                if (foreign && !afterBoundary() && boundary == 0) foreign = nullptr;
+                if (foreign) {
+                    why = nullptr;
+                    if (!wasNotWord) foreign = nullptr;
+                }
             }
             // На знаке посреди набора: буква там стала знаком после редкого слова ("Нуцж" - "Yew;") - опечатка в своём слове,
             // которое пишут дальше, а не слово там. Языку без списков частых слов - не судим.
@@ -716,6 +743,11 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
         Journal("switched", from, to, foreign ? foreign : "");
         return true;
     }
+    if (!atSign && !(m_autoSwitched.early && m_autoSwitched.ends == m_wordEnds)) {
+        m_lastAutoSwitch = 0;
+        m_lastSwitchedTyped.clear();
+        m_lastSwitchedEarly = false;
+    }
     return false;
 }
 
@@ -793,7 +825,7 @@ void WorkerImplement::AutoSwitchEarly() {
     // скажет совсем).
     size_t minLetters = AutoSwitch::kEarlyMin;
     if (m_autoWord.moved) {
-        if (m_autoWord.boundary == -1) {
+        if (m_autoWord.boundary == -1 && keys.size() <= AutoSwitch::kEarlyMin) {
             m_autoWord.boundary = StartedAfterBoundary(typed);
             LOG_ANY(L"autoswitch early: {} after a click or arrows, before it in the field: {}", typed, m_autoWord.boundary);
         }
@@ -891,8 +923,14 @@ void WorkerImplement::AutoSwitchEarly() {
 void WorkerImplement::WarmUpEarly() {
     GETCONF;
     if (!cfg->autoswitch) return;
-    // Сочетания букв (AutoSwitch::Implausible: слово, которого нет в словаре там) - таблицы заранее, а не на пробеле.
-    for (HKL l : cfg->layouts_info.EnabledLayouts()) WordStart::Combos(Utils::GetNameForHKL_simple(l));
+    Uia();
+    // Словари Windows и сочетания букв (AutoSwitch::Implausible) - заранее при старте, а не на первом слове под
+    // придержкой клавиш (форум, gutasiho, 29-30.10.2026: первое "GJUJLF" после загрузки системы не успевало за 200 мс).
+    for (HKL l : cfg->layouts_info.EnabledLayouts()) {
+        const std::wstring lang = Utils::GetNameForHKL_simple(l);
+        SpellCheck::Check(L"a", lang);
+        WordStart::Combos(lang);
+    }
     // Начала слов нужны и словам "Переключать всегда", набранным целиком (AutoSwitchEarly: "реез" - начало "реестр").
     if (!cfg->autoswitch_early && cfg->autoswitch_force.empty()) return;
     for (HKL l : cfg->layouts_info.EnabledLayouts()) WordStart::Available(Utils::GetNameForHKL_simple(l));
@@ -1219,11 +1257,11 @@ void WorkerImplement::FixTwoCaps(bool afterSpace, bool atSign) {
     LOG_ANY(L"two caps: {} -> {}{}", text, text.substr(0, fix.from), fix.tail);
     TextFixed();
     LiftHeldMods();
-    const int delay = (int)std::min<uint32_t>(cfg->retype_delay_ms, 100);
+    const int delay = RetypeDelay();
     const auto stop = CaretStop();
     SettleBeforeErase();
     InputSender::SendVkKeyPaced(VK_BACK, (int)(typed.size() + space.size()), delay, stop); // со второй буквы (и пробел)
-    Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
+    PauseAfterErase(); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
     InputSender::SendTextPaced(fix.tail + space, delay, stop);
     if (stop()) {
         LOG_ANY("two caps stopped: the caret moved");
@@ -1324,10 +1362,10 @@ bool WorkerImplement::UndoTwoCaps() {
     }
     auto last = std::exchange(m_twoCaps, {});
     LOG_ANY(L"two caps: {} back, it is an exception now", last.word);
-    const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+    const int delay = RetypeDelay();
     const auto stop = CaretStop();
     InputSender::SendVkKeyPaced(VK_BACK, (int)(last.fixed.size() + last.space.size()), delay, stop);
-    Sleep(c_afterErase);
+    PauseAfterErase();
     InputSender::SendTextPaced(last.typed + last.space, delay, stop);
     if (stop()) return true; // курсор переехал: бросили, не в счёт
     last.key->is_shift = !last.upper;
@@ -1881,10 +1919,17 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
     
     bool fDels = false;
 
+    const bool erase = TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE);
+    if (erase) {
+        SettleBeforeErase();
+        LiftHeldMods();
+    }
+
     // Раскладка, в которой будет набран текст: новая, если её меняем, иначе текущая - или данная (lay без SetLang):
     // знаками той раскладки, а эта остаётся ("1ю5ю3" - 1.5.3, FixNumberSigns).
+    const HKL fromLay = CurLay();
     const bool textOnly = !TestFlag(ctxRevert.flags, SW_CLIENT_SetLang) && ctxRevert.lay;
-    HKL target = textOnly ? ctxRevert.lay : CurLay();
+    HKL target = textOnly ? ctxRevert.lay : fromLay;
     if (TestFlag(ctxRevert.flags, SW_CLIENT_SetLang) && ctxRevert.lay) {
         auto prevLay = CurLay();
         const HKL want = ctxRevert.lay != (HKL)HKL_NEXT ? ctxRevert.lay
@@ -1898,19 +1943,29 @@ TStatus WorkerImplement::ProcessRevert(ContextRevert&& ctxRevert) {
         else {
             // Сразу нужную, а не "следующую": если прошлое переключение ещё не дошло, два "следующих" вернули бы назад.
             SetNewLay(want ? want : ctxRevert.lay);
-            HKL got = WaitOtherLay(prevLay, 15, 40);
+            HKL got = WaitOtherLay(prevLay, IsNotepad() ? 15 : 2, 40);
             target = want;
             if (target == 0) target = got;
         }
     }
 
-    const int delay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+    const int delay = RetypeDelay();
     // Щелчок или другое окно, пока печатаем: бросить - остальное ушло бы в другое место.
     const auto stop = CaretStop();
-    if (TestFlag(ctxRevert.flags, SW_CLIENT_PUTTEXT) && TestFlag(ctxRevert.flags, SW_CLIENT_BACKSPACE)) {
-        SettleBeforeErase();
-        InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size(), delay, stop);
-        Sleep(c_afterErase); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
+    if (erase) {
+        std::wstring typed;
+        for (const auto& k : ctxRevert.keylist) {
+            const auto c = InputSender::KeyText(k, fromLay, k.is_caps);
+            if (c.size() != 1) {
+                typed.clear();
+                break;
+            }
+            typed += c;
+        }
+        const bool extraBack = HasSelectionUia(typed);
+        if (extraBack) LOG_ANY(L"revert: selection in the field, +1 Backspace");
+        InputSender::SendVkKeyPaced(VK_BACK, ctxRevert.keylist.size() + (extraBack ? 1 : 0), delay, stop);
+        PauseAfterErase(); // новый Блокнот теряет первую букву, если она приходит сразу за стиранием
     }
     if (stop()) {
         LOG_ANY(L"revert stopped: the caret moved");

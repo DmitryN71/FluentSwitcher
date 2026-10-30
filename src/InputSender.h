@@ -155,6 +155,24 @@ public:
 		}
 	}
 
+	// Точная пауза в миллисекундах (таймер высокого разрешения Windows 10 1803+): обычный Sleep(1..8) ждёт до следующего
+	// тика системного таймера (15,6 мс), поэтому уменьшение задержки ниже 8 мс не ускоряло перепечатку (форум,
+	// AlexPORTrb, 30.10.2026).
+	static void SleepMs(int ms) {
+		if (ms <= 0) return;
+		static thread_local HANDLE timer = CreateWaitableTimerExW(
+			nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+		if (timer) {
+			LARGE_INTEGER due{};
+			due.QuadPart = -10000LL * ms;
+			if (SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
+				WaitForSingleObject(timer, (DWORD)ms + 20);
+				return;
+			}
+		}
+		Sleep((DWORD)ms);
+	}
+
 	// delay_ms > 0: по одной клавише, с паузой после каждой (см. retype_delay_ms); stop() - бросить (курсор переехал).
 	static void SendKeysAsText(const TKeyRevert& sendData, HKL lay, bool is_now_caps, int delay_ms = 0,
 	                           const std::function<bool()>& stop = nullptr) {
@@ -176,7 +194,7 @@ public:
 				if (stop && stop()) return;
 				inputSender.Send();
 				inputSender.Clear();
-				Sleep(delay_ms);
+				SleepMs(delay_ms);
 			}
 		}
 
@@ -193,7 +211,7 @@ public:
 				if (stop && stop()) return;
 				inputSender.Send();
 				inputSender.Clear();
-				Sleep(delay_ms);
+				SleepMs(delay_ms);
 			}
 		}
 		if (stop && stop()) return;
@@ -209,7 +227,7 @@ public:
 		for (int i = 0; i < count; i++) {
 			if (stop && stop()) return;
 			SendVkKey(vk);
-			Sleep(delay_ms);
+			SleepMs(delay_ms);
 		}
 	}
 

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 class WorkerImplement {
     enum {
@@ -24,6 +24,7 @@ class WorkerImplement {
         // IFS_LOG(PathUtils::GetPath_fileExe_lower(m_sSelfExeName));
         TimerClear();
         TimerCheckLay();
+        Worker()->PostMsg([](auto p) { p->WarmUpEarly(); });
     }
 
     void TimerClear() {
@@ -237,11 +238,22 @@ class WorkerImplement {
     }
     unsigned m_caretBase = 0; // KeyHold::caretMoves в начале сообщения
     ULONGLONG m_keyAt = 0;    // когда пришло сообщение о последней нажатой клавише (SettleBeforeErase)
-    // Перед стиранием: клавиша, набранная только что (знак после слова), - ещё в пути к программе. Новый Блокнот, получив
-    // Backspace через 6 мс после запятой, иногда его терял: "ЧТо," - "ЧТто," (Дмитрий 08.10.2026). Не раньше 40 мс после неё.
+    bool IsNotepad() const;
+    // Перед стиранием: клавиша, набранная только что (знак после слова, переигранная буква), - ещё в пути к программе.
+    // Новый Блокнот, получив Backspace через 6 мс после запятой, иногда его терял: "ЧТо," - "ЧТто," (Дмитрий 08.10.2026) -
+    // там ждём 40 мс; в остальных программах достаточно 10 мс.
     void SettleBeforeErase() const {
+        const ULONGLONG target = IsNotepad() ? 40 : 25;
         const ULONGLONG since = GetTickCount64() - m_keyAt;
-        if (since < 40) Sleep((DWORD)(40 - since));
+        if (since < target) InputSender::SleepMs((int)(target - since));
+    }
+    void PauseAfterErase() const {
+        InputSender::SleepMs(IsNotepad() ? 40 : 5);
+    }
+    int RetypeDelay() const {
+        const int cfgDelay = (int)std::min<uint32_t>(conf_get_unsafe()->retype_delay_ms, 100);
+        if (IsNotepad() || cfgDelay == 0 || cfgDelay > 8) return cfgDelay;
+        return 1;
     }
     // Курсор переехал в том же окне (щелчок, стрелки): первое слово дальше может быть дописанной серединой.
     void CaretMoved() {
@@ -335,7 +347,7 @@ class WorkerImplement {
         auto start = GetTickCount64();        
 
         if(minWait > 0){
-            Sleep(5);
+            InputSender::SleepMs(2);
         }
         // Дождемся смены языка. Нет смысла переходить в асинхронный режим. Можем ждать прямо здесь.
 
@@ -348,7 +360,7 @@ class WorkerImplement {
             } else if (curL != lay) {
                 auto waited = GetTickCount64() - start;
                 if (waited < minWait) {
-                    Sleep(minWait - waited);  // ждем оставшееся время.
+                    InputSender::SleepMs((int)(minWait - waited));  // ждем оставшееся время.
                 }
                 LOG_ANY(L"WaitLay: new lay {} arrived after {}. totalwait={}", (void*)curL, waited, GetTickCount64() - start);
                 return curL;
@@ -359,7 +371,7 @@ class WorkerImplement {
                 return 0;
             }
 
-            Sleep(5);
+            InputSender::SleepMs(2);
         }
     }
 

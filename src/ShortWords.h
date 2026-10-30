@@ -253,7 +253,7 @@ inline bool Neutral(const std::wstring& word, const std::wstring& lang) {
 // (the - "еру", by - "ин", but - "иге", put - "зге"); в украинской эти клавиши дают те же буквы.
 inline bool NotWord(const std::wstring& word, const std::wstring& lang) {
 	static const std::unordered_set<std::wstring> ru = { L"еру", L"ин", L"иге", L"вшу", L"пгн", L"шу", L"ль", L"дув",
-	                                                     L"дуп", L"туе", L"зуе", L"зге", L"ен" };
+	                                                     L"дуп", L"туе", L"зуе", L"зге", L"ен", L"фив" };
 	return (Is(lang, L"ru") || Is(lang, L"uk")) && ru.contains(word);
 }
 

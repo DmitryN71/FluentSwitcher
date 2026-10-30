@@ -408,7 +408,8 @@ inline constexpr const wchar_t* kShortEn[] = {
 	L"mb", L"gb", L"tb", L"px", L"dpi", L"fps", L"rpm", L"wb", L"ym", L"ozon", L"fbo", L"fbs", L"dbs", L"rfbs", L"sms",
 	L"roi", L"oem", L"kpi", L"ctr", L"cpc", L"cpm", L"cpa", L"erp", L"cdn", L"sso", L"otp",
 	// Из «Переключать всегда» WinnyS (форум, 29.10.2026; остальное из его списка переключается и так).
-	L"rdp", L"fs", L"ms", L"tnx", L"drweb" };
+	L"rdp", L"fs", L"ms", L"tnx", L"drweb",
+	L"tbd", L"tba", L"wip", L"fyi", L"eta", L"asap", L"diy", L"afk", L"llc", L"inc", L"ltd", L"qty", L"pcs", L"pkg", L"aka" };
 inline constexpr const wchar_t* kShortEnKeep[] = {
 	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"it", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
 	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd" };
@@ -535,19 +536,24 @@ inline bool OneEditApart(const std::wstring& x, const std::wstring& y) {
 // "каша" (английское слово в русской раскладке) почти всегда на одну букву от какой-нибудь краткой русской формы
 // ("еруку" - There - от "ерку"), и проверка теряла бы их десятками (tools/test_autoswitch.cmd), а английская "каша"
 // (русское слово в английской раскладке) на английское слово похожа редко.
-// Соседние клавиши латинской раскладки (QWERTY): ряды сдвинуты - клавиша верхнего ряда над двумя клавишами нижнего.
+// Соседние клавиши латинской (QWERTY) и русской (ЙЦУКЕН) раскладок: ряды сдвинуты - клавиша верхнего ряда над двумя
+// клавишами нижнего.
 inline bool NearKeys(wchar_t x, wchar_t y) {
-	static const wchar_t* const rows[] = { L"qwertyuiop", L"asdfghjkl", L"zxcvbnm" };
-	int rx = -1, cx = -1, ry = -1, cy = -1;
-	for (int r = 0; r < 3; r++) {
-		if (const wchar_t* p = wcschr(rows[r], x); p && x) rx = r, cx = (int)(p - rows[r]);
-		if (const wchar_t* p = wcschr(rows[r], y); p && y) ry = r, cy = (int)(p - rows[r]);
+	static const wchar_t* const kLatin[] = { L"qwertyuiop[]", L"asdfghjkl;'", L"zxcvbnm,." };
+	static const wchar_t* const kCyrillic[] = { L"йцукенгшщзхъ", L"фывапролджэ", L"ячсмитьбю" };
+	for (const auto* rows : { kLatin, kCyrillic }) {
+		int rx = -1, cx = -1, ry = -1, cy = -1;
+		for (int r = 0; r < 3; r++) {
+			if (const wchar_t* p = wcschr(rows[r], x); p && x) rx = r, cx = (int)(p - rows[r]);
+			if (const wchar_t* p = wcschr(rows[r], y); p && y) ry = r, cy = (int)(p - rows[r]);
+		}
+		if (rx < 0 || ry < 0) continue;
+		if (rx == ry) return cx - cy == 1 || cy - cx == 1;
+		if (rx - ry != 1 && ry - rx != 1) return false;
+		const int upper = rx < ry ? cx : cy, lower = rx < ry ? cy : cx;
+		return lower == upper || lower == upper - 1;
 	}
-	if (rx < 0 || ry < 0) return false;
-	if (rx == ry) return cx - cy == 1 || cy - cx == 1;
-	if (rx - ry != 1 && ry - rx != 1) return false;
-	const int upper = rx < ry ? cx : cy, lower = rx < ry ? cy : cx;
-	return lower == upper || lower == upper - 1;
+	return false;
 }
 
 // Правка на одну букву (OneEditApart), какую делают пальцы: пропущенная буква и две переставленные - любые; другая
@@ -593,10 +599,12 @@ inline bool LooksLikeTypo(const std::wstring& word, const std::vector<std::wstri
 inline constexpr size_t kTypoThereMin = 5;
 inline bool TypoThere(const Part& t, const Part& a, bool typedHasSigns, auto&& spellTyped, auto&& suggestTyped,
                       auto&& suggestThere) {
-	if (a.inner || a.core.size() < kTypoThereMin || a.begin != t.begin || a.end != t.end) return false;
+	if (a.inner || a.core.size() < kTypoThereMin || a.begin > t.begin || a.end != t.end) return false;
 	for (size_t i = 1; i < t.core.size(); i++)
 		if (TwoCaps::IsUpper(t.core[i])) return false;
-	if (typedHasSigns && spellTyped(t.core) == SpellCheck::Result::Word) return false;
+	for (size_t i = 1; i < a.core.size(); i++)
+		if (TwoCaps::IsUpper(a.core[i])) return false;
+	if ((typedHasSigns || a.begin < t.begin) && spellTyped(t.core) == SpellCheck::Result::Word) return false;
 	bool close = false;
 	for (const auto& s : suggestThere(a.core)) {
 		if (OneEditApart(a.core, s)) {
@@ -665,8 +673,14 @@ inline bool NotRussian(const std::wstring& typed, const std::wstring& there, con
 				std::wstring guess = t.core;
 				guess[0] = TwoCaps::IsUpper(t.core[0]) ? (wchar_t)(UINT_PTR)CharUpperW((LPWSTR)(UINT_PTR)kRussian[q][c])
 				                                      : kRussian[q][c];
-				if (spellTyped(guess) != SpellCheck::Result::NotWord) return false;
-				guesses.push_back(Lower(guess));
+				// Из трёх букв словарь Windows принимает редкие сокращения ("вещ" - вещ., из-за чего "ыещ" - sto считалось
+				// опечаткой в "вещ"; Дмитрий, 30.10.2026): для трёх букв - только живое слово языка.
+				const std::wstring gl = Lower(guess);
+				const bool knownGuess = t.core.size() <= 3
+					? (ShortWords::Frequent(gl, typedLanguage) || WordStart::IsWord(gl, typedLanguage, true))
+					: spellTyped(guess) != SpellCheck::Result::NotWord;
+				if (knownGuess) return false;
+				guesses.push_back(gl);
 			}
 	}
 	for (const auto& s : suggestTyped(l)) {
@@ -728,9 +742,22 @@ inline bool Implausible(const std::wstring& typed, const std::wstring& there, co
 	for (wchar_t c : typed)
 		if (iswdigit(c)) return false;
 	const Part t = Letters(typed), a = Letters(there);
-	if (t.inner || a.inner || a.core.size() < kImplausibleMin || a.begin != t.begin || a.end > t.end) return false;
+	if (a.inner || a.core.size() < 3 || a.begin > t.begin || a.end > t.end || t.core.empty()) return false;
 	for (size_t i = a.end; i < t.end; i++)
 		if (!wcschr(kTrailSigns, there[i])) return false;
+	if (a.core.size() < kImplausibleMin && (t.inner || a.begin != t.begin)) return false;
+	int signPenalty = 0;
+	std::wstring tLetters;
+	for (size_t i = a.begin; i < a.end; i++) {
+		if (TwoCaps::IsLetter(typed[i])) {
+			tLetters.push_back(typed[i]);
+			continue;
+		}
+		if (typed[i] != L',' && typed[i] != L';' && !(i > t.begin && i < t.end && (typed[i] == L'[' || typed[i] == L']' || typed[i] == L'`')))
+			return false;
+		signPenalty += 2;
+	}
+	if (tLetters.size() < 3) return false;
 	// Кириллица с одной стороны, латиница - с другой (русская и украинская раскладки - почти одни клавиши).
 	const auto script = [](const std::wstring& s) {
 		const auto first = TwoCaps::ScriptOf(s[0]);
@@ -738,20 +765,38 @@ inline bool Implausible(const std::wstring& typed, const std::wstring& there, co
 			if (TwoCaps::ScriptOf(c) != first) return TwoCaps::Script::Other;
 		return first;
 	};
-	const auto st = script(t.core), sa = script(a.core);
+	const auto st = script(tLetters), sa = script(a.core);
 	if (st == TwoCaps::Script::Other || sa == TwoCaps::Script::Other || st == sa) return false;
-	const std::wstring l = Lower(t.core);
+	const std::wstring l = Lower(tLetters), al = Lower(a.core);
 	// Растянутое и повторы слогов.
 	std::wstring letters = l;
 	std::ranges::sort(letters);
 	if (2 * (size_t)(std::unique(letters.begin(), letters.end()) - letters.begin()) <= l.size()) return false;
 	for (size_t i = 2; i < l.size(); i++)
 		if (l[i] == l[i - 1] && l[i] == l[i - 2]) return false;
-	const int here = UnusualCombos(l, typedLanguage), away = UnusualCombos(Lower(a.core), thereLanguage);
-	if (here < 0 || away < 0 || away > kImplausibleThere || here - away < kImplausibleMargin) return false;
-	if (spellTyped(t.core) != SpellCheck::Result::NotWord) return false;
-	for (const auto& s : suggestTyped(t.core))
-		if (OneEditApart(l, Lower(s))) return false;
+	const int baseHere = UnusualCombos(l, typedLanguage), away = UnusualCombos(al, thereLanguage);
+	const int here = baseHere < 0 ? -1 : baseHere + signPenalty;
+	if (here < 0 || away < 0) return false;
+	if (a.core.size() < kImplausibleMin) {
+		// Короткое (3-4 буквы), которого нет в словаре там ("фив" - abd, "ещд" - tol, "ыещ" - sto; Дмитрий, 30.10.2026):
+		// в своём языке с него не начинается ни одно частое слово и есть небывалое сочетание, а там - начало частого слова
+		// с обычными сочетаниями; не опечатка соседней клавишей (FingerSlip).
+		if (here < 1 || away > 1 || WordStart::Known(l, typedLanguage, true) != WordStart::Result::No ||
+		    WordStart::Known(al, thereLanguage, true) != WordStart::Result::Yes)
+			return false;
+		if (!ShortWords::NotWord(l, typedLanguage) && spellTyped(t.core) != SpellCheck::Result::NotWord) return false;
+		for (const auto& s : suggestTyped(t.core)) {
+			const std::wstring sl = Lower(s);
+			if (sl != l && OneEditApart(l, sl) && FingerSlip(l, sl)) return false;
+		}
+		return true;
+	}
+	if (away > kImplausibleThere || here - away < kImplausibleMargin) return false;
+	if ((!t.inner && spellTyped(t.core) != SpellCheck::Result::NotWord) ||
+	    (signPenalty > 0 && spellTyped(tLetters) != SpellCheck::Result::NotWord))
+		return false;
+	for (const auto& s : suggestTyped(tLetters))
+		if (OneEditApart(Lower(typed.substr(a.begin, a.end - a.begin)), Lower(s))) return false;
 	return true;
 }
 

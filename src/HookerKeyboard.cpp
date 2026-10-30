@@ -1,4 +1,4 @@
-﻿
+
 LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 	_In_  int nCode,
 	_In_  WPARAM wParam,
@@ -69,19 +69,6 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			return;
 		}
 
-		// "ДВе ЗАглавные": пока движок исправляет слово, нажатия придерживаются и уходят потом (KeyHold.h).
-		const bool replayed = k->dwExtraInfo == KeyHold::c_Replayed || KeyHold::ForeignReplay(*k);
-		if (replayed) {
-			KeyHold::OnReplayed();
-		}
-		else if (KeyHold::Busy() && !KeyHold::InPlace(*k)) {
-			KeyHold::Hold(*k);
-			held_event = true;
-			return;
-		}
-		else
-			KeyHold::PassedLive(*k);
-
 		if (k->vkCode > 255) {
 			LOG_ANY(L"k->vkCode > 255: {}", k->vkCode);
 		}
@@ -95,6 +82,19 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 			LOG_ANY(L"skip bugged lctrl");
 			return;
 		}
+
+		// "ДВе ЗАглавные": пока движок исправляет слово, нажатия придерживаются и уходят потом (KeyHold.h).
+		const bool replayed = k->dwExtraInfo == KeyHold::c_Replayed || KeyHold::ForeignReplay(*k);
+		if (replayed) {
+			KeyHold::OnReplayed();
+		}
+		else if (KeyHold::Busy() && !KeyHold::InPlace(*k)) {
+			KeyHold::Hold(*k);
+			held_event = true;
+			return;
+		}
+		else
+			KeyHold::PassedLive(*k);
 
 		// Не клавиатура: геймпад. 0x07 (в Windows "зарезервирован") - его кнопка Xbox / Home, кнопки VK_GAMEPAD_* и
 		// VK_NAVIGATION_*. Геймпад выключили, держа эту кнопку, - её отпускания не будет (8BitDo Ultimate 2, notAlx на форуме,
@@ -447,7 +447,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					KeyHold::SetBackslash(lays);
 				}
 				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold(),
-					curk.HasMod(VK_CONTROL) && curk.HasMod(VK_MENU));
+					curk.HasMod(VK_CONTROL) && curk.HasMod(VK_MENU), isInjected && !replayed);
 				// Слово "Переключать всегда" набрано целиком - и без "Не ждать конца слова", с любой буквы (KeyHold::ForcedPoint).
 				early = letter && cfg->autoswitch && g_enabled.IsEnabled() && KeyHold::CanStart() &&
 					((cfg->autoswitch_early && KeyHold::EarlyPoint()) || KeyHold::ForcedPoint());

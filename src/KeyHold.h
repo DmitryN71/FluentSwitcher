@@ -520,8 +520,14 @@ inline bool HyphenKey(UINT vk, bool shift) {
 // Нажатие, которое движок получает как набор (не пробел). true - в слово добавилась буква. repeat - автоповтор
 // зажатой клавиши: так слова не набирают ("ааааа", W в игре), слово - не наш случай (не считать буквы автоповтора, а
 // с ними и придерживать пробел после них). altGr - сочетание с Ctrl и Alt сразу: так набирают буквы с AltGr.
-inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = false, bool altGr = false) {
+// injected - нажатие от другой программы (AutoHotkey #Hotstring R и др.): её набор не придерживать и не переключать.
+inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = false, bool altGr = false, bool injected = false) {
 	if (CHotKey::IsKnownMods(vk)) return false; // сам Shift (Ctrl...) - не буква и не помеха
+	if (injected) {
+		broken = true;
+		number = -1;
+		return false;
+	}
 	// Число с . и , (number): цифра, такая клавиша только после цифры; остальное - не число (громкость, NumLock - ничего).
 	const bool media = (vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE) || vk == VK_NUMLOCK || vk == VK_SCROLL;
 	if (!media) {
@@ -655,9 +661,10 @@ inline bool ForcedPoint() {
 }
 
 // Буква, после которой движок может переключить посреди слова (AutoSwitch::DecideEarly): с четвёртой по восьмую
-// (AutoSwitch::kEarlyMin, kEarlyMax), пока он не сказал, что в этом слове больше нечего.
+// (AutoSwitch::kEarlyMin, kEarlyMax; ПРОПИСНЫМИ - с пятой, kCapsEarlyMin), пока он не сказал, что в этом слове больше нечего.
 inline bool EarlyPoint() {
 	return !broken && backslash < 0 && !digitsFirst && !earlyDone && word.size() >= 4 && word.size() <= 8;
+
 }
 
 // Первые n клавиш слова могут быть ДВумя ЗАглавными: две заглавные, потом строчная (от трёх; дальше не смотрим: знак с

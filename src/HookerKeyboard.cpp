@@ -1,4 +1,6 @@
 
+#include "AutoSwitch.h"
+
 LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 	_In_  int nCode,
 	_In_  WPARAM wParam,
@@ -444,6 +446,10 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 					std::vector<HKL> lays;
 					for (HKL l : cfg->layouts_info.EnabledLayouts()) lays.push_back(l);
 					KeyHold::SetForced(words, lays);
+					std::vector<std::wstring> shorts;
+					for (const wchar_t* w : AutoSwitch::kShortEn) shorts.push_back(w);
+					for (const wchar_t* w : AutoSwitch::kShortRu) shorts.push_back(w);
+					KeyHold::SetShortKeys(shorts, lays);
 					KeyHold::SetBackslash(lays);
 				}
 				const bool letter = KeyHold::Track(vkCode, curk.HasMod(VK_SHIFT), iscaps == 1, command, curKeys.IsHold(),

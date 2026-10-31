@@ -602,7 +602,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
         }
         // "Переключать всегда" - без словаря и правил (кроме исключений): "еру" - the, "ф" - a. Так же - адрес, набранный не
         // в той раскладке, если набранное не слово своего языка: "еюьу" - t.me (AutoSwitch::Address; "июля" там - "b.kz").
-        const bool address = AutoSwitch::Address(typed, there) && dictionary(lay)(typed) != SpellCheck::Result::Word;
+        const bool address = AutoSwitch::Address(typed, there) &&
+                             (std::any_of(typed.begin(), typed.end(), iswdigit) || dictionary(lay)(typed) != SpellCheck::Result::Word);
         // И сокращение из встроенного списка, которое словарь не решит: "ГЫИ" - USB, "BYY" - ИНН, "Секд" - Ctrl, "зды" - pls,
         // "АИЩ" - FBO (AutoSwitch::KnownShort).
         const bool known = !address && AutoSwitch::KnownShort(typed, there, lang, otherLang, spellEvenCaps);
@@ -869,14 +870,28 @@ void WorkerImplement::AutoSwitchEarly() {
         const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
             !AutoSwitch::Excepted(typed, there, exceptions) && !AutoSwitch::ExceptionAhead(typed, there, exceptions) &&
             !WordStart::TypedEvenCaps(AutoSwitch::Letters(typed).core, lang);
-        auto verdict = forcedWhole ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
+        const bool shortWhole = !forcedWhole && cfg->autoswitch_early &&
+            AutoSwitch::KnownShortEarly(typed, there, lang, otherLang, minLetters, exceptions,
+                                        [&](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); });
+        auto verdict = (forcedWhole || shortWhole) ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
             : !cfg->autoswitch_early ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Never, "a word of Always switch only" }
             : AutoSwitch::DecideEarly(typed, there, minLetters, exceptions,
                                       [&](const std::wstring& w) { return WordStart::Typed(w, lang); }, thereStarts);
-        // "Не в этом слове" (заглавная внутри, аббревиатура) - но там начало слова из "Переключать всегда": ждать его
-        // целиком. "ЬЩАш" - заглавная внутри, решение "никогда" на четвёртой букве, и "ЬЩАшш" - MOFii переключалось только
-        // на пробеле, а "реез" - http сразу (Дмитрий 07.10).
-        if (verdict.what == AutoSwitch::Early::Never && forcedStarts(there) && !AutoSwitch::Excepted(typed, there, exceptions))
+        // "Не в этом слове" (заглавная внутри, аббревиатура) - но там начало слова из "Переключать всегда" или встроенного
+        // списка (четыре и больше букв: "РЕЬД" - HTML): ждать его целиком. "ЬЩАш" - заглавная внутри, решение "никогда" на
+        // четвёртой букве, и "ЬЩАшш" - MOFii переключалось только на пробеле, а "реез" - http сразу (Дмитрий 07.10).
+        auto shortStarts = [&](const std::wstring& w) {
+            const std::wstring l = WordStart::Lower(w), code = WordStart::Lower(otherLang.substr(0, 2));
+            auto in = [&](const auto& list) {
+                return std::ranges::any_of(list, [&](const wchar_t* s) {
+                    const std::wstring_view v(s);
+                    return v.size() > l.size() && v.starts_with(l);
+                });
+            };
+            return code == L"en" ? in(AutoSwitch::kShortEn) : code == L"ru" ? in(AutoSwitch::kShortRu) : false;
+        };
+        if (verdict.what == AutoSwitch::Early::Never && (forcedStarts(there) || shortStarts(there)) &&
+            !AutoSwitch::Excepted(typed, there, exceptions))
             verdict = { AutoSwitch::Early::NotYet, "a beginning of a word of Always switch" };
         if (verdict.what != AutoSwitch::Early::Switch) {
             later = later || verdict.what == AutoSwitch::Early::NotYet;

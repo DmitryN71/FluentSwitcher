@@ -427,8 +427,10 @@ inline UINT firstKeys[2] = {}; // клавиши первых двух букв 
 inline std::wstring keys;      // клавиши слова (буквы и цифры впереди) - сравнить со словами "Переключать всегда"
 // Слова "Переключать всегда" клавишами (SetForced): набраны целиком - движок переключит сразу, без пробела и с любой
 // буквы, а не с четвёртой (Дмитрий, 19.10.2026: "Разве не логичнее их сразу переключать, после ввода последнего
-// символа?"). Только поток хука.
+// символа?"). shortKeys - трёхбуквенные сокращения и расширения файлов из встроенного списка (SetShortKeys): с третьей
+// буквы хук держит клавиши только для них. Только поток хука.
 inline std::unordered_set<std::wstring> forced;
+inline std::unordered_set<std::wstring> shortKeys;
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, буква с AltGr, автоповтор, другая клавиша - не наш случай
 // Где в слове обратная косая черта (-1 - нет): с неё - сокращение шаблона ("\рекв" в FluentClipper), путь, команда.
@@ -646,6 +648,26 @@ inline void SetForced(const std::vector<std::wstring>& words, const std::vector<
 		}
 	}
 }
+// Трёхбуквенные сокращения и расширения файлов из встроенного списка (AutoSwitch::kShortEn, kShortRu) - клавишами в
+// раскладках layouts: на третьей букве хук держит нажатия только для них (четыре и больше букв держит EarlyPoint).
+inline void SetShortKeys(const std::vector<std::wstring>& words, const std::vector<HKL>& layouts) {
+	shortKeys.clear();
+	for (const auto& w : words) {
+		if (w.size() != 3) continue;
+		for (HKL lay : layouts) {
+			std::wstring k;
+			for (wchar_t c : w) {
+				const SHORT s = VkKeyScanExW(c, lay);
+				if (s == -1 || (HIBYTE(s) & ~1)) {
+					k.clear();
+					break;
+				}
+				k.push_back((wchar_t)LOBYTE(s));
+			}
+			if (!k.empty()) shortKeys.insert(k);
+		}
+	}
+}
 // Клавиши "\" во всех раскладках layouts (backslashKeys).
 inline void SetBackslash(const std::vector<HKL>& layouts) {
 	backslashKeys.clear();
@@ -660,11 +682,12 @@ inline bool ForcedPoint() {
 	return !broken && backslash < 0 && !forced.empty() && forced.contains(keys);
 }
 
-// Буква, после которой движок может переключить посреди слова (AutoSwitch::DecideEarly): с четвёртой по восьмую
-// (AutoSwitch::kEarlyMin, kEarlyMax; ПРОПИСНЫМИ - с пятой, kCapsEarlyMin), пока он не сказал, что в этом слове больше нечего.
+// Буква, после которой движок может переключить посреди слова (AutoSwitch::DecideEarly, KnownShortEarly): с четвёртой по
+// восьмую (AutoSwitch::kEarlyMin, kEarlyMax; ПРОПИСНЫМИ - с пятой, kCapsEarlyMin), а для трёхбуквенных сокращений и
+// расширений из встроенного списка - на третьей, пока он не сказал, что в этом слове больше нечего.
 inline bool EarlyPoint() {
-	return !broken && backslash < 0 && !digitsFirst && !earlyDone && word.size() >= 4 && word.size() <= 8;
-
+	return !broken && backslash < 0 && !digitsFirst && !earlyDone &&
+		((word.size() >= 4 && word.size() <= 8) || (word.size() == 3 && !shortKeys.empty() && shortKeys.contains(keys)));
 }
 
 // Первые n клавиш слова могут быть ДВумя ЗАглавными: две заглавные, потом строчная (от трёх; дальше не смотрим: знак с

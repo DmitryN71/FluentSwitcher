@@ -332,8 +332,9 @@ inline int NumberFix(const std::wstring& typed, const std::wstring& there) {
 	return -1;
 }
 
-// Адрес, набранный не в той раскладке (форум, Maz, 14.10.2026: "еюьу" - t.me): там - имя сайта или почта, буквы, цифры и
-// дефисы через точки, в конце - известная зона (ya.ru, vk.com, t.me, www.google.com, ivan@mail.ru), а набрано
+// Адрес или имя файла с расширением, набранные не в той раскладке (форум, Maz, 14.10.2026: "еюьу" - t.me; volodyalipkin и
+// gutasiho, 31.10.2026: "зрщещюозп" - photo.jpg, "шьфпуюиьз" - image.bmp): там - имя сайта, почта или файл, буквы, цифры и
+// дефисы через точки, в конце - известная зона или расширение файла (ya.ru, vk.com, t.me, photo.jpg, video.mp4), а набрано
 // кириллицей. Слово со знаком внутри иначе словом не считается (Skip: "not one word in the other layout"). Знак после
 // адреса - нет: перепечатка сделала бы из русской запятой "?". Что набранное - не слово своего языка ("июля" там -
 // "b.kz"), проверяет движок по словарю.
@@ -344,7 +345,15 @@ inline bool Address(const std::wstring& typed, const std::wstring& there) {
 	static const wchar_t* const kZones[] = { L"ru", L"com", L"me", L"net", L"org", L"io", L"su", L"by", L"ua", L"kz", L"uz",
 		L"info", L"biz", L"pro", L"app", L"dev", L"ai", L"tv", L"co", L"cc", L"to", L"gg", L"fm", L"ly", L"xyz", L"online",
 		L"site", L"store", L"shop", L"tech", L"top", L"club", L"de", L"uk", L"us", L"eu", L"am", L"ge", L"md", L"kg", L"az",
-		L"lv", L"lt", L"ee", L"pl", L"cz", L"fr", L"it", L"es", L"nl", L"jp", L"cn" };
+		L"lv", L"lt", L"ee", L"pl", L"cz", L"fr", L"it", L"es", L"nl", L"jp", L"cn",
+		L"jpg", L"jpeg", L"png", L"gif", L"bmp", L"svg", L"webp", L"tiff", L"tif", L"ico", L"heic", L"avif", L"psd", L"cdr",
+		L"raw", L"dng", L"mp3", L"mp4", L"wav", L"flac", L"ogg", L"aac", L"wma", L"m4a", L"opus", L"mkv", L"avi", L"mov",
+		L"wmv", L"webm", L"mpeg", L"mpg", L"srt", L"pdf", L"doc", L"docx", L"xls", L"xlsx", L"ppt", L"pptx", L"txt", L"csv",
+		L"rtf", L"odt", L"ods", L"odp", L"epub", L"fb2", L"mobi", L"djvu", L"zip", L"rar", L"7z", L"tar", L"tgz", L"gz",
+		L"xz", L"zst", L"iso", L"dmg", L"img", L"vhd", L"vhdx", L"vmdk", L"ova", L"exe", L"msi", L"dll", L"apk", L"apks",
+		L"xapk", L"ipa", L"deb", L"rpm", L"bat", L"cmd", L"ps1", L"vbs", L"reg", L"sys", L"ini", L"cfg", L"conf", L"json",
+		L"xml", L"yaml", L"yml", L"toml", L"env", L"log", L"bak", L"tmp", L"dat", L"bin", L"html", L"htm", L"css", L"js",
+		L"ts", L"py", L"cpp", L"php", L"sql", L"sh", L"lua", L"jar", L"wasm", L"ttf", L"otf", L"woff", L"woff2", L"torrent" };
 	const std::wstring a = Lower(there);
 	auto ascii = [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9'); };
 	std::wstring host = a;
@@ -409,7 +418,12 @@ inline constexpr const wchar_t* kShortEn[] = {
 	L"roi", L"oem", L"kpi", L"ctr", L"cpc", L"cpm", L"cpa", L"erp", L"cdn", L"sso", L"otp",
 	// Из «Переключать всегда» WinnyS (форум, 29.10.2026; остальное из его списка переключается и так).
 	L"rdp", L"fs", L"ms", L"tnx", L"drweb",
-	L"tbd", L"tba", L"wip", L"fyi", L"eta", L"asap", L"diy", L"afk", L"llc", L"inc", L"ltd", L"qty", L"pcs", L"pkg", L"aka" };
+	L"tbd", L"tba", L"wip", L"fyi", L"eta", L"asap", L"diy", L"afk", L"llc", L"inc", L"ltd", L"qty", L"pcs", L"pkg", L"aka",
+	// Расширения файлов (форум, volodyalipkin и gutasiho, 31.10.2026: "иьз" - bmp).
+	L"bmp", L"webp", L"heic", L"avif", L"psd", L"cdr", L"dng", L"ogg", L"wma", L"mkv", L"avi", L"wmv", L"webm", L"mpg",
+	L"vob", L"srt", L"xls", L"ppt", L"rtf", L"odp", L"epub", L"djvu", L"chm", L"tgz", L"zst", L"dmg", L"vhdx", L"vmdk",
+	L"apk", L"apks", L"xapk", L"vbs", L"ini", L"bak", L"tmp", L"ttf", L"woff", L"htm", L"xhtml", L"aspx", L"jsp",
+	L"zsh", L"sln", L"wasm", L"pyc", L"whl", L"ovpn" };
 inline constexpr const wchar_t* kShortEnKeep[] = {
 	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"it", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
 	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd" };
@@ -989,6 +1003,57 @@ inline bool ExceptionAhead(const std::wstring& typed, const std::wstring& there,
 			if (!w->empty() && el.size() > w->size() && el.compare(0, w->size(), *w) == 0) return true;
 	}
 	return false;
+}
+
+// Сокращение или расширение файла из встроенного списка (kShortEn, kShortRu) от трёх букв, набранное целиком: переключить
+// сразу на его последней букве, не дожидаясь пробела или знака (Дмитрий, 31.10.2026: "иьз" - bmp, "озп" - jpg, "зтп" - png,
+// "цуиз" - webp, "гыи" - usb, "BYY" - ИНН, "JJJ" - ООО). Не переключает на середине слова после щелчка или стрелок
+// (minLetters > kEarlyMin), с заглавной внутри ("Сзф" в "СзфыДщсл"), когда с набранного начинается слово своего языка
+// ("зва" - pdf: звать, "дув" - led: лед) или когда в трёх буквах одна опечатка пальцев (соседняя клавиша, перестановка,
+// задвоенная вторая или третья буква: "сыы" в "сырым", "аез" в "везде", "еир" в "кириллица", "реь" в "ревью") даёт частое
+// начало слова своего языка.
+inline bool KnownShortEarly(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                            const std::wstring& thereLanguage, size_t minLetters,
+                            const std::vector<std::wstring>& exceptions, auto&& spellTyped) {
+	if (minLetters > kEarlyMin || typed.size() != there.size() || typed.size() < 3) return false;
+	const Part t = Letters(typed), a = Letters(there);
+	if (t.core.size() != typed.size() || a.core.size() != there.size()) return false;
+	for (size_t i = 1; i < t.core.size(); i++)
+		if (TwoCaps::IsUpper(t.core[i]) && !AllUpper(t.core)) return false;
+	if (!KnownShort(typed, there, typedLanguage, thereLanguage, spellTyped) ||
+	    ExceptedEarly(typed, there, exceptions) || ExceptionAhead(typed, there, exceptions))
+		return false;
+	if (WordStart::TypedEvenCaps(t.core, typedLanguage)) return false;
+	const std::wstring l = Lower(t.core);
+	const int u = UnusualCombos(l, typedLanguage);
+	if (u < 1) return false;
+	if (l.size() >= 4) {
+		if (u < 2 && (TwoCaps::ScriptOf(l[0]) == TwoCaps::Script::Latin ||
+		              WordStart::TypedEvenCaps(t.core.substr(0, t.core.size() - 1), typedLanguage)))
+			return false;
+		return true;
+	}
+	if ((l[0] == l[1] || l[1] == l[2]) && !(l[0] == l[1] && l[1] == l[2])) {
+		const std::wstring two = l[0] == l[1] ? l.substr(1) : l.substr(0, 2);
+		if (WordStart::PrefixCount(two, typedLanguage, true) >= 50) return false;
+	}
+	for (size_t i = 0; i + 1 < l.size(); i++) {
+		std::wstring sw = l;
+		std::swap(sw[i], sw[i + 1]);
+		if (WordStart::PrefixCount(sw, typedLanguage, true) >= 10) return false;
+	}
+	static const wchar_t* const kLatin[] = { L"qwertyuiop[]", L"asdfghjkl;'", L"zxcvbnm,." };
+	static const wchar_t* const kCyrillic[] = { L"йцукенгшщзхъ", L"фывапролджэ", L"ячсмитьбю" };
+	const auto* rows = TwoCaps::ScriptOf(l[0]) == TwoCaps::Script::Cyrillic ? kCyrillic : kLatin;
+	for (size_t pos = 0; pos < l.size(); pos++)
+		for (int r = 0; r < 3; r++)
+			for (int c = 0; rows[r][c]; c++) {
+				if (!NearKeys(l[pos], rows[r][c])) continue;
+				std::wstring g = l;
+				g[pos] = rows[r][c];
+				if (WordStart::PrefixCount(g, typedLanguage, true) >= 20) return false;
+			}
+	return true;
 }
 
 // Решение посреди слова. typed - набранное с начала слова, there - те же клавиши в другой раскладке; minLetters - с

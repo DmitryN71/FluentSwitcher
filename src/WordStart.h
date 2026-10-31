@@ -165,6 +165,21 @@ inline Result Known(const std::wstring& prefix, const std::wstring& language, bo
 	return it != l->starts.end() && impl::Word(*l, *it).starts_with(key) ? Result::Yes : Result::No;
 }
 
+// Сколько слов в списке языка начинается с prefix; common - в списке частых.
+inline size_t PrefixCount(const std::wstring& prefix, const std::wstring& language, bool common = false) {
+	const impl::List* l = impl::For(language, common);
+	if (!l || prefix.empty()) return 0;
+	const std::string key = impl::Key(prefix);
+	auto it = std::lower_bound(l->starts.begin(), l->starts.end(), key,
+	                           [l](uint32_t start, const std::string& k) { return impl::Word(*l, start) < k; });
+	size_t n = 0;
+	while (it != l->starts.end() && impl::Word(*l, *it).starts_with(key)) {
+		n++;
+		++it;
+	}
+	return n;
+}
+
 // Слово целиком в списке языка (регистр не важен); common - в списке частых.
 inline bool IsWord(const std::wstring& word, const std::wstring& language, bool common = false) {
 	const impl::List* l = impl::For(language, common);

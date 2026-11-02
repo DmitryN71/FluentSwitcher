@@ -12,6 +12,7 @@
 #include <wx/tokenzr.h>
 
 #include <algorithm>
+#include <map>
 
 #include "../../src/WordStart.h" // after wxWidgets: Windows headers of its own; the engine's lists, in this exe too
 
@@ -433,13 +434,30 @@ public:
         box->SetMinSize(FromDIP(wxSize(520, 330)));
 
         m_count = FluentText(this, wxString(), 9, g.text2);
+        // The order of the rows (Refill): by date added, the newest first, or alphabetically - in "Переключать всегда" by
+        // either column. Kept for the kind while the settings window is open (Dmitry, 02.11.2026).
+        wxArrayString orders;
+        orders.Add(T("По дате добавления"));
+        if (m_kind == WordKind::Always)
+        {
+            orders.Add(T("По набранному"));
+            orders.Add(T("По тому, что получится"));
+        }
+        else
+            orders.Add(T("По алфавиту"));
+        m_order = new FluentChoice(this, orders, OrderOf(m_kind));
+        m_order->onChange = [this] {
+            OrderOf(m_kind) = m_order->GetSelection();
+            Refill();
+        };
         wxBoxSizer* fieldRow = new wxBoxSizer(wxHORIZONTAL);
         fieldRow->Add(m_field, 1, wxALIGN_CENTER_VERTICAL);
         fieldRow->Add(add, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
         if (pick)
             fieldRow->Add(pick, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
         wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
-        buttons->Add(m_count, 1, wxALIGN_CENTER_VERTICAL);
+        buttons->Add(m_order, 0, wxALIGN_CENTER_VERTICAL);
+        buttons->Add(m_count, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
         buttons->Add(new FluentButton(this, wxID_OK, T("Готово"), true), 0, wxALIGN_CENTER_VERTICAL);
         buttons->Add(new FluentButton(this, wxID_CANCEL, T("Отмена")), 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(8));
         wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -471,6 +489,14 @@ public:
     WordListWords Result() const { return { m_words, m_learned }; }
 
 private:
+    // The order chosen for the lists of this kind (m_order), while the settings window is open; at first - alphabetically,
+    // "Переключать всегда" by what is typed.
+    static int& OrderOf(WordKind kind)
+    {
+        static std::map<WordKind, int> orders;
+        return orders.try_emplace(kind, 1).first->second;
+    }
+
     wxArrayString Forms(const wxString& word) const
     {
         return m_kind == WordKind::Caps || m_kind == WordKind::Programs ? wxArrayString() : OtherForms(word, m_layouts);
@@ -629,18 +655,29 @@ private:
             }
             rows.push_back(row);
         }
-        // Alphabetically, as the user's language sorts (ё by е, case aside, 2 before 10; WinnyS, forum, 02.11.2026); the
-        // words added in this dialog - on top, the newest first, so that the one just added is seen.
-        auto fresh = [this](const wxString& w) { return m_fresh.Index(w); };
-        std::stable_sort(rows.begin(), rows.end(), [&](const WordRows::Row& a, const WordRows::Row& b) {
-            const int fa = fresh(a.word), fb = fresh(b.word);
-            if (fa != fb)
-                return fa > fb; // wxNOT_FOUND is -1: below any added one
-            if (fa != wxNOT_FOUND)
-                return false;
-            return CompareStringEx(LOCALE_NAME_USER_DEFAULT, LINGUISTIC_IGNORECASE | SORT_DIGITSASNUMBERS,
-                                   a.word.wc_str(), -1, b.word.wc_str(), -1, nullptr, nullptr, 0) == CSTR_LESS_THAN;
-        });
+        // By date: the newest first. Alphabetically - as the user's language sorts (ё by е, case aside, 2 before 10;
+        // WinnyS, forum, 02.11.2026), "Переключать всегда" by what is typed or by what it becomes; the words added in
+        // this dialog - on top, the newest first, so that the one just added is seen.
+        const int order = m_order->GetSelection();
+        if (order == 0)
+            std::reverse(rows.begin(), rows.end());
+        else
+        {
+            const bool byTyped = m_kind == WordKind::Always && order == 1;
+            auto key = [byTyped](const WordRows::Row& r) -> const wxString& {
+                return byTyped && !r.typed.empty() ? r.typed : r.word;
+            };
+            auto fresh = [this](const wxString& w) { return m_fresh.Index(w); };
+            std::stable_sort(rows.begin(), rows.end(), [&](const WordRows::Row& a, const WordRows::Row& b) {
+                const int fa = fresh(a.word), fb = fresh(b.word);
+                if (fa != fb)
+                    return fa > fb; // wxNOT_FOUND is -1: below any added one
+                if (fa != wxNOT_FOUND)
+                    return false;
+                return CompareStringEx(LOCALE_NAME_USER_DEFAULT, LINGUISTIC_IGNORECASE | SORT_DIGITSASNUMBERS,
+                                       key(a).wc_str(), -1, key(b).wc_str(), -1, nullptr, nullptr, 0) == CSTR_LESS_THAN;
+            });
+        }
         m_rows->SetRows(std::move(rows), query.empty() ? T("Пока пусто") : T("Не найдено"));
         m_scroll->FitInside();
         m_scroll->Layout();
@@ -680,6 +717,7 @@ private:
     TextField* m_field = nullptr;
     wxStaticText* m_hint = nullptr;
     wxStaticText* m_count = nullptr;
+    FluentChoice* m_order = nullptr;
     wxScrolledWindow* m_scroll = nullptr;
     WordRows* m_rows = nullptr;
     wxString m_done; // what the last add, removal or ⇄ did, for the hint until the field changes

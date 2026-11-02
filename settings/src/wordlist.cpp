@@ -548,6 +548,7 @@ private:
             }
             m_words.Add(kept);
             m_forms.push_back(Forms(kept));
+            m_fresh.Add(kept);
             added.Add(m_kind == WordKind::Always && !m_forms.back().empty()
                           ? Direction(kept, m_forms.back())
                           : kept);
@@ -586,6 +587,8 @@ private:
             m_learned.RemoveAt(learned); // the user's own now
         m_words[index] = other;
         m_forms[index] = Forms(other);
+        if (const int fresh = m_fresh.Index(word); fresh != wxNOT_FOUND)
+            m_fresh[fresh] = other; // stays where it was
         m_done = wxString::Format(T("Теперь %s"), Direction(other, m_forms[index]));
         Refill();
     }
@@ -599,7 +602,7 @@ private:
         if (hit < 0 && !query.empty() && Kept(query) != query)
             hit = Find(Kept(query), &covered);
         std::vector<WordRows::Row> rows;
-        for (int i = (int)m_words.size() - 1; i >= 0; i--) // the newest first
+        for (int i = 0; i < (int)m_words.size(); i++)
         {
             const wxString& w = m_words[i];
             bool match = query.empty() || i == hit || LowerAll(w).Contains(lower); // the word that covers it - too
@@ -626,6 +629,18 @@ private:
             }
             rows.push_back(row);
         }
+        // Alphabetically, as the user's language sorts (ё by е, case aside, 2 before 10; WinnyS, forum, 02.11.2026); the
+        // words added in this dialog - on top, the newest first, so that the one just added is seen.
+        auto fresh = [this](const wxString& w) { return m_fresh.Index(w); };
+        std::stable_sort(rows.begin(), rows.end(), [&](const WordRows::Row& a, const WordRows::Row& b) {
+            const int fa = fresh(a.word), fb = fresh(b.word);
+            if (fa != fb)
+                return fa > fb; // wxNOT_FOUND is -1: below any added one
+            if (fa != wxNOT_FOUND)
+                return false;
+            return CompareStringEx(LOCALE_NAME_USER_DEFAULT, LINGUISTIC_IGNORECASE | SORT_DIGITSASNUMBERS,
+                                   a.word.wc_str(), -1, b.word.wc_str(), -1, nullptr, nullptr, 0) == CSTR_LESS_THAN;
+        });
         m_rows->SetRows(std::move(rows), query.empty() ? T("Пока пусто") : T("Не найдено"));
         m_scroll->FitInside();
         m_scroll->Layout();
@@ -661,6 +676,7 @@ private:
     std::vector<HKL> m_layouts;
     wxArrayString m_words, m_learned;
     std::vector<wxArrayString> m_forms; // of each word: its text in the other layouts
+    wxArrayString m_fresh;              // the words added in this dialog, in the order added (Refill: on top)
     TextField* m_field = nullptr;
     wxStaticText* m_hint = nullptr;
     wxStaticText* m_count = nullptr;

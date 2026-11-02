@@ -19,8 +19,8 @@ free and open source under GPL-3.0.
   neighbors: "f vj;yj" - "а можно", "ns ult" - "ты где", while "plan B" and "5 шт" are left alone. A word with a typo
   too: "нфдлштп" - "yalking". A word with hyphens too, also with a part of one letter: "у-ьфшд" - "e-mail",
   "d-nhtnmb[" - "в-третьих". A word in CAPITALS from four letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
-  "ЗИМА ВОЗМЕЗДИЯ", in the middle of the word from the fifth letter. A site or mail address typed in the wrong layout too: "еюьу" - "t.me", "нфюкг" - "ya.ru". Frequent
-  abbreviations of a built-in list too - "ГЫИ" - "USB", "BYY" - "ИНН", "зды" - "pls", and hotkeys: "Секд+А" - "Ctrl+F".
+  "ЗИМА ВОЗМЕЗДИЯ", in the middle of the word from the fifth letter. A site or mail address typed in the wrong layout too: "еюьу" - "t.me", "нфюкг" - "ya.ru", and a file name with an extension: "зрщещюозп" - "photo.jpg". Frequent
+  abbreviations of a built-in list too - "ГЫИ" - "USB", "BYY" - "ИНН", "зды" - "pls", file extensions - "иьз" - "bmp", and hotkeys: "Секд+А" - "Ctrl+F". Abbreviations and extensions from three letters switch at once on the last letter, unless a frequent word of its own language begins so ("озп" - "jpg"; "зва" - "pdf" only on a space: "звать"). Short ones its own language never has, too: "фив" - "abd", "ыещ" - "sto".
   A word with Ы or Ь first - no Russian word begins so - goes without a dictionary too: "Ыфин" - "Saby". Names no
   dictionary knows - when the typed word has many letter combinations its language hardly has: "ФЗЛЬшккщк" -
   "APKMirror", "Вшфвщс" - "Diadoc". A word the dictionary knows only with capitals, typed in lowercase, too: "пшерги" -
@@ -28,10 +28,10 @@ free and open source under GPL-3.0.
   a hyphen where only the part after the hyphen is in the wrong layout, only that part is fixed: "legacy-yfcnhjqrb" -
   "legacy-настройки", and so does Shift twice.
   English with an apostrophe: "Шэь" - "I'm", "вщтэе" - "don't". Words run together with capitals: "СфзыДщсл" -
-  "CapsLock". Words with digits (with digits in front - only from "Always switch": "7яшз" - 7zip), other abbreviations (NASA, ВДНХ), a word right after "\" (abbreviations of templates, paths: "\рекв", C:\Users), a word typed again after the layout was switched by
+  "CapsLock". Text another program types (AutoHotkey and the like; so the On-Screen Keyboard and Mouse Without Borders too), words with digits (with digits in front - only from "Always switch": "7яшз" - 7zip), other abbreviations (NASA, ВДНХ), a word right after "\" (abbreviations of templates, paths: "\рекв", C:\Users), a word typed again after the layout was switched by
   hand right after a fix, passwords, the console (but for the console apps listed, such as far.exe) and the apps of "No automatic switch in apps" are left alone; fixed
   by mistake - "Fix the last word" right after it brings the word back, and the third time remembers it; a word
-  you keep fixing by hand goes to "Always switch" the third time, a word with hyphens too (e-Residency, ВСХВ-ВДНХ-ВВЦ), and with digits in front (4pda). A word of "Always switch" is switched as soon as it is typed whole, with no space. The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked. The journal
+  you keep fixing by hand goes to "Always switch" the third time, a word with hyphens too (e-Residency, ВСХВ-ВДНХ-ВВЦ), and with digits in front (4pda). A word of "Always switch" is switched as soon as it is typed whole, with no space. The lists are edited in a window of their own: one field adds and finds a word, each shows how it looks in the other layout; "Always switch" shows what is typed and what it becomes ("реез -> http"), either can be typed in, and the ⇄ button turns the direction; the words the app learned are marked; the order is by date or alphabetical ("Always switch" - by what is typed or by what it becomes). The journal
   of the automatic switch shows what switched by itself, what was switched back and what was fixed by hand, with the
   reason; its mistakes make a report for the forum topic - you see and can edit the text, the app sends nothing.
   It is turned on and off with a hotkey of its own and with a check item in the tray icon's menu too.

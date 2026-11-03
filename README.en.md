@@ -20,7 +20,7 @@ free and open source under GPL-3.0.
   too: "нфдлштп" - "yalking". A word with hyphens too, also with a part of one letter: "у-ьфшд" - "e-mail",
   "d-nhtnmb[" - "в-третьих". A word in CAPITALS from four letters, also typed with CapsLock: "ЗИМА DJPVTPLBZ" -
   "ЗИМА ВОЗМЕЗДИЯ", in the middle of the word from the fifth letter. A site or mail address typed in the wrong layout too: "еюьу" - "t.me", "нфюкг" - "ya.ru", and a file name with an extension: "зрщещюозп" - "photo.jpg". Frequent
-  abbreviations of a built-in list too - "ГЫИ" - "USB", "BYY" - "ИНН", "зды" - "pls", file extensions - "иьз" - "bmp", and hotkeys: "Секд+А" - "Ctrl+F". Abbreviations and extensions from three letters switch at once on the last letter, unless a frequent word of its own language begins so ("озп" - "jpg"; "зва" - "pdf" only on a space: "звать"). Short ones its own language never has, too: "фив" - "abd", "ыещ" - "sto".
+  abbreviations of a built-in list too - "ГЫИ" - "USB", "BYY" - "ИНН", "зды" - "pls", file extensions - "иьз" - "bmp", abbreviations with dots - "b n/l/" - "и т.д.", and hotkeys: "Секд+А" - "Ctrl+F". Abbreviations and extensions from three letters switch at once on the last letter, unless a frequent word of its own language begins so ("озп" - "jpg"; "зва" - "pdf" only on a space: "звать"). Short ones its own language never has, too: "фив" - "abd", "ыещ" - "sto".
   A word with Ы or Ь first - no Russian word begins so - goes without a dictionary too: "Ыфин" - "Saby". Names no
   dictionary knows - when the typed word has many letter combinations its language hardly has: "ФЗЛЬшккщк" -
   "APKMirror", "Вшфвщс" - "Diadoc". A word the dictionary knows only with capitals, typed in lowercase, too: "пшерги" -

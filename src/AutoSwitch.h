@@ -434,6 +434,10 @@ inline constexpr const wchar_t* kShortRu[] = {
 	L"нк", L"тк", L"лк", L"кп", L"см", L"мм", L"км", L"кг", L"мг", L"шт", L"млн", L"млрд", L"тчк", L"зпт", L"спб", L"пн",
 	L"вт", L"чт", L"пт", L"вс", L"кв", L"стр", L"вкл", L"мгц", L"ггц", L"кгц", L"мб", L"гб", L"кб", L"тб" };
 inline constexpr const wchar_t* kShortRuKeep[] = { L"рк" };
+// Русские сокращения с точками ("и т.д." в английской раскладке - "b n/l/", "и т.п." - "b n/g/"; Дмитрий, 03.11.2026):
+// точки - клавиша "/", набранное - не слово. Только с точками, как здесь: "lh" без точки - не "др".
+inline constexpr const wchar_t* kDottedRu[] = { L"т.д.", L"т.п.", L"т.е.", L"т.к.", L"т.н.", L"т.ч.", L"т.о.", L"н.э.",
+	L"и.о.", L"др." };
 
 // Знаки по краям сняты: открывающие в начале, знаки после слова в конце ("«ЗВА»," - ЗВА).
 inline std::wstring Bare(const std::wstring& s) {
@@ -460,6 +464,18 @@ inline bool KnownShort(const std::wstring& typed, const std::wstring& there, con
 	if (typed.size() != there.size()) return false;
 	for (wchar_t c : there)
 		if (iswdigit(c)) return false;
+	// Сокращение с точками (kDottedRu), знаки после него - его ("т.д.," - "n/l/?").
+	if (thereLanguage.size() >= 2 && Lower(thereLanguage.substr(0, 2)) == L"ru") {
+		std::wstring d = Lower(there);
+		while (!d.empty() && wcschr(L",;:!?)»\"", d.back())) d.pop_back();
+		if (std::ranges::any_of(kDottedRu, [&](const wchar_t* w) { return d == w; })) {
+			// С точкой внутри ("n/l/") - словарь не спрашиваем: он делит набранное по знаку и одну букву считает словом.
+			const std::wstring t = Bare(typed);
+			const bool inner = d.find(L'.') + 1 < d.size();
+			return !t.empty() && !InShortList(Lower(t), typedLanguage, true) &&
+				(inner || spellTyped(t) != SpellCheck::Result::Word);
+		}
+	}
 	const std::wstring t = Bare(typed), a = Lower(Bare(there));
 	if (t.empty() || !InShortList(a, thereLanguage, false) || InShortList(Lower(t), typedLanguage, true)) return false;
 	// Знак после него там - из набранной буквы ("зню" - py.: опечатка в "знаю"): так - от трёх букв ("ЗВАб" - PDF,).

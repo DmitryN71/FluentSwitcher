@@ -155,3 +155,8 @@ block()
 	file(GLOB word_lists CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/data/words_*.txt")
 	set_property(SOURCE src/res/res.rc APPEND PROPERTY OBJECT_DEPENDS ${word_lists})
 endblock()
+
+# The check of the rules files (rules/*.json) before they are published: tools/check_rules.cpp, run by the GitHub build.
+add_executable(check_rules tools/check_rules.cpp)
+target_include_directories(check_rules PRIVATE src extern "${CMAKE_BINARY_DIR}/generated")
+target_link_libraries(check_rules PRIVATE user32 shell32 ole32 oleaut32 uuid advapi32)

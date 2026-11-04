@@ -23,6 +23,11 @@ jobs:
         shell: cmd
         run: build.cmd
 
+      # The rules files the program downloads (rules/README.md): they are published from main by publish-rules.yml.
+      - name: Check the rules files
+        shell: cmd
+        run: build\x64-release\check_rules.exe src\data rules\rules.json rules\rules-beta.json
+
       - name: Zip and installer
         shell: pwsh
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\make_release.ps1 -NoBuild

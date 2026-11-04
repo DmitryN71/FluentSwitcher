@@ -1,0 +1,57 @@
+# Publishes rules/rules.json and rules/rules-beta.json of main to the "rules" branch, where FluentSwitcher downloads
+# them once a day (src/RulesFile.h, rules/README.md). By hand only: Actions - Publish rules - Run workflow, or
+#   gh workflow run publish-rules.yml
+# The files are checked first (tools/check_rules.cpp, the same check as in build.yml); a file that fails is not
+# published. The branch keeps its history: each publication is one commit there.
+name: Publish rules
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-rules
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        shell: cmd
+        run: build.cmd
+
+      - name: Check the rules files
+        shell: cmd
+        run: build\x64-release\check_rules.exe src\data rules\rules.json rules\rules-beta.json
+
+      - name: Copy them to the rules branch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'rules-branch'
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          $remote = "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git ls-remote --exit-code --heads $remote rules | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            git clone --quiet --branch rules --single-branch $remote $dir
+          } else {
+            # The first publication: a branch of its own with the rules files only.
+            git init --quiet $dir
+            git -C $dir checkout --quiet --orphan rules
+            git -C $dir remote add origin $remote
+          }
+          Copy-Item rules\rules.json, rules\rules-beta.json, rules\README.md $dir -Force
+          git -C $dir add rules.json rules-beta.json README.md
+          git -C $dir diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { "Nothing changed: the rules branch has these files already"; exit 0 }
+          $version = (Get-Content rules\rules.json -Raw | ConvertFrom-Json).version
+          $beta = (Get-Content rules\rules-beta.json -Raw | ConvertFrom-Json).version
+          git -C $dir commit --quiet -m "Rules $version (beta $beta) from main ${{ github.sha }}"
+          git -C $dir push --quiet origin rules
+          "Published: rules.json $version, rules-beta.json $beta"

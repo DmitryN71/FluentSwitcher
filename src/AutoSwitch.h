@@ -36,6 +36,7 @@
 
 #include "TwoCaps.h"
 #include "WinDictionary.h"
+#include "Rules.h"
 #include "ShortWords.h"
 #include "WordStart.h"
 
@@ -319,14 +320,12 @@ inline int NumberFix(const std::wstring& typed, const std::wstring& there) {
 	while (letters < there.size() && letters < 5 && TwoCaps::IsLetter(typed[letters]) && !iswdigit(there[letters])) letters++;
 	if (letters == 0) return number(0) ? 0 : -1;
 	// Сколько из них - слово впереди: сначала длиннее ("пю1" - "п" и знак, а не "пю").
-	static const wchar_t* const kVersion[] = { L"v", L"ver", L"rc" };
-	static const wchar_t* const kRussian[] = { L"п", L"пп", L"ст", L"рис", L"табл", L"гл", L"ч", L"разд", L"стр",
-	                                           L"прил", L"т" };
+	const Rules::Lists& rules = Rules::Current();
 	for (size_t p = std::min<size_t>(letters, 4); p > 0; p--) {
 		const std::wstring t = Lower(typed.substr(0, p)), a = Lower(there.substr(0, p));
 		const bool version = std::ranges::all_of(a, [](wchar_t c) { return iswalpha(c) != 0; }) &&
-			std::ranges::any_of(kVersion, [&](const wchar_t* v) { return a == v; });
-		const bool russian = std::ranges::any_of(kRussian, [&](const wchar_t* r) { return t == r; });
+			rules.numberEn.contains(a);
+		const bool russian = rules.numberRu.contains(t);
 		if ((version || russian) && number(p)) return version ? 0 : (int)p;
 	}
 	return -1;
@@ -342,18 +341,6 @@ inline bool Address(const std::wstring& typed, const std::wstring& there) {
 	if (typed.size() != there.size() || there.size() < 4) return false;
 	if (std::none_of(typed.begin(), typed.end(), [](wchar_t c) { return TwoCaps::ScriptOf(c) == TwoCaps::Script::Cyrillic; }))
 		return false;
-	static const wchar_t* const kZones[] = { L"ru", L"com", L"me", L"net", L"org", L"io", L"su", L"by", L"ua", L"kz", L"uz",
-		L"info", L"biz", L"pro", L"app", L"dev", L"ai", L"tv", L"co", L"cc", L"to", L"gg", L"fm", L"ly", L"xyz", L"online",
-		L"site", L"store", L"shop", L"tech", L"top", L"club", L"de", L"uk", L"us", L"eu", L"am", L"ge", L"md", L"kg", L"az",
-		L"lv", L"lt", L"ee", L"pl", L"cz", L"fr", L"it", L"es", L"nl", L"jp", L"cn",
-		L"jpg", L"jpeg", L"png", L"gif", L"bmp", L"svg", L"webp", L"tiff", L"tif", L"ico", L"heic", L"avif", L"psd", L"cdr",
-		L"raw", L"dng", L"mp3", L"mp4", L"wav", L"flac", L"ogg", L"aac", L"wma", L"m4a", L"opus", L"mkv", L"avi", L"mov",
-		L"wmv", L"webm", L"mpeg", L"mpg", L"srt", L"pdf", L"doc", L"docx", L"xls", L"xlsx", L"ppt", L"pptx", L"txt", L"csv",
-		L"rtf", L"odt", L"ods", L"odp", L"epub", L"fb2", L"mobi", L"djvu", L"zip", L"rar", L"7z", L"tar", L"tgz", L"gz",
-		L"xz", L"zst", L"iso", L"dmg", L"img", L"vhd", L"vhdx", L"vmdk", L"ova", L"exe", L"msi", L"dll", L"apk", L"apks",
-		L"xapk", L"ipa", L"deb", L"rpm", L"bat", L"cmd", L"ps1", L"vbs", L"reg", L"sys", L"ini", L"cfg", L"conf", L"json",
-		L"xml", L"yaml", L"yml", L"toml", L"env", L"log", L"bak", L"tmp", L"dat", L"bin", L"html", L"htm", L"css", L"js",
-		L"ts", L"py", L"cpp", L"php", L"sql", L"sh", L"lua", L"jar", L"wasm", L"ttf", L"otf", L"woff", L"woff2", L"torrent" };
 	const std::wstring a = Lower(there);
 	auto ascii = [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9'); };
 	std::wstring host = a;
@@ -375,7 +362,7 @@ inline bool Address(const std::wstring& typed, const std::wstring& there) {
 		if (l.empty() || l.front() == L'-' || l.back() == L'-' ||
 		    !std::all_of(l.begin(), l.end(), [&](wchar_t c) { return ascii(c) || c == L'-'; }))
 			return false;
-	return std::ranges::any_of(kZones, [&](const wchar_t* z) { return labels.back() == z; });
+	return Rules::Current().zones.contains(labels.back());
 }
 
 // Апострофы внутри слова там - английские сокращения: "Шэь" - I'm, "вщтэе" - don't, "Дуеэы" - Let's (Дмитрий,
@@ -399,45 +386,8 @@ inline bool Apostrophes(const std::wstring& typed, const std::wstring& there, co
 }
 
 // ----- Сокращения, которые словарь не решит -----
-// Аббревиатуры, слова без гласных, названия клавиш, единицы (Дмитрий, 15.10.2026: "ГЫИ" - USB не переключалось,
-// "понимаю, что Caramba пока впереди"): прописные короче четырёх букв и слова без гласных Skip не трогает, а словарь
-// Windows прописные принимает любые. Свой список на язык: там - сокращение из списка (kShortEn, kShortRu), набранное - не
-// слово своего языка (словарь, и строчными) и не из своих списков. ...Keep - что набирают нарочно и что не
-// переводить ("ru" - не "кг", "cv" - не "см", "CIF" - не "США", "DC" - не "вс"). Без цифр: "А4" - формат листа, не F4.
-inline constexpr const wchar_t* kShortEn[] = {
-	L"usb", L"pdf", L"api", L"crm", L"sku", L"vpn", L"dns", L"mit", L"ui", L"ux", L"url", L"uri", L"html", L"css", L"json",
-	L"xml", L"yaml", L"sql", L"http", L"https", L"ftp", L"sftp", L"ssh", L"ssl", L"tls", L"tcp", L"udp", L"ip", L"vps",
-	L"cpu", L"gpu", L"ram", L"ssd", L"hdd", L"nvme", L"bios", L"uefi", L"os", L"ios", L"lan", L"wan", L"wifi", L"nfc",
-	L"gps", L"seo", L"smm", L"cms", L"sdk", L"ide", L"gui", L"cli", L"pc", L"tv", L"hd", L"led", L"lcd", L"oled", L"rgb",
-	L"hdmi", L"dvd", L"faq", L"ceo", L"cfo", L"cto", L"hr", L"pr", L"qa", L"mvp", L"saas", L"ai", L"ml", L"gpt", L"llm",
-	L"ocr", L"docx", L"xlsx", L"pptx", L"csv", L"txt", L"jpg", L"jpeg", L"png", L"gif", L"svg", L"wav", L"zip", L"rar",
-	L"exe", L"dll", L"msi", L"iso", L"pls", L"plz", L"thx", L"thnx", L"btw", L"tbh", L"idk", L"imo", L"imho", L"lmk",
-	L"brb", L"omg", L"msg", L"npm", L"src", L"cmd", L"ls", L"pwd", L"sudo", L"env", L"js", L"ts", L"py", L"cpp", L"php",
-	L"db", L"ctrl", L"alt", L"esc", L"del", L"ins", L"pgup", L"pgdn", L"prtsc", L"fn", L"ghz", L"mhz", L"khz", L"kb",
-	L"mb", L"gb", L"tb", L"px", L"dpi", L"fps", L"rpm", L"wb", L"ym", L"ozon", L"fbo", L"fbs", L"dbs", L"rfbs", L"sms",
-	L"roi", L"oem", L"kpi", L"ctr", L"cpc", L"cpm", L"cpa", L"erp", L"cdn", L"sso", L"otp",
-	// Из «Переключать всегда» WinnyS (форум, 29.10.2026; остальное из его списка переключается и так).
-	L"rdp", L"fs", L"ms", L"tnx", L"drweb",
-	L"tbd", L"tba", L"wip", L"fyi", L"eta", L"asap", L"diy", L"afk", L"llc", L"inc", L"ltd", L"qty", L"pcs", L"pkg", L"aka",
-	// Расширения файлов (форум, volodyalipkin и gutasiho, 31.10.2026: "иьз" - bmp).
-	L"bmp", L"webp", L"heic", L"avif", L"psd", L"cdr", L"dng", L"ogg", L"wma", L"mkv", L"avi", L"wmv", L"webm", L"mpg",
-	L"vob", L"srt", L"xls", L"ppt", L"rtf", L"odp", L"epub", L"djvu", L"chm", L"tgz", L"zst", L"dmg", L"vhdx", L"vmdk",
-	L"apk", L"apks", L"xapk", L"vbs", L"ini", L"bak", L"tmp", L"ttf", L"woff", L"htm", L"xhtml", L"aspx", L"jsp",
-	L"zsh", L"sln", L"wasm", L"pyc", L"whl", L"ovpn" };
-inline constexpr const wchar_t* kShortEnKeep[] = {
-	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"it", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
-	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd" };
-inline constexpr const wchar_t* kShortRu[] = {
-	L"инн", L"ооо", L"оао", L"зао", L"пао", L"ип", L"ндс", L"ндфл", L"усн", L"огрн", L"огрнип", L"кпп", L"бик", L"снилс",
-	L"упд", L"ттн", L"эдо", L"дрр", L"фнс", L"пфр", L"сфр", L"фсс", L"мвд", L"гибдд", L"жкх", L"рф", L"ссср", L"сша",
-	L"ес", L"еаэс", L"оон", L"мкад", L"тц", L"цб", L"сбп", L"сдэк", L"ржд", L"вуз", L"сми", L"чп", L"тв", L"пк", L"гост",
-	L"нк", L"тк", L"лк", L"кп", L"см", L"мм", L"км", L"кг", L"мг", L"шт", L"млн", L"млрд", L"тчк", L"зпт", L"спб", L"пн",
-	L"вт", L"чт", L"пт", L"вс", L"кв", L"стр", L"вкл", L"мгц", L"ггц", L"кгц", L"мб", L"гб", L"кб", L"тб" };
-inline constexpr const wchar_t* kShortRuKeep[] = { L"рк" };
-// Русские сокращения с точками ("и т.д." в английской раскладке - "b n/l/", "и т.п." - "b n/g/"; Дмитрий, 03.11.2026):
-// точки - клавиша "/", набранное - не слово. Только с точками, как здесь: "lh" без точки - не "др".
-inline constexpr const wchar_t* kDottedRu[] = { L"т.д.", L"т.п.", L"т.е.", L"т.к.", L"т.н.", L"т.ч.", L"т.о.", L"н.э.",
-	L"и.о.", L"др." };
+// Списки - в Rules.h (встроенные и из файла правил): там - сокращение из списка (short), набранное - не слово своего
+// языка (словарь, и строчными) и не из своих списков; keep - что набирают нарочно и что не переводить.
 
 // Знаки по краям сняты: открывающие в начале, знаки после слова в конце ("«ЗВА»," - ЗВА).
 inline std::wstring Bare(const std::wstring& s) {
@@ -450,10 +400,10 @@ inline std::wstring Bare(const std::wstring& s) {
 // В списке языка (keepToo - и в keep); слово - строчными, без знаков по краям.
 inline bool InShortList(const std::wstring& word, const std::wstring& language, bool keepToo) {
 	if (word.empty() || language.size() < 2) return false;
-	auto has = [&](const auto& list) { return std::ranges::any_of(list, [&](const wchar_t* w) { return word == w; }); };
+	const Rules::Lists& rules = Rules::Current();
 	const std::wstring code = Lower(language.substr(0, 2));
-	if (code == L"en") return has(kShortEn) || (keepToo && has(kShortEnKeep));
-	if (code == L"ru") return has(kShortRu) || (keepToo && has(kShortRuKeep));
+	if (code == L"en") return rules.shortEn.contains(word) || (keepToo && rules.keepEn.contains(word));
+	if (code == L"ru") return rules.shortRu.contains(word) || (keepToo && rules.keepRu.contains(word));
 	return false;
 }
 
@@ -464,11 +414,11 @@ inline bool KnownShort(const std::wstring& typed, const std::wstring& there, con
 	if (typed.size() != there.size()) return false;
 	for (wchar_t c : there)
 		if (iswdigit(c)) return false;
-	// Сокращение с точками (kDottedRu), знаки после него - его ("т.д.," - "n/l/?").
+	// Сокращение с точками (Rules: dottedRu), знаки после него - его ("т.д.," - "n/l/?").
 	if (thereLanguage.size() >= 2 && Lower(thereLanguage.substr(0, 2)) == L"ru") {
 		std::wstring d = Lower(there);
 		while (!d.empty() && wcschr(L",;:!?)»\"", d.back())) d.pop_back();
-		if (std::ranges::any_of(kDottedRu, [&](const wchar_t* w) { return d == w; })) {
+		if (Rules::Current().dottedRu.contains(d)) {
 			// С точкой внутри ("n/l/") - словарь не спрашиваем: он делит набранное по знаку и одну букву считает словом.
 			const std::wstring t = Bare(typed);
 			const bool inner = d.find(L'.') + 1 < d.size();
@@ -1021,7 +971,7 @@ inline bool ExceptionAhead(const std::wstring& typed, const std::wstring& there,
 	return false;
 }
 
-// Сокращение или расширение файла из встроенного списка (kShortEn, kShortRu) от трёх букв, набранное целиком: переключить
+// Сокращение или расширение файла из списка (Rules: shortEn, shortRu) от трёх букв, набранное целиком: переключить
 // сразу на его последней букве, не дожидаясь пробела или знака (Дмитрий, 31.10.2026: "иьз" - bmp, "озп" - jpg, "зтп" - png,
 // "цуиз" - webp, "гыи" - usb, "BYY" - ИНН, "JJJ" - ООО). Не переключает на середине слова после щелчка или стрелок
 // (minLetters > kEarlyMin), с заглавной внутри ("Сзф" в "СзфыДщсл"), когда с набранного начинается слово своего языка

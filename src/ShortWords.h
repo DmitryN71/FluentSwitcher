@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Rules.h"
+
 namespace ShortWords {
 
 struct Entry {
@@ -242,19 +244,16 @@ inline bool OneLetter(const std::wstring& letter, const std::wstring& lang) {
 	return false;
 }
 
-// Латиницей среди русских слов пишут и английские ok, lol: перед словом они не значат, что пишут по-английски.
+// Латиницей среди русских слов пишут и английские ok, lol: перед словом они не значат, что пишут по-английски
+// (Rules: neutralEn).
 inline bool Neutral(const std::wstring& word, const std::wstring& lang) {
-	static const std::unordered_set<std::wstring> en = { L"ok", L"okay", L"oki", L"hi", L"lol", L"wow", L"omg", L"btw",
-	                                                     L"thx", L"pls", L"plz" };
-	return Is(lang, L"en") && en.contains(word);
+	return Is(lang, L"en") && Rules::Current().neutralEn.contains(word);
 }
 
 // Слова, которые знает словарь, которому можно верить, но так не пишут: английские короткие слова в русской раскладке
-// (the - "еру", by - "ин", but - "иге", put - "зге"); в украинской эти клавиши дают те же буквы.
+// (the - "еру", by - "ин", but - "иге", put - "зге"); в украинской эти клавиши дают те же буквы (Rules: notWordRu).
 inline bool NotWord(const std::wstring& word, const std::wstring& lang) {
-	static const std::unordered_set<std::wstring> ru = { L"еру", L"ин", L"иге", L"вшу", L"пгн", L"шу", L"ль", L"дув",
-	                                                     L"дуп", L"туе", L"зуе", L"зге", L"ен", L"фив" };
-	return (Is(lang, L"ru") || Is(lang, L"uk")) && ru.contains(word);
+	return (Is(lang, L"ru") || Is(lang, L"uk")) && Rules::Current().notWordRu.contains(word);
 }
 
 // Словарю языка можно верить в коротких словах: слово из двух-трёх букв, которое он знает, - настоящее ("учу", "лун").

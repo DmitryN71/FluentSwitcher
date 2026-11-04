@@ -438,17 +438,20 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				const bool command = curk.HasMod(VK_CONTROL) || curk.HasMod(VK_MENU) || curk.HasMod(VKE_WIN);
 				// Слова "Переключать всегда" - клавишами (KeyHold::SetForced), и клавиши "\" (SetBackslash), заново при новых
 				// настройках (там и выученные слова, и раскладки) - до Track: черту узнаёт и первое же нажатие.
+				// И после новых списков (Rules::Set): сокращения из файла правил.
 				static std::shared_ptr<const ProgramConfig> forcedFrom;
-				if (forcedFrom != cfg) {
+				static const Rules::Lists* rulesFrom = nullptr;
+				if (forcedFrom != cfg || rulesFrom != &Rules::Current()) {
 					forcedFrom = cfg;
+					rulesFrom = &Rules::Current();
 					std::vector<std::wstring> words;
 					for (const auto& e : cfg->autoswitch_force) words.push_back(StrUtils::Convert(e));
 					std::vector<HKL> lays;
 					for (HKL l : cfg->layouts_info.EnabledLayouts()) lays.push_back(l);
 					KeyHold::SetForced(words, lays);
 					std::vector<std::wstring> shorts;
-					for (const wchar_t* w : AutoSwitch::kShortEn) shorts.push_back(w);
-					for (const wchar_t* w : AutoSwitch::kShortRu) shorts.push_back(w);
+					for (const auto& w : rulesFrom->shortEn) shorts.push_back(w);
+					for (const auto& w : rulesFrom->shortRu) shorts.push_back(w);
 					KeyHold::SetShortKeys(shorts, lays);
 					KeyHold::SetBackslash(lays);
 				}

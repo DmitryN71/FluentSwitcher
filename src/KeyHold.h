@@ -648,7 +648,7 @@ inline void SetForced(const std::vector<std::wstring>& words, const std::vector<
 		}
 	}
 }
-// Трёхбуквенные сокращения и расширения файлов из встроенного списка (AutoSwitch::kShortEn, kShortRu) - клавишами в
+// Трёхбуквенные сокращения и расширения файлов из списка (Rules: shortEn, shortRu) - клавишами в
 // раскладках layouts: на третьей букве хук держит нажатия только для них (четыре и больше букв держит EarlyPoint).
 inline void SetShortKeys(const std::vector<std::wstring>& words, const std::vector<HKL>& layouts) {
 	shortKeys.clear();

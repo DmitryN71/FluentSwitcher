@@ -882,13 +882,13 @@ void WorkerImplement::AutoSwitchEarly() {
         // четвёртой букве, и "ЬЩАшш" - MOFii переключалось только на пробеле, а "реез" - http сразу (Дмитрий 07.10).
         auto shortStarts = [&](const std::wstring& w) {
             const std::wstring l = WordStart::Lower(w), code = WordStart::Lower(otherLang.substr(0, 2));
-            auto in = [&](const auto& list) {
-                return std::ranges::any_of(list, [&](const wchar_t* s) {
-                    const std::wstring_view v(s);
+            auto in = [&](const Rules::Words& list) {
+                return std::ranges::any_of(list, [&](const std::wstring& v) {
                     return v.size() > l.size() && v.starts_with(l);
                 });
             };
-            return code == L"en" ? in(AutoSwitch::kShortEn) : code == L"ru" ? in(AutoSwitch::kShortRu) : false;
+            const Rules::Lists& rules = Rules::Current();
+            return code == L"en" ? in(rules.shortEn) : code == L"ru" ? in(rules.shortRu) : false;
         };
         if (verdict.what == AutoSwitch::Early::Never && (forcedStarts(there) || shortStarts(there)) &&
             !AutoSwitch::Excepted(typed, there, exceptions))

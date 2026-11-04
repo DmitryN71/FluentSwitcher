@@ -94,6 +94,7 @@ private:
     wxString UpdateText(const Update::State& state);
     wxString UpdateButtonText() const;
     void CheckUpdateNow(FluentButton* button);
+    wxString RulesText() const;
 
     void ShowSection(int section);
     // The search (the field above the sections; 1.5.9): the cards with all the words of the query - in the title, the

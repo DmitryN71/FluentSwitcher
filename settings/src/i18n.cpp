@@ -626,6 +626,14 @@ const std::unordered_map<std::string, const char*>& English()
           "and installs a new version only when you click – the notification or the “Update” button" },
         { "Обновления", "Updates" },
         { "Проверить сейчас", "Check now" },
+        { "Обновлять правила переключения", "Update the switch rules" },
+        { "Раз в день – списки сокращений, зон сайтов и расширений файлов с GitHub, без новой версии "
+          "приложения\nСейчас: %s",
+          "Once a day – the lists of abbreviations, site zones and file extensions from GitHub, without a new "
+          "version of the app\nNow: %s" },
+        { "свой файл rules.json, версия %s", "your own rules.json, version %s" },
+        { "версия %s от %s", "version %s of %s" },
+        { "встроенные", "built-in" },
         { "Скачать", "Download" },
         { "Обновить", "Update" },
         { "Открыть страницу загрузки", "Open the download page" },

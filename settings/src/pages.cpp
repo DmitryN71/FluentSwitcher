@@ -21,6 +21,7 @@
 
 #include "../../src/Update.h" // after wxWidgets: Windows headers of its own
 #include "../../src/UpdateInstall.h"
+#include "../../src/RulesFile.h"
 #include "../../src/CanElevate.h"
 #include "../../src/ConfigLock.h"
 #include "../../src/AutoSwitch.h" // one word - one list: the engine's rule (Covers)
@@ -2853,6 +2854,10 @@ void SettingsFrame::BuildAbout()
                                             button->SetText(UpdateButtonText());
                                         return button;
                                     });
+    Toggle(T("Обновлять правила переключения"),
+           wxString::Format(T("Раз в день – списки сокращений, зон сайтов и расширений файлов с GitHub, без новой версии "
+                              "приложения\nСейчас: %s"), RulesText()),
+           "update_rules", true);
     AddSettingsCard(m_page, m_column, T("Основан на SimpleSwitcher"),
                     T("Автор оригинала – Aegel5. FluentSwitcher – изменённая версия: окно настроек и флаги в стиле "
                       "Windows 11, флаг у курсора, исправление с начала строки, запуск от администратора без "
@@ -2880,6 +2885,28 @@ void SettingsFrame::BuildAbout()
                         return open;
                     });
     FinishPage();
+}
+
+// Which rules the engine takes (RulesFile::Load): its own rules.json next to the program, else the one got from GitHub
+// (when "Обновлять правила" is on), else the built-in lists.
+wxString SettingsFrame::RulesText() const
+{
+    const std::wstring folder = m_folder.ToStdWstring();
+    std::string text;
+    if (RulesFile::ReadText(RulesFile::LocalPath(folder), text))
+    {
+        const auto r = RulesFile::Parse(text, kVersion);
+        if (r.ok)
+            return wxString::Format(T("свой файл rules.json, версия %s"), wxString::FromUTF8(r.version));
+    }
+    if (m_edit.GetBool("update_rules", true) && RulesFile::ReadText(RulesFile::CachePath(folder), text))
+    {
+        const auto r = RulesFile::Parse(text, kVersion);
+        if (r.ok)
+            return wxString::Format(T("версия %s от %s"), wxString::FromUTF8(r.version),
+                                    wxDateTime((time_t)(RulesFile::CacheTime(folder) / 1000)).Format("%d.%m.%Y"));
+    }
+    return T("встроенные");
 }
 
 wxString SettingsFrame::UpdateButtonText() const

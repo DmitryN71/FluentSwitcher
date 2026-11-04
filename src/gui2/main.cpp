@@ -8,6 +8,7 @@
 #include "SettingsIpc.h"
 #include "Update.h"
 #include "UpdateInstall.h"
+#include "RulesFile.h"
 #include "ConfigLock.h"
 #include "utils/WinTimer.h"
 
@@ -192,6 +193,52 @@ void StartGui() {
 	Update::CleanUp(folder);
 	timer.CycleTimer([&] {
 		if (!updates.installing) Update::CleanUp(folder);
+	}, 60 * 1000);
+	// Правила автопереключения (RulesFile.h): свой rules.json рядом с программой, иначе скачанный, иначе встроенные.
+	// Скачанный - раз в день (после неудачи - не раньше чем через 6 часов), в своём потоке; ответ - WM_RulesResult.
+	// "Обновлять правила" выключили - обратно на встроенные (или свой файл) в ту же минуту; "Проверять обновления"
+	// выключили - скачанные остаются, новых не качает.
+	struct {
+		long long nextLook = 0;
+		long long lastTry = 0;
+		bool busy = false;
+		bool downloaded = true; // update_rules при последней загрузке
+	} rules;
+	auto loadRules = [&] {
+		rules.downloaded = conf_get_unsafe()->update_rules;
+		const auto l = RulesFile::Load(folder, rules.downloaded, FS_VERSION);
+		for (const auto& n : l.notes) LOG_WARN("rules: {} - not taken", LogPlain(n));
+		LOG_ANY("rules: {}{}{}, {} added, {} removed, {} left out", RulesFile::SourceName(l.source),
+		        l.version.empty() ? "" : " ", LogPlain(l.version), l.added, l.removed, l.skipped.size());
+		for (const auto& s : l.skipped) LOG_WARN("rules: left out {}", LogPlain(s));
+	};
+	loadRules();
+	auto refreshRules = [&] {
+		rules.lastTry = Update::NowMs();
+		rules.busy = true;
+		std::thread([hwnd = g_guiHandle, folder] {
+			auto* result = new RulesFile::Refreshed(RulesFile::Refresh(folder, FS_VERSION));
+			if (!PostMessageW(hwnd, WM_RulesResult, 0, (LPARAM)result)) delete result;
+		}).detach();
+	};
+	timer.CycleTimer([&] {
+		if (rules.busy) return;
+		if (conf_get_unsafe()->update_rules != rules.downloaded) {
+			loadRules();
+			rules.nextLook = 0;
+		}
+		// Не проверять обновления - и правил не качать: программа к GitHub не обращается совсем.
+		if (!rules.downloaded || !conf_get_unsafe()->check_updates || RulesFile::Current() == RulesFile::Source::Local) return;
+		const long long now = Update::NowMs();
+		if (now < rules.nextLook) return;
+		rules.nextLook = now + 60LL * 60 * 1000;
+		const long long got = RulesFile::CacheTime(folder);
+		if (now - got < Update::kDayMs) {
+			rules.nextLook = std::min(rules.nextLook, got + Update::kDayMs);
+			return;
+		}
+		if (now - rules.lastTry < 6LL * 60 * 60 * 1000) return;
+		refreshRules();
 	}, 60 * 1000);
 	// Уведомления - с текстом: без него Windows уведомление не показывает, а убирает (1.5.5-test1: ни одного не было).
 	if (g_updatedStart) {
@@ -469,6 +516,23 @@ void StartGui() {
 				auto state = Update::Load(folder);
 				notifyUpdate(state, true);
 				Update::Save(folder, state);
+				// "Проверить сейчас" - и правила: свой файл мог появиться или пропасть, скачанные - забрать заново.
+				if (!rules.busy) {
+					loadRules();
+					if (rules.downloaded && RulesFile::Current() != RulesFile::Source::Local) refreshRules();
+				}
+				return 0;
+			}
+
+			if (msg == WM_RulesResult) {
+				std::unique_ptr<RulesFile::Refreshed> result(reinterpret_cast<RulesFile::Refreshed*>(lParam));
+				rules.busy = false;
+				if (!result->ok) {
+					LOG_WARN("rules: {}", LogPlain(result->error));
+					return 0;
+				}
+				LOG_ANY("rules: got {} from GitHub{}, {} left out", LogPlain(result->version),
+				        result->changed ? ", taken" : ", the same", result->skipped);
 				return 0;
 			}
 

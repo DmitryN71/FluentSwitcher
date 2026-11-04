@@ -188,6 +188,8 @@ public:
 	bool record_sides = false;
 	// Раз в день спрашивать у GitHub номер последней версии (Update.h).
 	bool check_updates = true;
+	// Раз в день забирать с GitHub файл правил автопереключения - списки сокращений, зон, расширений (RulesFile.h).
+	bool update_rules = true;
 	// Щелчки по значку в трее: "" - ничего, "menu", "next_layout", "toggle", "settings" (TrayIcon.h).
 	string tray_click = "";
 	string tray_double_click = "settings";

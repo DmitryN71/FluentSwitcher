@@ -11,6 +11,9 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <atomic>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -180,6 +183,152 @@ inline Result Parse(const std::string& text, const std::string& appVersion) {
 	r.lists.version = Wide(r.version);
 	r.ok = true;
 	return r;
+}
+
+// ----- Откуда правила -----
+// Свой файл рядом с программой (rules.json: положил пользователь, офлайн - gutasiho, форум 03.11.2026) главнее скачанного
+// (rules-github.json, туда же); пока он лежит, с GitHub ничего не качается. Беты берут rules-beta.json: новое правило
+// сначала получают они; его нет - rules.json.
+inline const wchar_t kAddress[] = L"https://raw.githubusercontent.com/DmitryN71/FluentSwitcher/rules/rules.json";
+inline const wchar_t kBetaAddress[] = L"https://raw.githubusercontent.com/DmitryN71/FluentSwitcher/rules/rules-beta.json";
+
+inline std::wstring LocalPath(const std::wstring& folder) { return folder + L"\\rules.json"; }
+inline std::wstring CachePath(const std::wstring& folder) { return folder + L"\\rules-github.json"; }
+
+inline bool IsBeta(const std::string& appVersion) { return appVersion.find('-') != std::string::npos; }
+
+inline std::vector<std::wstring> Addresses(const std::string& appVersion) {
+	if (IsBeta(appVersion)) return { kBetaAddress, kAddress };
+	return { kAddress };
+}
+
+enum class Source { Builtin, Local, Cache };
+
+inline const char* SourceName(Source s) {
+	return s == Source::Local ? "rules.json" : s == Source::Cache ? "rules-github.json" : "built-in";
+}
+
+// Что сейчас в работе (Load, Refresh).
+inline std::atomic<Source>& Current() {
+	static std::atomic<Source> s{ Source::Builtin };
+	return s;
+}
+
+inline bool ReadText(const std::wstring& path, std::string& text) {
+	std::ifstream f(path, std::ios::binary);
+	if (!f) return false;
+	text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+	return true;
+}
+
+inline bool Exists(const std::wstring& path) {
+	const DWORD a = GetFileAttributesW(path.c_str());
+	return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+// Когда скачанный файл в последний раз получен с GitHub (его время записи), мс от 1970; нет файла - 0.
+inline long long CacheTime(const std::wstring& folder) {
+	WIN32_FILE_ATTRIBUTE_DATA d{};
+	if (!GetFileAttributesExW(CachePath(folder).c_str(), GetFileExInfoStandard, &d)) return 0;
+	const ULONGLONG t = ((ULONGLONG)d.ftLastWriteTime.dwHighDateTime << 32) | d.ftLastWriteTime.dwLowDateTime;
+	return (long long)((t - 116444736000000000ULL) / 10000); // от 1601 года, по 100 нс
+}
+
+struct Loaded {
+	Source source = Source::Builtin;
+	std::string version;
+	size_t added = 0, removed = 0;
+	std::vector<std::string> skipped;
+	std::vector<std::string> notes; // что не взято и почему - для журнала
+};
+
+// При запуске и после "Проверить сейчас": свой файл, иначе скачанный (downloaded - "Обновлять правила" включено), иначе
+// встроенные. Не разобрался свой - как будто его нет. Выставляет списки (Rules::Set).
+inline Loaded Load(const std::wstring& folder, bool downloaded, const std::string& appVersion) {
+	Loaded l;
+	auto take = [&](Source source, const std::wstring& path) {
+		std::string text;
+		if (!ReadText(path, text)) return false;
+		Result r = Parse(text, appVersion);
+		if (!r.ok) {
+			l.notes.push_back(std::string(SourceName(source)) + ": " + r.error);
+			return false;
+		}
+		Rules::Set(std::move(r.lists));
+		l.source = source;
+		l.version = r.version;
+		l.added = r.added;
+		l.removed = r.removed;
+		l.skipped = std::move(r.skipped);
+		return true;
+	};
+	if (!take(Source::Local, LocalPath(folder)) && !(downloaded && take(Source::Cache, CachePath(folder)))) {
+		if (Current() != Source::Builtin) Rules::Set(Rules::Builtin());
+		l.source = Source::Builtin;
+	}
+	Current() = l.source;
+	return l;
+}
+
+struct Refreshed {
+	bool ok = false;
+	bool changed = false; // другие правила - выставлены
+	std::string version;
+	std::string error;
+	size_t skipped = 0;
+};
+
+// Скачать правила (в своём потоке: до ~10 с на адрес) и, если годны, - в rules-github.json и в работу. Тот же файл - только
+// отметка, что получен (время записи). Свой файл рядом с программой - ничего не качает.
+inline Refreshed Refresh(const std::wstring& folder, const std::string& appVersion,
+                         std::vector<std::wstring> addresses = {}) {
+	Refreshed f;
+	if (Exists(LocalPath(folder))) {
+		f.error = "rules.json is next to the program";
+		return f;
+	}
+	if (addresses.empty()) addresses = Addresses(appVersion);
+	std::string body;
+	for (const auto& address : addresses) {
+		DWORD status = 0;
+		if (!Update::Fetch(address.c_str(), nullptr, body, status, f.error)) return f;
+		if (status == 200) break;
+		f.error = "GitHub answered " + std::to_string(status);
+		body.clear();
+		if (status != 404) return f;
+	}
+	if (body.empty()) return f;
+	Result r = Parse(body, appVersion);
+	if (!r.ok) {
+		f.error = r.error;
+		return f;
+	}
+	f.version = r.version;
+	f.skipped = r.skipped.size();
+	std::string old;
+	const bool same = ReadText(CachePath(folder), old) && old == body;
+	// Через временный файл: прерванная запись не портит прежний.
+	const std::wstring temp = CachePath(folder) + L".tmp";
+	{
+		std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+		out << body;
+		if (!out) {
+			f.error = "can't write rules-github.json";
+			return f;
+		}
+	}
+	if (!MoveFileExW(temp.c_str(), CachePath(folder).c_str(), MOVEFILE_REPLACE_EXISTING)) {
+		DeleteFileW(temp.c_str());
+		f.error = "can't write rules-github.json: error " + std::to_string(GetLastError());
+		return f;
+	}
+	f.ok = true;
+	if (!same || Current() != Source::Cache) {
+		Rules::Set(std::move(r.lists));
+		Current() = Source::Cache;
+		f.changed = true;
+	}
+	return f;
 }
 
 }

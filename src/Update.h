@@ -69,37 +69,50 @@ inline bool IsNewer(const std::string& latestFull, const std::string& currentFul
 	return compare(latestSuffix, currentSuffix) > 0;
 }
 
-// Спрашивает GitHub сейчас; ждёт до ~10 с на каждый шаг (нет сети, медленный прокси).
-inline Result Check() {
-	Result r;
+// Один запрос GET: ответ (до 1 МБ) - в body, код ответа - в status; false - не дозвались (error - почему). Ждёт до ~10 с
+// на каждый шаг (нет сети, медленный прокси). Ничего не отправляет, кроме имени программы с версией; https - только
+// по https (http - для тестов на этом компьютере). И для файла правил (RulesFile.h).
+inline bool Fetch(const wchar_t* address, const wchar_t* headers, std::string& body, DWORD& status, std::string& error) {
+	body.clear();
+	status = 0;
 	const std::string agent = std::string("FluentSwitcher/") + FS_VERSION;
 	// Настройки прокси - системные, как у браузера.
 	HINTERNET net = InternetOpenA(agent.c_str(), INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
 	if (!net) {
-		r.error = "InternetOpen: error " + std::to_string(GetLastError());
-		return r;
+		error = "InternetOpen: error " + std::to_string(GetLastError());
+		return false;
 	}
 	DWORD timeout = 10000;
 	InternetSetOptionW(net, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout, sizeof(timeout));
 	InternetSetOptionW(net, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
 	InternetSetOptionW(net, INTERNET_OPTION_SEND_TIMEOUT, &timeout, sizeof(timeout));
-	HINTERNET url = InternetOpenUrlW(net, kLatestApi, L"Accept: application/vnd.github+json\r\n", (DWORD)-1,
+	const bool secure = wcsncmp(address, L"https://", 8) == 0;
+	HINTERNET url = InternetOpenUrlW(net, address, headers, headers ? (DWORD)-1 : 0,
 		INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_NO_UI |
-		INTERNET_FLAG_SECURE, 0);
+		(secure ? INTERNET_FLAG_SECURE : 0), 0);
 	if (!url) {
-		r.error = "InternetOpenUrl: error " + std::to_string(GetLastError());
+		error = "InternetOpenUrl: error " + std::to_string(GetLastError());
 		InternetCloseHandle(net);
-		return r;
+		return false;
 	}
-	DWORD status = 0, size = sizeof(status);
+	DWORD size = sizeof(status);
 	HttpQueryInfoW(url, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &status, &size, nullptr);
-	std::string body;
 	char buffer[8192];
 	DWORD got = 0;
 	while (InternetReadFile(url, buffer, sizeof(buffer), &got) && got > 0 && body.size() < (1u << 20))
 		body.append(buffer, got);
 	InternetCloseHandle(url);
 	InternetCloseHandle(net);
+	return true;
+}
+
+// Спрашивает GitHub сейчас.
+inline Result Check() {
+	Result r;
+	std::string body;
+	DWORD status = 0;
+	if (!Fetch(kLatestApi, L"Accept: application/vnd.github+json\r\n", body, status, r.error))
+		return r;
 	if (status != 200) {
 		r.error = "GitHub answered " + std::to_string(status);
 		return r;

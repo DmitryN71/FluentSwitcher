@@ -113,6 +113,7 @@ namespace nlohmann {
 		ui_theme, \
 		record_sides, \
 		check_updates, \
+		update_rules, \
 		tray_click, \
 		tray_double_click, \
 		sound_switch, \

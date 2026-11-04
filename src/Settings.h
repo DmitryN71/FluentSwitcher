@@ -190,6 +190,8 @@ public:
 	bool check_updates = true;
 	// Раз в день забирать с GitHub файл правил автопереключения - списки сокращений, зон, расширений (RulesFile.h).
 	bool update_rules = true;
+	// "Обновляться до бета-версий": проверка предлагает и беты (предварительные выпуски GitHub), правила - rules-beta.json.
+	bool update_beta = false;
 	// Щелчки по значку в трее: "" - ничего, "menu", "next_layout", "toggle", "settings" (TrayIcon.h).
 	string tray_click = "";
 	string tray_double_click = "settings";

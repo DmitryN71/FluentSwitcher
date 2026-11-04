@@ -627,6 +627,11 @@ const std::unordered_map<std::string, const char*>& English()
         { "Обновления", "Updates" },
         { "Проверить сейчас", "Check now" },
         { "Обновлять правила переключения", "Update the switch rules" },
+        { "Обновляться до бета-версий", "Update to beta versions" },
+        { "Бета выходит раньше выпуска: в ней новое, но возможны и ошибки. Проверка предлагает и беты, а новые "
+          "правила переключения приходят сюда первыми. Выключите – останетесь на бете до выпуска новее",
+          "A beta comes out before the release: new things, but errors are possible too. The check offers betas "
+          "as well, and new switch rules come here first. Turn it off and you stay on the beta until a newer release" },
         { "Раз в день – списки сокращений, зон сайтов и расширений файлов с GitHub, без новой версии "
           "приложения\nСейчас: %s",
           "Once a day – the lists of abbreviations, site zones and file extensions from GitHub, without a new "

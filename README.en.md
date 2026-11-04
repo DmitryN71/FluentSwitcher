@@ -92,7 +92,9 @@ free and open source under GPL-3.0.
   it tells about a new version with a notification from the tray. A click on it (or "Update" in "About") downloads
   the new version from GitHub, checks its SHA-256 checksum and installs it without questions - with the installer
   or, for the version without installation (zip), by replacing the files in its folder; FluentSwitcher restarts by itself, and the
-  downloaded file is deleted. The check is turned off in "About", where "Check now" is too.
+  downloaded file is deleted. The check is turned off in "About", where "Check now" is too. There is also "Update
+  to beta versions": the check offers betas as well, and new switch rules come first; turned off, the app stays on the
+  beta until a newer release.
 - **Updatable auto switch rules**: the lists the app decides by whether to switch a word (abbreviations, Russian
   abbreviations with dots such as "т.д.", site zones and file extensions) grow without a new version. Once a day,
   with the update check, the app gets the rules file from GitHub and takes it at once, without a restart; with no

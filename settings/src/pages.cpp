@@ -2843,6 +2843,10 @@ void SettingsFrame::BuildAbout()
            T("Раз в день приложение спрашивает у GitHub номер последней версии, больше ничего не отправляет. Новую "
              "версию оно скачает и поставит только по вашему клику – по уведомлению или кнопке «Обновить»"),
            "check_updates", true);
+    Toggle(T("Обновляться до бета-версий"),
+           T("Бета выходит раньше выпуска: в ней новое, но возможны и ошибки. Проверка предлагает и беты, а новые "
+             "правила переключения приходят сюда первыми. Выключите – останетесь на бете до выпуска новее"),
+           "update_beta", false);
     // "Проверить сейчас"; once a newer version is known, "Обновить" has the engine install it (UpdateInstall.h) or,
     // when it cannot (no engine, a release without the file), "Скачать" opens its page; when GitHub could not be
     // reached, "Открыть страницу загрузки" leaves it to the browser.
@@ -2966,7 +2970,7 @@ void SettingsFrame::CheckUpdateNow(FluentButton* button)
     button->Enable(false);
     SetCardDescription(m_updateLabel, T("Проверяю…"));
     m_updateLabel->GetParent()->Update();
-    const Update::Result result = Update::Check();
+    const Update::Result result = Update::Check(m_edit.GetBool("update_beta", false));
     const std::wstring folder = m_folder.ToStdWstring();
     Update::State state = Update::Load(folder);
     Update::Apply(state, result, true);

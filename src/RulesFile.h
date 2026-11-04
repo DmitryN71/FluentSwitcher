@@ -187,8 +187,8 @@ inline Result Parse(const std::string& text, const std::string& appVersion) {
 
 // ----- Откуда правила -----
 // Свой файл рядом с программой (rules.json: положил пользователь, офлайн - gutasiho, форум 03.11.2026) главнее скачанного
-// (rules-github.json, туда же); пока он лежит, с GitHub ничего не качается. Беты берут rules-beta.json: новое правило
-// сначала получают они; его нет - rules.json.
+// (rules-github.json, туда же); пока он лежит, с GitHub ничего не качается. Беты и "Обновляться до бета-версий" берут
+// rules-beta.json: новое правило сначала получают они; его нет - rules.json.
 inline const wchar_t kAddress[] = L"https://raw.githubusercontent.com/DmitryN71/FluentSwitcher/rules/rules.json";
 inline const wchar_t kBetaAddress[] = L"https://raw.githubusercontent.com/DmitryN71/FluentSwitcher/rules/rules-beta.json";
 
@@ -197,8 +197,9 @@ inline std::wstring CachePath(const std::wstring& folder) { return folder + L"\\
 
 inline bool IsBeta(const std::string& appVersion) { return appVersion.find('-') != std::string::npos; }
 
-inline std::vector<std::wstring> Addresses(const std::string& appVersion) {
-	if (IsBeta(appVersion)) return { kBetaAddress, kAddress };
+// beta - бета или "Обновляться до бета-версий" (gui2/main.cpp).
+inline std::vector<std::wstring> Addresses(bool beta) {
+	if (beta) return { kBetaAddress, kAddress };
 	return { kAddress };
 }
 
@@ -281,13 +282,13 @@ struct Refreshed {
 // Скачать правила (в своём потоке: до ~10 с на адрес) и, если годны, - в rules-github.json и в работу. Тот же файл - только
 // отметка, что получен (время записи). Свой файл рядом с программой - ничего не качает.
 inline Refreshed Refresh(const std::wstring& folder, const std::string& appVersion,
-                         std::vector<std::wstring> addresses = {}) {
+                         std::vector<std::wstring> addresses = {}, bool beta = false) {
 	Refreshed f;
 	if (Exists(LocalPath(folder))) {
 		f.error = "rules.json is next to the program";
 		return f;
 	}
-	if (addresses.empty()) addresses = Addresses(appVersion);
+	if (addresses.empty()) addresses = Addresses(beta);
 	std::string body;
 	for (const auto& address : addresses) {
 		DWORD status = 0;

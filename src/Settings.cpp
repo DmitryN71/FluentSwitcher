@@ -114,6 +114,7 @@ namespace nlohmann {
 		record_sides, \
 		check_updates, \
 		update_rules, \
+		update_beta, \
 		tray_click, \
 		tray_double_click, \
 		sound_switch, \

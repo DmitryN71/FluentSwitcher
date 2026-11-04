@@ -106,18 +106,9 @@ inline bool Fetch(const wchar_t* address, const wchar_t* headers, std::string& b
 	return true;
 }
 
-// Спрашивает GitHub сейчас.
-inline Result Check() {
+// Один выпуск из ответа GitHub - номер, страница, установщик и архив.
+inline Result FromRelease(const nlohmann::json& json) {
 	Result r;
-	std::string body;
-	DWORD status = 0;
-	if (!Fetch(kLatestApi, L"Accept: application/vnd.github+json\r\n", body, status, r.error))
-		return r;
-	if (status != 200) {
-		r.error = "GitHub answered " + std::to_string(status);
-		return r;
-	}
-	const auto json = nlohmann::json::parse(body, nullptr, false);
 	std::string tag;
 	if (json.is_object()) {
 		auto it = json.find("tag_name");
@@ -148,6 +139,43 @@ inline Result Check() {
 	if (!r.ok)
 		r.error = "no tag_name in the answer";
 	return r;
+}
+
+// Ответ GitHub: без бет - последний выпуск (releases/latest, беты GitHub туда не берёт); с бетами - самый новый из
+// списка выпусков, и предварительных тоже (черновики - нет).
+inline Result FromAnswer(const std::string& body, bool beta) {
+	const auto json = nlohmann::json::parse(body, nullptr, false);
+	if (!beta)
+		return FromRelease(json);
+	Result best;
+	best.error = "no releases in the answer";
+	if (!json.is_array())
+		return best;
+	for (const auto& release : json) {
+		if (!release.is_object()) continue;
+		if (const auto draft = release.find("draft"); draft != release.end() && draft->is_boolean() && draft->get<bool>())
+			continue;
+		Result r = FromRelease(release);
+		if (r.ok && (!best.ok || IsNewer(r.latest, best.latest)))
+			best = std::move(r);
+	}
+	return best;
+}
+
+inline const wchar_t kReleasesApi[] = L"https://api.github.com/repos/DmitryN71/FluentSwitcher/releases?per_page=30";
+
+// Спрашивает GitHub сейчас; beta - "Обновляться до бета-версий".
+inline Result Check(bool beta = false) {
+	Result r;
+	std::string body;
+	DWORD status = 0;
+	if (!Fetch(beta ? kReleasesApi : kLatestApi, L"Accept: application/vnd.github+json\r\n", body, status, r.error))
+		return r;
+	if (status != 200) {
+		r.error = "GitHub answered " + std::to_string(status);
+		return r;
+	}
+	return FromAnswer(body, beta);
 }
 
 inline long long NowMs() {

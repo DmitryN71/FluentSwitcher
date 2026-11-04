@@ -216,8 +216,10 @@ void StartGui() {
 	auto refreshRules = [&] {
 		rules.lastTry = Update::NowMs();
 		rules.busy = true;
-		std::thread([hwnd = g_guiHandle, folder] {
-			auto* result = new RulesFile::Refreshed(RulesFile::Refresh(folder, FS_VERSION));
+		// Беты и "Обновляться до бета-версий" - rules-beta.json: новые правила - сначала им.
+		const bool beta = conf_get_unsafe()->update_beta || RulesFile::IsBeta(FS_VERSION);
+		std::thread([hwnd = g_guiHandle, folder, beta] {
+			auto* result = new RulesFile::Refreshed(RulesFile::Refresh(folder, FS_VERSION, {}, beta));
 			if (!PostMessageW(hwnd, WM_RulesResult, 0, (LPARAM)result)) delete result;
 		}).detach();
 	};
@@ -263,8 +265,8 @@ void StartGui() {
 		if (now - updates.lastTry < 6LL * 60 * 60 * 1000) return;
 		updates.lastTry = now;
 		updates.busy = true;
-		std::thread([hwnd = g_guiHandle] {
-			auto* result = new Update::Result(Update::Check());
+		std::thread([hwnd = g_guiHandle, beta = conf_get_unsafe()->update_beta] {
+			auto* result = new Update::Result(Update::Check(beta));
 			if (!PostMessageW(hwnd, WM_UpdateResult, 0, (LPARAM)result)) delete result;
 		}).detach();
 	}, 60 * 1000);

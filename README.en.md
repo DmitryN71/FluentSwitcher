@@ -93,6 +93,13 @@ free and open source under GPL-3.0.
   the new version from GitHub, checks its SHA-256 checksum and installs it without questions - with the installer
   or, for the version without installation (zip), by replacing the files in its folder; FluentSwitcher restarts by itself, and the
   downloaded file is deleted. The check is turned off in "About", where "Check now" is too.
+- **Updatable auto switch rules**: the lists the app decides by whether to switch a word (abbreviations, Russian
+  abbreviations with dots such as "т.д.", site zones and file extensions) grow without a new version. Once a day,
+  with the update check, the app gets the rules file from GitHub and takes it at once, without a restart; with no
+  network or a file that does not fit, the built-in lists work. Your own `rules.json` next to FluentSwitcher.exe wins
+  over the downloaded one - so the rules can be put in without a network (the format is in `rules/README.md`). The
+  "Always switch" and "Never switch" lists win over the file. Turned off in "About" ("Update the switch rules"), which
+  also shows the rules in use; with the update check off the rules are not downloaded either.
 - **Report to the developer** (Advanced): if something works wrong – "Start recording", repeat the error, "Save
   the report". The recording has no typed text: only the number of letters instead of them, passwords never get
   into it. The report is a text file on the desktop that you can read; a letter to the developer opens, and the file

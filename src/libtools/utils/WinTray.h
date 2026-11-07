@@ -39,6 +39,7 @@ private:
 	// добавлял его снова).
 	inline static const UINT WM_TaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 	HWND listener = nullptr;
+	bool m_iconPending = false; // SetIcon: Windows значок не приняла - RetryIcon
 	static LRESULT CALLBACK ListenerProc(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		if (msg == WM_TaskbarCreated && Inst) {
 			Inst->AddAgain();
@@ -243,12 +244,19 @@ public:
 	void SetIcon(HICON icon) {
 		//nid.hIcon = LoadIcon(NULL, IDI_APPLICATION); // Load your icon here
 		nid.hIcon = icon; // Load your icon here
+		m_iconPending = false;
 		if (!Shell_NotifyIcon(NIM_MODIFY, &nid)) {
 			if (!Shell_NotifyIcon(NIM_ADD, &nid)) {
-				LOG_WARN("Can't modify or add icon");
-				// todo - by timer
+				// Проводник занят - Windows не принимает значок (тайм-аут), и в трее висел прежний флаг до следующего
+				// переключения, а флаг у курсора уже новый (форум, bdvrt, 07.11.2026). Ещё раз - RetryIcon по таймеру.
+				LOG_WARN("Can't modify or add icon, error {}, will try again", GetLastError());
+				m_iconPending = true;
 			}
 		}
+	}
+	// Значок не приняли (SetIcon): ещё раз тот же.
+	void RetryIcon() {
+		if (m_iconPending && nid.hIcon) SetIcon(nid.hIcon);
 	}
 	// Уведомление у значка (в Windows 10/11 - всплывающее сообщение и Центр уведомлений). Значка нет - нет и его.
 	bool ShowBalloon(const std::wstring& title, const std::wstring& text) {

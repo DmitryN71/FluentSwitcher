@@ -132,6 +132,10 @@ public:
 		tray.OnBalloonClick(std::move(onClick));
 		return tray.ShowBalloon(title, text);
 	}
+	// Прошлый значок Windows не приняла (Проводник был занят) - ещё раз; раз в 2 с (gui2/main.cpp).
+	void Retry() {
+		if (!Hidden()) tray.RetryIcon();
+	}
 	void Update(HKL lay = 0) {
 
 		if (lay != 0) {

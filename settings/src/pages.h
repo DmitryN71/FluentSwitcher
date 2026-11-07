@@ -160,6 +160,7 @@ private:
     ToggleSwitch* m_autostartSwitch = nullptr;
     ToggleSwitch* m_loggingSwitch = nullptr;
     FluentButton* m_reportStart = nullptr; // "Начать запись" / "Остановить запись" of the report to the developer
+    bool m_reportRecorded = false;         // the engine was recording while this window was open
     wxWindow* m_notRunningCard = nullptr;
 
     SectionNav* m_nav = nullptr;

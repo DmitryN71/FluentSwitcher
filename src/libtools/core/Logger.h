@@ -208,6 +208,15 @@ namespace _log_int {
 			return std::wstring(path) + L"\\log";
 		}
 		static std::wstring ReportPath() { return Folder() + L"\\FluentSwitcher-report.log"; }
+		// Папка рядом с exe закрыта для записи (портативная копия в Program Files, "Контролируемый доступ к папкам"):
+		// журнал - сюда, %LOCALAPPDATA%\FluentSwitcher\log. Отчёт отсюда же берёт окно настроек (pages.cpp,
+		// DeveloperReport): у bdvrt (форум, 07.11.2026, портативная 1.5.22) запись для отчёта не появлялась вовсе.
+		static std::wstring FallbackFolder() {
+			wchar_t local[MAX_PATH] = {};
+			const DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", local, (DWORD)std::size(local));
+			if (!n || n >= std::size(local)) return {};
+			return std::wstring(local) + L"\\FluentSwitcher\\log";
+		}
 
 	private:
 		struct Queued {
@@ -260,22 +269,27 @@ namespace _log_int {
 				if (!m_tryOpen) {
 					m_tryOpen = true;
 
-					const std::wstring folder = Folder();
-					if (folder.empty())
-						return NULL;
-					CreateDirectory(folder.c_str(), NULL);
-					if (m_openReport) {
-						m_fp = _wfsopen(ReportPath().c_str(), L"wt, ccs=UTF-8", _SH_DENYNO);
-						return m_fp;
-					}
 					TChar base[512];
 					base[0] = 0;
 					GetModuleBaseName(GetCurrentProcess(), NULL, base, std::ssize(base));
-
-					auto path = std::format(L"{}\\{}.log", folder, base);
-					// Первый раз за запуск - заново; после безопасного журнала - дописать.
-					m_fp = _wfsopen(path.c_str(), m_mainOpened ? L"at, ccs=UTF-8" : L"wt, ccs=UTF-8", _SH_DENYNO);
-					m_mainOpened = m_mainOpened || m_fp;
+					// Рядом с exe; не вышло - FallbackFolder.
+					for (const std::wstring& folder : { Folder(), FallbackFolder() }) {
+						if (folder.empty())
+							continue;
+						if (const size_t up = folder.rfind(L'\\'); up != std::wstring::npos)
+							CreateDirectory(folder.substr(0, up).c_str(), NULL); // FluentSwitcher в %LOCALAPPDATA%
+						CreateDirectory(folder.c_str(), NULL);
+						if (m_openReport)
+							m_fp = _wfsopen((folder + L"\\FluentSwitcher-report.log").c_str(), L"wt, ccs=UTF-8", _SH_DENYNO);
+						else {
+							auto path = std::format(L"{}\\{}.log", folder, base);
+							// Первый раз за запуск - заново; после безопасного журнала - дописать.
+							m_fp = _wfsopen(path.c_str(), m_mainOpened ? L"at, ccs=UTF-8" : L"wt, ccs=UTF-8", _SH_DENYNO);
+							m_mainOpened = m_mainOpened || m_fp;
+						}
+						if (m_fp)
+							break;
+					}
 				}
 			}
 			return m_fp;

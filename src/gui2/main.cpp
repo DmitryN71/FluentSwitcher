@@ -172,6 +172,7 @@ void StartGui() {
 	timer.CycleTimer([&, dark = FluentMenu::TaskbarDark()]() mutable {
 		mouseFlag.Watch(); // и указатели Windows: сменили схему, размер, цвет
 		capsChanged(false);
+		trayIcon.Retry(); // и значок, который Windows не приняла (Проводник был занят)
 		const bool now = FluentMenu::TaskbarDark();
 		if (now == dark) return;
 		dark = now;

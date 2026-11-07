@@ -594,6 +594,10 @@ const std::unordered_map<std::string, const char*>& English()
           "Recording. Repeat the error and click “Save the report”. The recording stops by itself in an hour" },
         { "Записи ещё нет: нажмите «Начать запись» и повторите ошибку",
           "Nothing recorded yet: click “Start recording” and repeat the error" },
+        { "Запись не сохранилась: FluentSwitcher не смог создать файл ни в папке log рядом с собой, ни в "
+          "%LOCALAPPDATA%\\FluentSwitcher\\log",
+          "The recording was not saved: FluentSwitcher could not create the file either in the log folder next to it "
+          "or in %LOCALAPPDATA%\\FluentSwitcher\\log" },
         { "Не удалось сохранить отчёт на рабочем столе", "Could not save the report on the desktop" },
         { "Отчёт на рабочем столе: %s. Приложите его к письму на %s",
           "The report is on the desktop: %s. Attach it to a letter to %s" },

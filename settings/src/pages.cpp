@@ -366,13 +366,47 @@ wxString SettingsForReport(const wxString& path)
     return wxString::FromUTF8(json.dump(1, ' ', true));
 }
 
+// The engine's log folders: next to the exe, and %LOCALAPPDATA%\FluentSwitcher\log when that one is closed for writing
+// (Logger.h, FallbackFolder; bdvrt's portable copy, 07.11.2026). The one next to the exe first.
+std::vector<wxString> LogFolders(const wxString& folder)
+{
+    std::vector<wxString> folders{ folder + "\\log" };
+    wxString local;
+    if (wxGetEnv("LOCALAPPDATA", &local) && !local.empty())
+        folders.push_back(local + "\\FluentSwitcher\\log");
+    return folders;
+}
+
+// The recording for the report: the newest not empty FluentSwitcher-report.log of the log folders; empty - none.
+wxString ReportFile(const wxString& folder)
+{
+    wxLogNull quiet;
+    wxString best;
+    wxDateTime bestTime;
+    for (const wxString& dir : LogFolders(folder))
+    {
+        const wxFileName file(dir, "FluentSwitcher-report.log");
+        if (!file.FileExists() || file.GetSize() == 0)
+            continue;
+        const wxDateTime time = file.GetModificationTime();
+        if (best.empty() || (time.IsValid() && bestTime.IsValid() && time > bestTime))
+        {
+            best = file.GetFullPath();
+            bestTime = time;
+        }
+    }
+    return best;
+}
+
 // The report: what, where, the settings and the engine's recording (only its end if it is huge).
 wxString DeveloperReport(const wxString& folder, const wxString& configPath)
 {
     wxString log;
+    const wxString path = ReportFile(folder);
+    if (!path.empty())
     {
         wxLogNull quiet;
-        wxFFile file(folder + "\\log\\FluentSwitcher-report.log", "rb");
+        wxFFile file(path, "rb");
         if (file.IsOpened())
         {
             std::string bytes((size_t)std::max<wxFileOffset>(file.Length(), 0), '\0');
@@ -2762,6 +2796,7 @@ void SettingsFrame::BuildAdvanced()
                             const bool recording = (m_state & Engine::StateReport) != 0;
                             if (!Engine::SetReport(m_engine, !recording))
                                 return SetStatus(T("FluentSwitcher не ответил"), true);
+                            m_reportRecorded = true;
                             RefreshEngine();
                             SetStatus(recording ? T("Запись остановлена: сохраните отчёт")
                                                 : T("Идёт запись. Повторите ошибку и нажмите «Сохранить отчёт». Через "
@@ -2771,9 +2806,17 @@ void SettingsFrame::BuildAdvanced()
                         save->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
                             RefreshEngine();
                             if (m_state & Engine::StateReport)
+                            {
+                                m_reportRecorded = true;
                                 Engine::SetReport(m_engine, false); // the end of the recording is in the file then
+                            }
                             RefreshEngine();
                             const wxString report = DeveloperReport(m_folder, m_saved.Path());
+                            // Recorded, but no file: the engine could not write it anywhere (the header is always there).
+                            if (report.empty() && m_reportRecorded)
+                                return SetStatus(T("Запись не сохранилась: FluentSwitcher не смог создать файл ни в папке "
+                                                   "log рядом с собой, ни в %LOCALAPPDATA%\\FluentSwitcher\\log"),
+                                                 true);
                             if (report.empty())
                                 return SetStatus(T("Записи ещё нет: нажмите «Начать запись» и повторите ошибку"), true);
                             const wxString path = SaveOnDesktop(report);
@@ -2816,6 +2859,13 @@ void SettingsFrame::BuildAdvanced()
                     [this](wxWindow* card) {
                         FluentButton* open = new FluentButton(card, wxID_ANY, T("Открыть"));
                         open->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+                            // Next to the exe; not there - the fallback one (LogFolders).
+                            for (const wxString& folder : LogFolders(m_folder))
+                                if (wxFileExists(folder + "\\FluentSwitcher.exe.log"))
+                                {
+                                    OpenAsUser(folder.ToStdWstring());
+                                    return;
+                                }
                             const wxString folder = m_folder + "\\log";
                             if (!wxDirExists(folder))
                                 return SetStatus(T("Журнала ещё нет: включите его выше и повторите ошибку"), true);

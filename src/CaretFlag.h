@@ -55,6 +55,7 @@ public:
 		bool system = false;   // у браузера есть системная каретка (Firefox) - вот она:
 		RECT systemRc{};
 		bool uiaOnly = false;  // только UI Automation: MSAA там врёт так же, как системная каретка (UiaOnly)
+		bool qt = false;       // окно Qt: каретка - только в поле ввода (Qt)
 	};
 	struct Result {
 		uint64_t seq = 0;
@@ -122,8 +123,15 @@ private:
 				}
 				Result res{ .seq = req.seq };
 				RECT rc{};
+				CComPtr<IUIAutomationElement> focused;
 				if (req.browser) {
 					res = BrowserCaret(uia, req);
+				}
+				else if (req.qt && uia && Editable(uia, req, res.type, res.state, focused) != 1) {
+					res.how = "not a text field (Qt)";
+				}
+				else if (req.qt && req.system) {
+					res = { req.seq, true, req.systemRc, "caret (Qt text field)" };
 				}
 				else if (!req.uiaFirst && Msaa(req.focus, rc)) {
 					res = { req.seq, true, rc, "msaa" };
@@ -728,6 +736,7 @@ private:
 	HWND m_noCaretFocus = nullptr;
 	bool m_eventPoked = false;
 	bool m_askedBrowser = false;
+	bool m_askedQt = false; // окно Qt - одно на всё: "в этом окне каретки нет" не запоминается, как у браузера
 	int m_retry = 0;          // браузер: сколько раз уже переспросили после неудачи
 	bool m_retrying = false;  // эта проверка - повторная
 	std::string m_lastDetail; // браузер: что нашли в прошлый раз (для журнала)
@@ -924,6 +933,17 @@ private:
 	// отчёт на 1.5.2) она каретку PowerPoint не видит и при наборе - флажок пропал совсем.
 	static bool UiaOnly(HWND fg) { return IsClass(fg, { L"PPTFrameClass" }); }
 
+	// Окно на Qt (Qt680QWindowIcon, Qt5QWindowIcon): Qt говорит о каретке и в тексте, который можно только выделять, -
+	// флажок вставал у любой строки на "Главной" менеджера VirtualBox (форум, s1n, 06.11.2026: VirtualBox 7.2.22, Qt 6.8,
+	// каретка от UI Automation). Там, как в браузере, флажок - только когда в фокусе поле ввода (Editable): поле
+	// "только для чтения", подпись, ссылка - нет.
+	static bool Qt(HWND fg) {
+		wchar_t cls[128]{};
+		if (!fg || !GetClassNameW(fg, cls, (int)std::size(cls))) return false;
+		const std::wstring_view c = cls;
+		return c.starts_with(L"Qt") && c.find(L"QWindow") != std::wstring_view::npos;
+	}
+
 	// Системная каретка сдвинулась с последнего нажатия кнопки мыши, прокрутки или смены окна (CaretMark, CaretFlagPoke.h).
 	static bool CaretMoved(const GUITHREADINFO& gti) {
 		std::lock_guard lock(CaretFlagDetails::g_markMtx);
@@ -1023,8 +1043,9 @@ private:
 		RECT caret{};
 		const bool uiaFirst = UiaFirst(fg, gti.hwndFocus);
 		const bool browser = Browser(fg, gti.hwndFocus);
+		const bool qt = !browser && Qt(fg);
 		const bool system = !uiaFirst && SystemCaret(gti, caret);
-		if (system && !browser) {
+		if (system && !browser && !qt) {
 			++m_seq; // ответ потока, если он ещё идёт, уже не нужен
 			return Place(fg, caret, "caret");
 		}
@@ -1034,18 +1055,19 @@ private:
 		}
 		// Остальное - в потоке CaretProbe; пока ждём, флажок остаётся, только если окно то же.
 		HWND focus = gti.hwndFocus ? gti.hwndFocus : fg;
-		if (!eventDriven && !browser && focus == m_noCaretFocus) return HideBecause("no caret in this window, found before", fg);
+		if (!eventDriven && !browser && !qt && focus == m_noCaretFocus) return HideBecause("no caret in this window, found before", fg);
 		if (fg != m_shownFg) Hide();
 		m_askedFg = fg;
 		m_askedFocus = focus;
 		m_askedBrowser = browser;
-		m_probe.Ask({ ++m_seq, focus, pid, uiaFirst, browser, system, caret, UiaOnly(fg) });
+		m_askedQt = qt;
+		m_probe.Ask({ ++m_seq, focus, pid, uiaFirst, browser, system, caret, UiaOnly(fg), qt });
 	}
 
 	void OnProbe() {
 		auto res = m_probe.Take();
 		if (res.seq != m_seq || GetForegroundWindow() != m_askedFg) return; // устарел
-		m_noCaretFocus = res.ok || m_askedBrowser ? nullptr : m_askedFocus;
+		m_noCaretFocus = res.ok || m_askedBrowser || m_askedQt ? nullptr : m_askedFocus;
 		if (m_askedBrowser && res.detail != m_lastDetail) {
 			LOG_ANY("caret flag: {}", LogPlain(res.detail));
 			m_lastDetail = res.detail;

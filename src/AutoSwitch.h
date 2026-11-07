@@ -428,10 +428,19 @@ inline bool KnownShort(const std::wstring& typed, const std::wstring& there, con
 	}
 	const std::wstring t = Bare(typed), a = Lower(Bare(there));
 	if (t.empty() || !InShortList(a, thereLanguage, false) || InShortList(Lower(t), typedLanguage, true)) return false;
-	// Знак после него там - из набранной буквы ("зню" - py.: опечатка в "знаю"): так - от трёх букв ("ЗВАб" - PDF,).
+	// Знак после него там - из набранной буквы ("зню" - py.: опечатка в "знаю"): так - от трёх букв ("ЗВАб" - PDF,), а
+	// у двух букв - если с набранных до знака не начинается частое слово своего языка и всё набранное - не начало слова
+	// ("Шзб" - ip,: Дмитрий, 07.11.2026; "зн" - знать, знаю - нет). Нет списков языка - нет.
 	if (a.size() < 3)
 		for (size_t i = 0; i < there.size(); i++)
-			if (TwoCaps::IsLetter(typed[i]) && !TwoCaps::IsLetter(there[i])) return false;
+			if (TwoCaps::IsLetter(typed[i]) && !TwoCaps::IsLetter(there[i])) {
+				const std::wstring head = Lower(typed.substr(0, i));
+				if (a.size() != 2 || !WordStart::Available(typedLanguage) || head.size() != 2 ||
+				    WordStart::PrefixCount(head, typedLanguage, true) > 0 ||
+				    WordStart::Known(Lower(t), typedLanguage) == WordStart::Result::Yes)
+					return false;
+				break;
+			}
 	return spellTyped(t) != SpellCheck::Result::Word;
 }
 

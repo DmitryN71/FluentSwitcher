@@ -15,6 +15,32 @@ std::wstring ProcessPath(DWORD pid) {
 	CloseHandle(process);
 	return ok ? std::wstring(path, size) : std::wstring();
 }
+}
+
+// Открытые окна настроек этого же exe (FluentSwitcher.exe --settings, свой процесс; заголовок "FluentSwitcher") -
+// закрыть (WM_CLOSE: окно запоминает место, несохранённое не пишет). pids - их процессы, чтобы дождаться. Выход из
+// трея оставлял окно настроек открытым без движка (форум, Maz, 08.11.2026; TrayIcon.h).
+void CloseSettingsWindows(std::vector<DWORD>* pids) {
+	std::wstring self;
+	IFS_LOG(PathUtils::GetPath_exe_noLower(self));
+	std::function<void(HWND)> close = [&](HWND window) {
+		wchar_t title[64] = {};
+		GetWindowTextW(window, title, (int)std::size(title));
+		DWORD pid = 0;
+		GetWindowThreadProcessId(window, &pid);
+		if (wcscmp(title, L"FluentSwitcher") == 0 && IsWindowVisible(window) && pid != GetCurrentProcessId() &&
+			StrUtils::IsEqualCI(ProcessPath(pid).c_str(), self.c_str())) {
+			if (pids) pids->push_back(pid);
+			PostMessageW(window, WM_CLOSE, 0, 0);
+		}
+	};
+	EnumWindows([](HWND window, LPARAM param) -> BOOL {
+		(*reinterpret_cast<std::function<void(HWND)>*>(param))(window);
+		return TRUE;
+	}, reinterpret_cast<LPARAM>(&close));
+}
+
+namespace {
 
 // --quit (установщик перед заменой файла, удаление): закрыть FluentSwitcher из этой же папки - движок
 // (командой Quit окна настроек, SettingsIpc.h) и открытые окна настроек - и дождаться, пока они выйдут.
@@ -38,21 +64,10 @@ int QuitRunningCopy() {
 		DWORD_PTR res = 0;
 		SendMessageTimeoutW(engine, SettingsIpc::msgQuit, 0, 0, SMTO_ABORTIFHUNG, 2000, &res);
 	}
-	// Окна настроек (FluentSwitcher.exe --settings): у них заголовок "FluentSwitcher".
-	std::function<void(HWND)> close_settings = [&](HWND window) {
-		wchar_t title[64] = {};
-		GetWindowTextW(window, title, (int)std::size(title));
-		DWORD pid = 0;
-		GetWindowThreadProcessId(window, &pid);
-		if (wcscmp(title, L"FluentSwitcher") == 0 && IsWindowVisible(window) && ours(pid)) {
-			wait_for(pid);
-			PostMessageW(window, WM_CLOSE, 0, 0);
-		}
-	};
-	EnumWindows([](HWND window, LPARAM param) -> BOOL {
-		(*reinterpret_cast<std::function<void(HWND)>*>(param))(window);
-		return TRUE;
-	}, reinterpret_cast<LPARAM>(&close_settings));
+	// Окна настроек (FluentSwitcher.exe --settings).
+	std::vector<DWORD> settings;
+	CloseSettingsWindows(&settings);
+	for (DWORD pid : settings) wait_for(pid);
 	for (HANDLE h : waits) {
 		WaitForSingleObject(h, 5000);
 		CloseHandle(h);

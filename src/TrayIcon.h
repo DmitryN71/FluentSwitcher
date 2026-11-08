@@ -3,6 +3,8 @@
 #include "utils/WinTray.h"
 #include "IconManager.h"
 
+void CloseSettingsWindows(std::vector<DWORD>* pids); // WinMain.cpp
+
 class TrayIcon {
 	HKL curlay = 0;
 	uint64_t last_lay_cnt = 0;
@@ -112,7 +114,11 @@ public:
 			                .is_checkbox = true, .edit_val = conf_get_unsafe()->autoswitch, .icon = 0xE8AB,
 			                .state = []() { return conf_get_unsafe()->autoswitch; } });
 			res.push_back({ .is_separator = true });
-			res.push_back({ .name = LOC("Exit"), .callback = []() { PostQuitMessage(0); }, .icon = 0xF3B1 });
+			// Выход - и открытые окна настроек этого exe: без движка им нечего настраивать (форум, Maz, 08.11.2026).
+			res.push_back({ .name = LOC("Exit"), .callback = []() {
+				CloseSettingsWindows(nullptr);
+				PostQuitMessage(0);
+			}, .icon = 0xF3B1 });
 			return res;
 			});
 	}

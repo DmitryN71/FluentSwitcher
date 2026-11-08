@@ -870,9 +870,11 @@ void WorkerImplement::AutoSwitchEarly() {
         const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
             !AutoSwitch::Excepted(typed, there, exceptions) && !AutoSwitch::ExceptionAhead(typed, there, exceptions) &&
             !WordStart::TypedEvenCaps(AutoSwitch::Letters(typed).core, lang);
+        auto spellEvenCaps = [&](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); };
+        // И сокращение из списка, за которым дефис ("ЕСЗ-" - "TCP-"): часть до дефиса кончилась (KnownShortBeforeHyphen).
         const bool shortWhole = !forcedWhole && cfg->autoswitch_early &&
-            AutoSwitch::KnownShortEarly(typed, there, lang, otherLang, minLetters, exceptions,
-                                        [&](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); });
+            (AutoSwitch::KnownShortEarly(typed, there, lang, otherLang, minLetters, exceptions, spellEvenCaps) ||
+             AutoSwitch::KnownShortBeforeHyphen(typed, there, lang, otherLang, minLetters, exceptions, spellEvenCaps));
         auto verdict = (forcedWhole || shortWhole) ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
             : !cfg->autoswitch_early ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Never, "a word of Always switch only" }
             : AutoSwitch::DecideEarly(typed, there, minLetters, exceptions,

@@ -1031,6 +1031,27 @@ inline bool KnownShortEarly(const std::wstring& typed, const std::wstring& there
 	return true;
 }
 
+// Сокращение из списка, набранное целиком, и сразу дефис ("ЕСЗ-" - "TCP-", "ЬСЗ-" - "MCP-"): дефис кончает эту часть,
+// переключить сейчас. Часть после дефиса набирают уже в новой раскладке, а если нет - её одну переведёт конец слова
+// (OwnAbbreviationPart, HyphenTail): "TCP-cthdth" - "TCP-сервер". Раньше три буквы ждали конца слова (KnownShortEarly
+// для трёх букв осторожен), а на дефисе - "знак там": "ЕСЗ-сервер" оставалось как набрано (Дмитрий, 08.11.2026).
+// Только буквы до одного дефиса в конце; после щелчка посреди слова (minLetters > kEarlyMin) - нет.
+inline bool KnownShortBeforeHyphen(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                                   const std::wstring& thereLanguage, size_t minLetters,
+                                   const std::vector<std::wstring>& exceptions, auto&& spellTyped) {
+	if (minLetters > kEarlyMin || typed.size() != there.size() || typed.size() < 3) return false;
+	if (typed.back() != L'-' || there.back() != L'-') return false;
+	const std::wstring head = typed.substr(0, typed.size() - 1), headThere = there.substr(0, there.size() - 1);
+	for (size_t i = 0; i < head.size(); i++)
+		if (!TwoCaps::IsLetter(head[i]) || !TwoCaps::IsLetter(headThere[i])) return false;
+	for (size_t i = 1; i < head.size(); i++)
+		if (TwoCaps::IsUpper(head[i]) && !AllUpper(head)) return false;
+	// Начало слова своего языка тут не мешает ("зва" - звать): дефис кончил часть, слово ли она - решает словарь
+	// (KnownShort: набранное - не слово).
+	return KnownShort(head, headThere, typedLanguage, thereLanguage, spellTyped) &&
+		!ExceptedEarly(head, headThere, exceptions);
+}
+
 // Решение посреди слова. typed - набранное с начала слова, there - те же клавиши в другой раскладке; minLetters - с
 // какой буквы можно переключать: kEarlyMin, после щелчка или стрелок в том же окне на одну больше (могли дописывать
 // середину слова). knownTyped(буквы) - набранное - слово или начало слова своего языка (не знаем - да: не трогать);

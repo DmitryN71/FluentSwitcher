@@ -3,7 +3,7 @@
 #include "utils/WinTray.h"
 #include "IconManager.h"
 
-void CloseSettingsWindows(std::vector<DWORD>* pids); // WinMain.cpp
+#include "SettingsWindows.h"
 
 class TrayIcon {
 	HKL curlay = 0;
@@ -116,7 +116,7 @@ public:
 			res.push_back({ .is_separator = true });
 			// Выход - и открытые окна настроек этого exe: без движка им нечего настраивать (форум, Maz, 08.11.2026).
 			res.push_back({ .name = LOC("Exit"), .callback = []() {
-				CloseSettingsWindows(nullptr);
+				SettingsWindows::CloseAll();
 				PostQuitMessage(0);
 			}, .icon = 0xF3B1 });
 			return res;

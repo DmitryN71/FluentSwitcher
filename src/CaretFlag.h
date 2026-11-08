@@ -944,6 +944,20 @@ private:
 		return c.starts_with(L"Qt") && c.find(L"QWindow") != std::wstring_view::npos;
 	}
 
+	// Поле Windows (Edit, RichEdit; WinForms, Delphi - те же, своим именем класса) "только для чтения" (ES_READONLY):
+	// Windows ставит в нём каретку, куда кликнули, хотя печатать нельзя, - флажок вставал у текста вкладки "System
+	// Information" MVP Toolkit (форум, WinnyS, 08.11.2026; WinForms, программа с правами администратора - стиль окна
+	// читается и так). Там, как в браузере и Qt, флажка нет.
+	static bool ReadOnlyEdit(HWND w) {
+		wchar_t cls[128]{};
+		if (!w || !GetClassNameW(w, cls, (int)std::size(cls))) return false;
+		std::wstring c = cls;
+		CharLowerBuffW(c.data(), (DWORD)c.size());
+		const bool edit = c == L"edit" || c.starts_with(L"richedit") || c.starts_with(L"windowsforms10.edit") ||
+			c.starts_with(L"windowsforms10.richedit") || c == L"tedit" || c == L"tmemo" || c == L"trichedit";
+		return edit && (GetWindowLongW(w, GWL_STYLE) & ES_READONLY);
+	}
+
 	// Системная каретка сдвинулась с последнего нажатия кнопки мыши, прокрутки или смены окна (CaretMark, CaretFlagPoke.h).
 	static bool CaretMoved(const GUITHREADINFO& gti) {
 		std::lock_guard lock(CaretFlagDetails::g_markMtx);
@@ -1047,6 +1061,7 @@ private:
 		const bool system = !uiaFirst && SystemCaret(gti, caret);
 		if (system && !browser && !qt) {
 			++m_seq; // ответ потока, если он ещё идёт, уже не нужен
+			if (ReadOnlyEdit(gti.hwndCaret)) return HideBecause("a read-only text field (ES_READONLY)", fg);
 			return Place(fg, caret, "caret");
 		}
 		if (UiaOnly(fg) && CaretMoved(gti) && SystemCaret(gti, caret)) {

@@ -188,6 +188,10 @@ void StartGui() {
 		long long lastTry = 0;
 		bool busy = false;
 		bool installing = false; // идёт обновление по щелчку (UpdateInstall.h)
+		// "Обновляться до бета-версий" включили - проверить в ту же минуту, не дожидаясь суток с прошлой проверки: бета,
+		// вышедшая после неё, иначе приходила только на следующий день (форум, jexx85, 09.11.2026).
+		bool beta = conf_get_unsafe()->update_beta;
+		bool now = false;
 	} updates;
 	// Обновление по щелчку оставляет установщик или архив во временной папке, портативная - FluentSwitcher.exe.old:
 	// удалить при запуске и потом раз в минуту (установщик ещё мог работать, прежняя копия - выходить).
@@ -254,16 +258,24 @@ void StartGui() {
 		LOG_ANY("update: started after the update to {}, note shown {}", LogPlain(version), shown);
 	}
 	timer.CycleTimer([&] {
+		const bool beta = conf_get_unsafe()->update_beta;
+		if (beta && !updates.beta) {
+			LOG_ANY("update: betas turned on, checking now");
+			updates.now = true;
+		}
+		updates.beta = beta;
 		if (!conf_get_unsafe()->check_updates || updates.busy) return;
 		const long long now = Update::NowMs();
-		if (now < updates.nextLook) return;
-		updates.nextLook = now + 60LL * 60 * 1000; // не позже чем через час: файл могло обновить окно настроек
-		const auto state = Update::Load(folder);
-		if (now - state.checkedAt < Update::kDayMs) {
-			updates.nextLook = std::min(updates.nextLook, state.checkedAt + Update::kDayMs);
-			return;
+		if (!std::exchange(updates.now, false)) {
+			if (now < updates.nextLook) return;
+			updates.nextLook = now + 60LL * 60 * 1000; // не позже чем через час: файл могло обновить окно настроек
+			const auto state = Update::Load(folder);
+			if (now - state.checkedAt < Update::kDayMs) {
+				updates.nextLook = std::min(updates.nextLook, state.checkedAt + Update::kDayMs);
+				return;
+			}
+			if (now - updates.lastTry < 6LL * 60 * 60 * 1000) return;
 		}
-		if (now - updates.lastTry < 6LL * 60 * 60 * 1000) return;
 		updates.lastTry = now;
 		updates.busy = true;
 		std::thread([hwnd = g_guiHandle, beta = conf_get_unsafe()->update_beta] {

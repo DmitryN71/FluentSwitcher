@@ -789,6 +789,62 @@ inline bool Implausible(const std::wstring& typed, const std::wstring& there, co
 	return true;
 }
 
+// ----- ПРОПИСНЫЕ, каких по-русски не бывает -----
+// Три-четыре ПРОПИСНЫЕ в русской раскладке, там - латиница: сокращение не из списка (Дмитрий, 10.11.2026: "ЫЙЕ" - SQT не
+// переключалось - "совершенно дикие комбинации русских букв"). Русские сокращения - первые буквы слов, а с Ы, Ь, Ъ слова
+// не начинаются, с Й и Щ - почти: буквы эти в прописных - от слова, и когда рядом с такой буквой сочетание (с краями
+// слова), какого нет в списке слов языка (WordStart::Combos, меньше чем в двух словах: "^ы", "еь", "сй"), - это не
+// русское. В 1.5.16-test1 угадывали по одной букве, без сочетаний и подсказок, и переключали опечатки ("ДНЕЬ" - LYTM),
+// поэтому здесь не трогает:
+//   - слово словаря (и прописными) и из своих списков; нет словаря - ничего;
+//   - опечатку: словарь предлагает слово на одну правку ("ДНЕЬ" - ДЕНЬ, "ВСЙЕ" - ВСЕЙ, "ЕЩК" - ЩЕК, и "ЫЬИ" - SMB:
+//     ЧЬИ - такое только списком, Rules::kShortEn);
+//   - одну букву подряд ("ЫЫЫ"), "ЫГЫ";
+//   - сокращение без этих букв ("МФЦ", "ЦСКА") - как и раньше, по спискам.
+// Знак после слова там - можно ("ЫЙЕЖ" - "SQT:"). Решает, только когда обычное правило отказалось
+// (WorkerImplement::AutoSwitchLastWord).
+inline bool CapsNotRussian(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                           const std::wstring& thereLanguage, auto&& spellTyped, auto&& suggestTyped) {
+	if (typed.size() != there.size() || !ShortWords::Is(typedLanguage, L"ru") || !ShortWords::Is(thereLanguage, L"en"))
+		return false;
+	for (wchar_t c : typed)
+		if (iswdigit(c)) return false;
+	const Part t = Letters(typed), a = Letters(there);
+	if (t.inner || a.inner || a.core.size() < 3 || a.core.size() > 4 || a.begin != t.begin || a.end > t.end) return false;
+	for (size_t i = a.end; i < t.end; i++)
+		if (!wcschr(kTrailSigns, there[i])) return false;
+	const std::wstring word = typed.substr(a.begin, a.end - a.begin);
+	for (size_t i = 0; i < word.size(); i++)
+		if (TwoCaps::ScriptOf(a.core[i]) != TwoCaps::Script::Latin || !TwoCaps::IsUpper(a.core[i]) ||
+		    TwoCaps::ScriptOf(word[i]) != TwoCaps::Script::Cyrillic || !TwoCaps::IsUpper(word[i]))
+			return false;
+	const std::wstring l = Lower(word);
+	if (l.find_first_not_of(l[0]) == std::wstring::npos || l == L"ыгы" || l == L"ыгыг") return false;
+	const auto* combos = WordStart::Combos(typedLanguage);
+	if (!combos) return false;
+	constexpr size_t n = WordStart::impl::Combos::kLetters;
+	std::vector<int> index{ 0 };
+	for (wchar_t c : l) {
+		const int i = WordStart::impl::LetterIndex(c);
+		if (i < 0) return false;
+		index.push_back(i);
+	}
+	index.push_back(0);
+	auto marker = [&](size_t i) { return i > 0 && i <= l.size() && wcschr(L"ыьъйщ", l[i - 1]); };
+	bool impossible = false;
+	for (size_t i = 0; i + 1 < index.size(); i++)
+		if ((marker(i) || marker(i + 1)) && combos->two[index[i] * n + index[i + 1]] < 2) impossible = true;
+	if (!impossible) return false;
+	std::vector<std::wstring> words{ word };
+	if (t.core != word) words.push_back(t.core);
+	for (const auto& w : words)
+		if (InShortList(Lower(w), typedLanguage, true) || spellTyped(w) != SpellCheck::Result::NotWord) return false;
+	for (const auto& w : words)
+		for (const auto& s : suggestTyped(w))
+			if (OneEditApart(w, s)) return false;
+	return true;
+}
+
 // Слова слитно, каждое с заглавной (Дмитрий, 15.10.2026: "СфзыДщсл" - CapsLock, "КгыеВуыл" - RustDesk, "ТгьДщсл" -
 // NumLock): словарь знает только части. Две-три части от двух букв, только буквы, каждая - слово (spellThere); новая
 // часть - с заглавной после строчной ("camelCase" - тоже; "HTMLParser" - одна часть, не слово).

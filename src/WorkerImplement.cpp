@@ -641,6 +641,16 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
                     if (!wasNotWord) foreign = nullptr;
                 }
             }
+            // ПРОПИСНЫЕ в три-четыре буквы, каких по-русски не бывает ("ЫЙЕ" - SQT; AutoSwitch::CapsNotRussian): сокращение
+            // не из списка. После клика или стрелок - как выше.
+            if (why && (strcmp(why, "abbreviation") == 0 || strcmp(why, "no vowels (an abbreviation)") == 0 ||
+                        strcmp(why, "not a word in the other layout") == 0) &&
+                !AutoSwitch::Excepted(typed, there, exceptions) &&
+                AutoSwitch::CapsNotRussian(typed, there, lang, otherLang, spellEvenCaps, suggestions(lay)) &&
+                (afterBoundary() || boundary != 0)) {
+                foreign = "capitals no Russian word has";
+                why = nullptr;
+            }
             // На знаке посреди набора: буква там стала знаком после редкого слова ("Нуцж" - "Yew;") - опечатка в своём слове,
             // которое пишут дальше, а не слово там. Языку без списков частых слов - не судим.
             auto frequentThere = [&otherLang](const std::wstring& w) {

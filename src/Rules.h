@@ -23,7 +23,7 @@ namespace Rules {
 // слово своего языка (словарь, и строчными) и не из своих списков. ...Keep - что набирают нарочно и что не
 // переводить ("ru" - не "кг", "cv" - не "см", "CIF" - не "США", "DC" - не "вс"). Без цифр: "А4" - формат листа, не F4.
 inline constexpr const wchar_t* kShortEn[] = {
-	L"usb", L"pdf", L"api", L"crm", L"sku", L"vpn", L"warp", L"mcp", L"dns", L"mit", L"ui", L"ux", L"url", L"uri", L"html", L"css", L"json",
+	L"usb", L"pdf", L"api", L"crm", L"sku", L"vpn", L"warp", L"mcp", L"sqt", L"smb", L"dns", L"mit", L"ui", L"ux", L"url", L"uri", L"html", L"css", L"json",
 	L"xml", L"yaml", L"sql", L"http", L"https", L"ftp", L"sftp", L"ssh", L"ssl", L"tls", L"tcp", L"udp", L"ip", L"vps",
 	L"cpu", L"gpu", L"ram", L"ssd", L"hdd", L"nvme", L"bios", L"uefi", L"os", L"ios", L"lan", L"wan", L"wifi", L"nfc",
 	L"gps", L"seo", L"smm", L"cms", L"sdk", L"ide", L"gui", L"cli", L"pc", L"tv", L"hd", L"led", L"lcd", L"oled", L"rgb",

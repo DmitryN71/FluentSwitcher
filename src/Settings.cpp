@@ -105,6 +105,7 @@ namespace nlohmann {
 		AlternativeLayoutChange, \
 		config_version, \
 		layouts_info, \
+		layouts_away, \
 		fixRAlt, \
 		fixRAlt_lay_, \
 		run_programs, \

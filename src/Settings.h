@@ -285,6 +285,11 @@ public:
     std::vector< RunProgramInfo> run_programs;
 
     LayoutInfoList layouts_info;
+    // Раскладки, которых сейчас нет в Windows, с тем, что у них настроено (отключена, сочетание, цвет плашки): Windows
+    // временно подгружает раскладку, которой нет в "Параметрах" (экран входа, другой пользователь, программа), и
+    // убирает её (форум, WinnyS, 10.11.2026: United States-International, отключённая, после обновления снова включена).
+    // Вернулась - берётся отсюда (SyncLayouts). Ни движок, ни окно настроек их не видят.
+    std::vector<LayoutInfo> layouts_away;
 
     const auto& GetHk(HotKeyType type) const {
         for (auto& it : hotkeysList) {
@@ -398,33 +403,63 @@ inline void SaveApplyGuiConfig() {
 	
 }
 
-// Список раскладок настроек (layouts_info) = раскладки Windows: убрать удалённые, добавить новые (включёнными).
+// Список раскладок настроек (layouts_info) = раскладки Windows: убрать удалённые (настроенные - в layouts_away),
+// добавить новые (включёнными; бывшие в layouts_away - как были настроены).
 // Без него исправлять не на что: новый файл настроек приходит с пустым списком. Раньше это делало старое окно
 // ImGui при каждом запуске (gui2/gui_utils.h), с test22 его нет - теперь при запуске, после перечитывания
 // настроек и когда в Windows появилась раскладка, которой нет в списке. Только в главном потоке (conf_gui).
-inline void SyncLayouts() {
-	HKL all_lays[50] = { 0 };
-	int all_lay_size = GetKeyboardLayoutList((int)std::size(all_lays), all_lays);
-	if (all_lay_size <= 0) return;
+// Сама сверка - по списку раскладок Windows all_lays (tools/test_caret.cpp); true - что-то поменялось.
+inline bool SyncLayoutsWith(LayoutInfoList& list, std::vector<LayoutInfo>& away, const HKL* all_lays, int all_lay_size) {
 	auto has_system_layout = [&](HKL lay) { return std::find(all_lays, all_lays + all_lay_size, lay) != all_lays + all_lay_size; };
-
-	auto& list = conf_gui()->layouts_info;
 	auto& info = list.info;
+	// Что-то настроено - запомнить, пока раскладки нет; иначе - как новая, когда вернётся.
+	auto set_up = [](const LayoutInfo& l) {
+		auto any = [](const CHotKeyList& keys) { return std::ranges::any_of(keys.keys, [](const CHotKey& k) { return !k.IsEmpty(); }); };
+		return !l.enabled || any(l.hotkey) || !l.win_hotkey.IsEmpty() || !l.badge.empty();
+	};
+	auto find_away = [&away](HKL lay) { return std::ranges::find(away, lay, &LayoutInfo::layout); };
 	bool was_changes = false;
 	for (int i = (int)info.size() - 1; i >= 0; i--) {
 		if (!has_system_layout(info[i].layout)) {
+			if (const auto it = find_away(info[i].layout); it != away.end()) away.erase(it);
+			if (set_up(info[i])) {
+				LOG_ANY("layout {:x} is not in Windows now, kept with its settings (enabled {})",
+				        (ULONGLONG)info[i].layout, info[i].enabled);
+				away.push_back(info[i]);
+			}
 			Utils::RemoveAt(info, i);
 			was_changes = true;
 		}
 	}
 	for (int i = 0; i < all_lay_size; i++) {
 		if (!list.HasLayout(all_lays[i])) {
-			info.push_back({ .layout = all_lays[i] });
+			if (const auto it = find_away(all_lays[i]); it != away.end()) {
+				LOG_ANY("layout {:x} is back in Windows, with its settings (enabled {})", (ULONGLONG)it->layout, it->enabled);
+				info.push_back(*it);
+				away.erase(it);
+			} else {
+				info.push_back({ .layout = all_lays[i] });
+			}
 			was_changes = true;
 		}
 	}
-	if (was_changes) {
-		LOG_ANY("layouts synced with Windows: {}", info.size());
+	// И то, что в списке есть, а здесь осталось (файл правили руками), - убрать: в списке - свежее.
+	for (int i = (int)away.size() - 1; i >= 0; i--)
+		if (list.HasLayout(away[i].layout)) {
+			Utils::RemoveAt(away, i);
+			was_changes = true;
+		}
+	return was_changes;
+}
+
+inline void SyncLayouts() {
+	HKL all_lays[50] = { 0 };
+	int all_lay_size = GetKeyboardLayoutList((int)std::size(all_lays), all_lays);
+	if (all_lay_size <= 0) return;
+	auto& list = conf_gui()->layouts_info;
+	auto& away = conf_gui()->layouts_away;
+	if (SyncLayoutsWith(list, away, all_lays, all_lay_size)) {
+		LOG_ANY("layouts synced with Windows: {}, kept away {}", list.info.size(), away.size());
 		SaveApplyGuiConfig();
 	}
 }

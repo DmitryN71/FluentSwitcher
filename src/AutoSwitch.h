@@ -867,22 +867,40 @@ inline bool RareBeforeSign(const std::wstring& typed, const std::wstring& there,
 }
 
 // ----- Слово через дефис -----
+inline bool OnlyLetters(const std::wstring& w) {
+	return !w.empty() && std::all_of(w.begin(), w.end(), [](wchar_t c) { return TwoCaps::IsLetter(c); });
+}
+
+// Слово через дефис в набранном или в тех же клавишах там: его буквенная часть (core пуст - не такое слово). У части
+// после дефиса, набранной не в той раскладке, буква там - знак здесь ("API-rk.x" - "API-ключ": "ю" - точка), и по
+// набранному это слово через дефис не узнать: "ФЗШ" посреди слова стало API, а конец слова вернул всё в "ФЗШ-ключ"
+// (Дмитрий, 10.11.2026). Тогда - по тому, что там.
+inline Part HyphenWord(const std::wstring& typed, const std::wstring& there) {
+	const Part t = Letters(typed);
+	if (OnlyHyphens(t.core)) return t;
+	const Part a = Letters(there);
+	if (OnlyHyphens(a.core)) return a;
+	return {};
+}
+
 // Часть слова через дефис ПРОПИСНЫМИ - аббревиатура своего языка из его списков (PHP, API), а там такой нет ("ЗРЗ"): её
 // набрали нарочно - всё слово не переводить, только часть после дефиса (HyphenTail): "PHP-yt" - "PHP-не", а не "ЗРЗ-не"
 // (словарь там принимает любые прописные; Дмитрий, 23.10.2026). "LYR-ntcn" - "ДНК-тест", "ФШ-зщцукув" - "AI-powered"
 // переводятся целиком: там аббревиатура известная.
 inline bool OwnAbbreviationPart(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
                                 const std::wstring& thereLanguage) {
-	const Part t = Letters(typed);
-	if (typed.size() != there.size() || !OnlyHyphens(t.core)) return false;
+	if (typed.size() != there.size()) return false;
+	const Part t = HyphenWord(typed, there);
+	if (t.core.empty()) return false;
 	auto known = [](const std::wstring& w, const std::wstring& language) {
 		const std::wstring l = Lower(w);
 		return InShortList(l, language, true) || ShortWords::Frequent(l, language);
 	};
 	for (size_t from = t.begin, i = t.begin; i <= t.end; i++)
-		if (i == t.end || typed[i] == L'-') {
+		if (i == t.end || (typed[i] == L'-' && there[i] == L'-')) {
 			const std::wstring part = typed.substr(from, i - from);
-			if (AllUpper(part) && known(part, typedLanguage) && !known(there.substr(from, i - from), thereLanguage))
+			if (OnlyLetters(part) && AllUpper(part) && known(part, typedLanguage) &&
+			    !known(there.substr(from, i - from), thereLanguage))
 				return true;
 			from = i + 1;
 		}
@@ -895,10 +913,11 @@ inline bool OwnAbbreviationPart(const std::wstring& typed, const std::wstring& t
 // после - переключилась бы отдельным словом (tailSwitches(набранное, там)). С какого знака переводить; 0 - не такое слово.
 inline size_t HyphenTail(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
                          auto&& spellTyped, auto&& tailSwitches) {
-	const Part t = Letters(typed);
-	if (typed.size() != there.size() || !OnlyHyphens(t.core)) return 0;
+	if (typed.size() != there.size()) return 0;
+	const Part t = HyphenWord(typed, there);
+	if (t.core.empty()) return 0;
 	const size_t hyphen = t.begin + t.core.rfind(L'-');
-	if (there[hyphen] != L'-') return 0;
+	if (typed[hyphen] != L'-' || there[hyphen] != L'-') return 0;
 	const Part head = Letters(typed.substr(0, hyphen));
 	if (head.core.size() < 2 || (spellTyped(head.core) != SpellCheck::Result::Word &&
 	                             !InShortList(Lower(head.core), typedLanguage, true)))

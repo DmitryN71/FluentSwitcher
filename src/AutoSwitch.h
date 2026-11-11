@@ -411,11 +411,10 @@ inline bool InShortList(const std::wstring& word, const std::wstring& language, 
 // Ctrl, "зды" - pls). spellTyped - словарь своего языка и для прописных (SpellCheck::CheckAnyCaseEvenCaps).
 inline bool KnownShort(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
                        const std::wstring& thereLanguage, auto&& spellTyped) {
-	if (typed.size() != there.size()) return false;
-	for (wchar_t c : there)
-		if (iswdigit(c)) return false;
+	if (typed.size() != there.size() || there.empty()) return false;
+	const std::wstring thereCode = thereLanguage.size() >= 2 ? Lower(thereLanguage.substr(0, 2)) : std::wstring();
 	// Сокращение с точками (Rules: dottedRu), знаки после него - его ("т.д.," - "n/l/?").
-	if (thereLanguage.size() >= 2 && Lower(thereLanguage.substr(0, 2)) == L"ru") {
+	if (thereCode == L"ru") {
 		std::wstring d = Lower(there);
 		while (!d.empty() && wcschr(L",;:!?)»\"", d.back())) d.pop_back();
 		if (Rules::Current().dottedRu.contains(d)) {
@@ -426,22 +425,71 @@ inline bool KnownShort(const std::wstring& typed, const std::wstring& there, con
 				(inner || spellTyped(t) != SpellCheck::Result::Word);
 		}
 	}
-	const std::wstring t = Bare(typed), a = Lower(Bare(there));
+	// Открывающие знаки снаружи - где они знаки в обоих прочтениях (кавычка в "\"LJ" - русская Э в "ЭДО", не снимать),
+	// закрывающие - после того, что там ("C<G" - "СБП", "cg," - "спб", "ЗВАб" - "PDF,").
+	size_t b = 0, e = there.size();
+	while (b < e && wcschr(kLeadSigns, there[b]) && wcschr(kLeadSigns, typed[b])) b++;
+	while (e > b && wcschr(kTrailSigns, there[e - 1])) e--;
+	if (b >= e) return false;
+	const std::wstring t = typed.substr(b, e - b), aRaw = there.substr(b, e - b), a = Lower(aRaw);
+	const std::wstring tBare = Bare(typed);
+	if (tBare != t && !tBare.empty() && std::ranges::all_of(tBare, [](wchar_t c) { return TwoCaps::IsLetter(c); }) &&
+	    spellTyped(tBare) == SpellCheck::Result::Word)
+		return false;
+	// Русское сокращение через косую черту ("б/у" - ",|e", "р/с" - "h|c").
+	if (thereCode == L"ru") {
+		if (const size_t slash = a.find(L'/'); slash != std::wstring::npos && Rules::Current().slashedRu.contains(a)) {
+			for (size_t i = e; i < there.size(); i++)
+				if (TwoCaps::IsLetter(typed[i])) return false;
+			return t[slash] == L'|';
+		}
+	}
+	// Закрытый список сокращений с цифрами ("ЬЗ3" - MP3, "И2И" - B2B, "ГЕА-8" - UTF-8, "ч64" - x64).
+	if (std::ranges::any_of(there, iswdigit)) {
+		if (thereCode != L"en" || !Rules::Current().alnumEn.contains(a)) return false;
+		for (size_t i = 0; i < there.size(); i++)
+			if (iswdigit(there[i]) != iswdigit(typed[i]) || (iswdigit(there[i]) && typed[i] != there[i])) return false;
+		return std::ranges::any_of(t, [](wchar_t c) { return TwoCaps::ScriptOf(c) == TwoCaps::Script::Cyrillic; });
+	}
+	// Парные английские сокращения через косую черту ("ГШ.ГЧ" - UI/UX, "ЕСЗ.ШЗ" - TCP/IP, "СШ.СВ" - CI/CD).
+	if (const size_t slash = a.find(L'/'); thereCode == L"en" && slash != std::wstring::npos) {
+		if (slash < 2 || slash + 2 >= a.size() || a.find(L'/', slash + 1) != std::wstring::npos || t[slash] != L'.')
+			return false;
+		if (!std::ranges::any_of(t, [](wchar_t c) { return TwoCaps::ScriptOf(c) == TwoCaps::Script::Cyrillic; }))
+			return false;
+		return Rules::Current().slashedEn.contains(a) ||
+			(InShortList(a.substr(0, slash), thereLanguage, false) && InShortList(a.substr(slash + 1), thereLanguage, false));
+	}
 	if (t.empty() || !InShortList(a, thereLanguage, false) || InShortList(Lower(t), typedLanguage, true)) return false;
+	// На конце латинского слова знак препинания (.,;:'"), ставший там русской буквой ("v," - "мб", "cg," - "спб",
+	// "TU\"" - "ЕГЭ"), - это знак после слова, а не буква сокращения ("V<" - "МБ", "CG<" - "СПБ", ";r[" - "жкх" - да).
+	if (thereCode == L"ru" && !TwoCaps::IsLetter(t.back()) && wcschr(L".,;:'\"", t.back()) &&
+	    std::ranges::any_of(t, [](wchar_t c) { return TwoCaps::ScriptOf(c) == TwoCaps::Script::Latin; }))
+		return false;
 	// Знак после него там - из набранной буквы ("зню" - py.: опечатка в "знаю"): так - от трёх букв ("ЗВАб" - PDF,), а
 	// у двух букв - если с набранных до знака не начинается частое слово своего языка и всё набранное - не начало слова
 	// ("Шзб" - ip,: Дмитрий, 07.11.2026; "зн" - знать, знаю - нет). Нет списков языка - нет.
 	if (a.size() < 3)
-		for (size_t i = 0; i < there.size(); i++)
+		for (size_t i = e; i < there.size(); i++)
 			if (TwoCaps::IsLetter(typed[i]) && !TwoCaps::IsLetter(there[i])) {
-				const std::wstring head = Lower(typed.substr(0, i));
+				const std::wstring head = Lower(typed.substr(b, i - b));
 				if (a.size() != 2 || !WordStart::Available(typedLanguage) || head.size() != 2 ||
 				    WordStart::PrefixCount(head, typedLanguage, true) > 0 ||
-				    WordStart::Known(Lower(t), typedLanguage) == WordStart::Result::Yes)
+				    WordStart::Known(Lower(tBare), typedLanguage) == WordStart::Result::Yes)
 					return false;
 				break;
 			}
-	return spellTyped(t) != SpellCheck::Result::Word;
+	// В "C<G" ("СБП"), "H:L" ("РЖД"), ";r[" ("жкх"), "\"LJ" ("ЭДО") русские буквы набраны знаками, и словарь Windows
+	// делит строку по знаку на одиночные буквы и считает словом: проверять словарём только буквенное слово (и с ' внутри).
+	const bool checkable = std::ranges::all_of(t, [](wchar_t c) { return TwoCaps::IsLetter(c); }) ||
+		Apostrophes(aRaw, t, Letters(t));
+	if (!checkable) return true;
+	// Две ПРОПИСНЫЕ латиницей ("TC" - "ЕС", "KR" - "ЛК", "RG" - "КП"): с заглавной ("Tc", "Kr", "Rg") английский словарь
+	// знает химические элементы, хотя строчными ("tc", "kr", "rg") таких слов нет.
+	if (t.size() == 2 && AllUpper(t) && !ShortWords::TrustDictionary(typedLanguage))
+		return !ShortWords::Frequent(Lower(t), typedLanguage) &&
+			SpellCheck::Check(Lower(t), typedLanguage) != SpellCheck::Result::Word;
+	return ShortWords::NotWord(Lower(t), typedLanguage) || spellTyped(t) != SpellCheck::Result::Word;
 }
 
 // Почему слово не трогаем; nullptr - можно спрашивать словари. typed - как набрано, there - те же клавиши в другой
@@ -742,7 +790,9 @@ inline bool Implausible(const std::wstring& typed, const std::wstring& there, co
 			tLetters.push_back(typed[i]);
 			continue;
 		}
-		if (typed[i] != L',' && typed[i] != L';' && !(i > t.begin && i < t.end && (typed[i] == L'[' || typed[i] == L']' || typed[i] == L'`')))
+		if (typed[i] != L',' && typed[i] != L';' &&
+		    !(a.core.size() >= kImplausibleMin && typed[i] == L'\'') &&
+		    !(i > t.begin && i < t.end && (typed[i] == L'[' || typed[i] == L']' || typed[i] == L'`')))
 			return false;
 		signPenalty += 2;
 	}
@@ -784,8 +834,12 @@ inline bool Implausible(const std::wstring& typed, const std::wstring& there, co
 	if ((!t.inner && spellTyped(t.core) != SpellCheck::Result::NotWord) ||
 	    (signPenalty > 0 && spellTyped(tLetters) != SpellCheck::Result::NotWord))
 		return false;
-	for (const auto& s : suggestTyped(tLetters))
-		if (OneEditApart(Lower(typed.substr(a.begin, a.end - a.begin)), Lower(s))) return false;
+	for (const auto& s : suggestTyped(tLetters)) {
+		const std::wstring sl = Lower(s);
+		if (OneEditApart(Lower(typed.substr(a.begin, a.end - a.begin)), sl) ||
+		    (typed[a.begin] == L'\'' && OneEditApart(l, sl) && FingerSlip(l, sl)))
+			return false;
+	}
 	return true;
 }
 
@@ -939,46 +993,144 @@ inline Part HyphenWord(const std::wstring& typed, const std::wstring& there) {
 	return {};
 }
 
-// Часть слова через дефис ПРОПИСНЫМИ - аббревиатура своего языка из его списков (PHP, API), а там такой нет ("ЗРЗ"): её
-// набрали нарочно - всё слово не переводить, только часть после дефиса (HyphenTail): "PHP-yt" - "PHP-не", а не "ЗРЗ-не"
-// (словарь там принимает любые прописные; Дмитрий, 23.10.2026). "LYR-ntcn" - "ДНК-тест", "ФШ-зщцукув" - "AI-powered"
-// переводятся целиком: там аббревиатура известная.
+// Часть слова до дефиса - слово или сокращение своего языка ("PHP-yt", "POST-pfghjc", "HR-lbhtrnjh", "key-afqk",
+// "QUIC-nhfabr"), а там такой части нет ("ЗРЗ", "ЗЩЫЕ", "РК", "лун", "ЙГШС"): её набрали нарочно - всё слово не
+// переводить, только часть после дефиса (HyphenTail): словарь Windows принимает любые ПРОПИСНЫЕ в частях слова через
+// дефис и портил бы первую часть (Дмитрий, 23.10.2026, аудит 10.11.2026). "LYR-ntcn" - "ДНК-тест", "ФШ-зщцукув" -
+// "AI-powered", "Dj-gthds[" - "Во-первых" переводятся целиком: там первая часть известная.
 inline bool OwnAbbreviationPart(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
                                 const std::wstring& thereLanguage) {
 	if (typed.size() != there.size()) return false;
 	const Part t = HyphenWord(typed, there);
 	if (t.core.empty()) return false;
-	auto known = [](const std::wstring& w, const std::wstring& language) {
+	auto knownHere = [](const std::wstring& w, const std::wstring& language) {
 		const std::wstring l = Lower(w);
-		return InShortList(l, language, true) || ShortWords::Frequent(l, language);
+		if (ShortWords::NotWord(l, language)) return false;
+		if (InShortList(l, language, true)) return true;
+		return l.size() <= 3 ? ShortWords::Frequent(l, language)
+			: (WordStart::IsWord(l, language, true) || SpellCheck::CheckAnyCaseEvenCaps(w, language) == SpellCheck::Result::Word);
+	};
+	auto knownThere = [](const std::wstring& w, const std::wstring& language) {
+		const std::wstring l = Lower(w);
+		if (ShortWords::NotWord(l, language)) return false;
+		if (InShortList(l, language, false)) return true;
+		if (l.size() <= 3) {
+			if (ShortWords::Frequent(l, language)) return true;
+		}
+		else if (WordStart::IsWord(l, language, true) || SpellCheck::CheckAnyCaseEvenCaps(w, language) == SpellCheck::Result::Word)
+			return true;
+		if (AllUpper(w)) {
+			const auto s = SpellCheck::Suggest(Titled(w), language);
+			if (!s.empty() && s.front() == w) return true;
+		}
+		return false;
 	};
 	for (size_t from = t.begin, i = t.begin; i <= t.end; i++)
 		if (i == t.end || (typed[i] == L'-' && there[i] == L'-')) {
-			const std::wstring part = typed.substr(from, i - from);
-			if (OnlyLetters(part) && AllUpper(part) && known(part, typedLanguage) &&
-			    !known(there.substr(from, i - from), thereLanguage))
-				return true;
+			const std::wstring part = typed.substr(from, i - from), therePart = there.substr(from, i - from);
+			if (part.size() >= 2 && OnlyLetters(part)) {
+				if (i < t.end && knownHere(part, typedLanguage) && !knownThere(therePart, thereLanguage))
+					return true;
+				if (i < t.end && AllUpper(part) && OnlyLetters(therePart) && AllUpper(therePart) &&
+				    !knownThere(therePart, thereLanguage))
+					return true;
+				if (i == t.end && AllUpper(part) && InShortList(Lower(part), typedLanguage, true) &&
+				    !knownThere(therePart, thereLanguage))
+					return true;
+			}
 			from = i + 1;
 		}
 	return false;
 }
 
+// Часть слова через дефис на своём языке: слово словаря или списка частых, сокращение, имя с заглавной внутри (GitHub,
+// github), название не по-русски (Saby, mofii, SQT) или составная часть вроде "USB-C", "Wi-Fi", "e-mail".
+inline bool ValidHyphenPart(const std::wstring& part, const std::wstring& otherPart, const std::wstring& language,
+                            const std::wstring& otherLanguage, auto&& spellPart) {
+	if (part.size() < 2) return false;
+	auto validOne = [&](const std::wstring& w, const std::wstring& otherW) {
+		if (w.size() < 2 || !OnlyLetters(w)) return false;
+		const std::wstring l = Lower(w);
+		if (InShortList(l, language, true)) return true;
+		if (!ShortWords::NotWord(l, language) && spellPart(w) == SpellCheck::Result::Word) return true;
+		if (!ShortWords::NotWord(l, language) &&
+		    (w.size() <= 3 ? ShortWords::Frequent(l, language) : WordStart::IsWord(l, language, false)))
+			return true;
+		auto suggestHere = [&](const std::wstring& s) { return SpellCheck::Suggest(s, language); };
+		if (KnownInOtherCase(w, suggestHere) || CamelWords(w, spellPart)) return true;
+		if (!otherLanguage.empty() && w.size() == otherW.size()) {
+			auto spellOther = [&](const std::wstring& s) { return SpellCheck::CheckAnyCaseEvenCaps(s, otherLanguage); };
+			auto suggestOther = [&](const std::wstring& s) { return SpellCheck::Suggest(s, otherLanguage); };
+			if (NotRussian(otherW, w, otherLanguage, language, spellOther, suggestOther) ||
+			    Implausible(otherW, w, otherLanguage, language, spellOther, suggestOther) ||
+			    CapsNotRussian(otherW, w, otherLanguage, language, spellOther, suggestOther))
+				return true;
+		}
+		return false;
+	};
+	if (part.find(L'-') == std::wstring::npos) return validOne(part, otherPart);
+	if (!OnlyHyphens(part) || part.size() != otherPart.size()) return false;
+	if (!ShortWords::NotWord(Lower(part), language) && spellPart(part) == SpellCheck::Result::Word) return true;
+	const auto script = TwoCaps::ScriptOf(part[0]);
+	if (script == TwoCaps::Script::Other) return false;
+	bool hasWord = false;
+	for (size_t from = 0, i = 0; i <= part.size(); i++) {
+		if (i < part.size() && part[i] != L'-') continue;
+		if (i < part.size() && otherPart[i] != L'-') return false;
+		const std::wstring sub = part.substr(from, i - from), otherSub = otherPart.substr(from, i - from);
+		if (sub.empty()) return false;
+		if (sub.size() == 1) {
+			if (!TwoCaps::IsLetter(sub[0]) || TwoCaps::ScriptOf(sub[0]) != script) return false;
+		}
+		else {
+			if (TwoCaps::ScriptOf(sub[0]) != script || !validOne(sub, otherSub)) return false;
+			hasWord = true;
+		}
+		from = i + 1;
+	}
+	return hasWord;
+}
+
 // Слово через дефис, у которого не в той раскладке только часть после последнего дефиса ("legacy-yfcnhjqrb" -
-// "legacy-настройки", "PHP-yt" - "PHP-не"; Дмитрий, 25.10.2026): целиком оно не переводится (там "дупфсн-настройки" -
-// не слово), часть до дефиса - слово своего языка или из его списков (spellTyped - словарь, и для прописных), а часть
-// после - переключилась бы отдельным словом (tailSwitches(набранное, там)). С какого знака переводить; 0 - не такое слово.
+// "legacy-настройки", "PHP-yt" - "PHP-не", "USB-C-rf,tkm" - "USB-C-кабель"; Дмитрий, 25.10.2026): целиком оно не
+// переводится, часть до дефиса - слово или сокращение своего языка, а часть после - переключилась бы отдельным словом
+// (tailSwitches(набранное, там)). С какого знака переводить; 0 - не такое слово.
 inline size_t HyphenTail(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
-                         auto&& spellTyped, auto&& tailSwitches) {
+                         auto&& spellTyped, auto&& tailSwitches, const std::wstring& thereLanguage = {}) {
 	if (typed.size() != there.size()) return 0;
 	const Part t = HyphenWord(typed, there);
 	if (t.core.empty()) return 0;
 	const size_t hyphen = t.begin + t.core.rfind(L'-');
 	if (typed[hyphen] != L'-' || there[hyphen] != L'-') return 0;
 	const Part head = Letters(typed.substr(0, hyphen));
-	if (head.core.size() < 2 || (spellTyped(head.core) != SpellCheck::Result::Word &&
-	                             !InShortList(Lower(head.core), typedLanguage, true)))
-		return 0;
+	const std::wstring otherHead = head.begin < there.size() && head.end <= there.size()
+		? there.substr(head.begin, head.end - head.begin) : std::wstring();
+	if (!ValidHyphenPart(head.core, otherHead, typedLanguage, thereLanguage, spellTyped)) return 0;
 	return tailSwitches(typed.substr(hyphen + 1), there.substr(hyphen + 1)) ? hyphen + 1 : 0;
+}
+
+// Обратный случай: не в той раскладке только часть до дефиса, а хвост после дефиса уже набран правильно ("ШЗ-адрес" -
+// "IP-адрес", "ПшеРги-репозиторий" - "GitHub-репозиторий", "Цш-Аш-роутер" - "Wi-Fi-роутер"). До какого знака (позиция
+// дефиса) переводить в другую раскладку, оставляя хвост и текущую раскладку как есть; 0 - не такое слово.
+inline size_t HyphenHead(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                         auto&& spellTyped, auto&& headSwitches, const std::wstring& thereLanguage = {}) {
+	if (typed.size() != there.size()) return 0;
+	const Part t = HyphenWord(typed, there);
+	if (t.core.empty()) return 0;
+	for (size_t pos = t.core.size(); (pos = t.core.rfind(L'-', pos - 1)) != std::wstring::npos;) {
+		const size_t hyphen = t.begin + pos;
+		if (typed[hyphen] == L'-' && there[hyphen] == L'-') {
+			const Part tail = Letters(typed.substr(hyphen + 1));
+			const size_t tailOff = hyphen + 1 + tail.begin;
+			const std::wstring otherTail = tailOff + tail.core.size() <= there.size()
+				? there.substr(tailOff, tail.core.size()) : std::wstring();
+			if (ValidHyphenPart(tail.core, otherTail, typedLanguage, thereLanguage, spellTyped) &&
+			    headSwitches(typed.substr(0, hyphen), there.substr(0, hyphen)))
+				return hyphen;
+		}
+		if (pos == 0) break;
+	}
+	return 0;
 }
 
 // Часть после дефиса из двух-трёх букв, которую словарь своего языка пропускает (yt - "не"): там - частое короткое
@@ -1067,12 +1219,26 @@ inline bool KnownShortEarly(const std::wstring& typed, const std::wstring& there
                             const std::vector<std::wstring>& exceptions, auto&& spellTyped) {
 	if (minLetters > kEarlyMin || typed.size() != there.size() || typed.size() < 3) return false;
 	const Part t = Letters(typed), a = Letters(there);
-	if (t.core.size() != typed.size() || a.core.size() != there.size()) return false;
-	for (size_t i = 1; i < t.core.size(); i++)
-		if (TwoCaps::IsUpper(t.core[i]) && !AllUpper(t.core)) return false;
+	if (a.core.size() != there.size()) return false;
+	for (size_t i = 1; i < a.core.size(); i++)
+		if (TwoCaps::IsUpper(a.core[i]) && !AllUpper(a.core)) return false;
 	if (!KnownShort(typed, there, typedLanguage, thereLanguage, spellTyped) ||
 	    ExceptedEarly(typed, there, exceptions) || ExceptionAhead(typed, there, exceptions))
 		return false;
+	// ПРОПИСНЫЕ русские сокращения со знаками Shift ("C<G" - СБП, "H:L" - РЖД, ":R{" - ЖКХ, "CL\"R" - СДЭК; не с кавычки
+	// в начале - так начинается и цитата латиницей): со строчными знаками (";r[", "cg,") ждут дефиса или пробела.
+	if (t.core.size() != typed.size() || !OnlyLetters(typed)) {
+		if (!AllUpper(a.core) || typed[0] == L'"') return false;
+		bool upperSign = false;
+		for (wchar_t c : typed) {
+			if (TwoCaps::IsLetter(c)) continue;
+			if (!wcschr(L"<>:\"{}", c)) return false;
+			upperSign = true;
+		}
+		return upperSign;
+	}
+	for (size_t i = 1; i < t.core.size(); i++)
+		if (TwoCaps::IsUpper(t.core[i]) && !AllUpper(t.core)) return false;
 	if (WordStart::TypedEvenCaps(t.core, typedLanguage)) return false;
 	const std::wstring l = Lower(t.core);
 	const int u = UnusualCombos(l, typedLanguage);
@@ -1106,25 +1272,77 @@ inline bool KnownShortEarly(const std::wstring& typed, const std::wstring& there
 	return true;
 }
 
-// Сокращение из списка, набранное целиком, и сразу дефис ("ЕСЗ-" - "TCP-", "ЬСЗ-" - "MCP-"): дефис кончает эту часть,
-// переключить сейчас. Часть после дефиса набирают уже в новой раскладке, а если нет - её одну переведёт конец слова
-// (OwnAbbreviationPart, HyphenTail): "TCP-cthdth" - "TCP-сервер". Раньше три буквы ждали конца слова (KnownShortEarly
-// для трёх букв осторожен), а на дефисе - "знак там": "ЕСЗ-сервер" оставалось как набрано (Дмитрий, 08.11.2026).
-// Только буквы до одного дефиса в конце; после щелчка посреди слова (minLetters > kEarlyMin) - нет.
+// Сокращение из списка, набранное целиком, и сразу дефис ("ЕСЗ-" - "TCP-", "ЬСЗ-" - "MCP-", "ШЗ-" - "IP-", "C<G-" - "СБП-"):
+// дефис кончает эту часть, переключить сейчас. Часть после дефиса набирают уже в новой раскладке, а если нет - её одну
+// переведёт конец слова (OwnAbbreviationPart, HyphenTail): "TCP-cthdth" - "TCP-сервер". Раньше три буквы ждали конца слова
+// (KnownShortEarly для трёх букв осторожен), а на дефисе - "знак там": "ЕСЗ-сервер" оставалось как набрано (Дмитрий,
+// 08.11.2026). После щелчка посреди слова (minLetters > kEarlyMin) - нет.
 inline bool KnownShortBeforeHyphen(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
                                    const std::wstring& thereLanguage, size_t minLetters,
                                    const std::vector<std::wstring>& exceptions, auto&& spellTyped) {
 	if (minLetters > kEarlyMin || typed.size() != there.size() || typed.size() < 3) return false;
 	if (typed.back() != L'-' || there.back() != L'-') return false;
 	const std::wstring head = typed.substr(0, typed.size() - 1), headThere = there.substr(0, there.size() - 1);
+	auto mappedKey = [](wchar_t c) { return TwoCaps::IsLetter(c) || wcschr(L",.<>;:'\"[]{}`~", c) != nullptr; };
 	for (size_t i = 0; i < head.size(); i++)
-		if (!TwoCaps::IsLetter(head[i]) || !TwoCaps::IsLetter(headThere[i])) return false;
-	for (size_t i = 1; i < head.size(); i++)
-		if (TwoCaps::IsUpper(head[i]) && !AllUpper(head)) return false;
+		if (!mappedKey(head[i]) || !TwoCaps::IsLetter(headThere[i])) return false;
+	for (size_t i = 1; i < headThere.size(); i++)
+		if (TwoCaps::IsUpper(headThere[i]) && !AllUpper(headThere)) return false;
 	// Начало слова своего языка тут не мешает ("зва" - звать): дефис кончил часть, слово ли она - решает словарь
 	// (KnownShort: набранное - не слово).
 	return KnownShort(head, headThere, typedLanguage, thereLanguage, spellTyped) &&
 		!ExceptedEarly(head, headThere, exceptions);
+}
+
+// Частое короткое слово своего языка ("шт", "руб", "ул", "gb"): правило конца слова его не трогает, даже если словарь
+// его не знает, а там - слово ("5 шт" - не "5 in").
+inline bool FrequentAsTyped(const std::wstring& typed, const std::wstring& lang) {
+	const Part t = Letters(typed);
+	return !t.inner && t.core.size() >= 2 && t.core.size() <= 3 && ShortWords::Frequent(Lower(t.core), lang);
+}
+
+// Обычное слово или имя (GitHub, Web, Saby, Wi-Fi, e-mail), набранное не в той раскладке, и сразу дефис ("ПшеРги-" -
+// "GitHub-", "Цуи-" - "Web-", "Ыфин-" - "Saby-"): дефис кончил первую часть, переключить сейчас (с заглавной внутри
+// DecideEarly сказал "никогда", а трёхбуквенные ждали четвёртой буквы). Опечатки в другой раскладке на дефисе не угадываем.
+inline bool WordBeforeHyphen(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLanguage,
+                             const std::wstring& thereLanguage, size_t minLetters,
+                             const std::vector<std::wstring>& exceptions) {
+	if (minLetters > kEarlyMin || typed.size() != there.size() || typed.size() < 4) return false;
+	if (typed.back() != L'-' || there.back() != L'-') return false;
+	const std::wstring head = typed.substr(0, typed.size() - 1), headThere = there.substr(0, there.size() - 1);
+	const Part ht = Letters(head), ha = Letters(headThere);
+	if (ha.core.size() < 3 || ha.begin > 0 || ha.end != headThere.size()) return false;
+	if (ExceptedEarly(head, headThere, exceptions)) return false;
+	const std::wstring hl = Lower(ht.core);
+	if (!ht.core.empty() && !ShortWords::NotWord(hl, typedLanguage) && WordStart::IsWord(hl, typedLanguage, false))
+		return false;
+	auto spellTyped = [&](const std::wstring& w) { return WordStart::CheckWord(w, typedLanguage); };
+	auto spellTypedEC = [&](const std::wstring& w) { return WordStart::CheckWordEvenCaps(w, typedLanguage); };
+	auto spellThere = [&](const std::wstring& w) { return WordStart::CheckWord(w, thereLanguage); };
+	auto suggestTyped = [&](const std::wstring& w) { return SpellCheck::Suggest(w, typedLanguage); };
+	auto caseSuggestThere = [&](const std::wstring& w) -> std::vector<std::wstring> {
+		auto s = SpellCheck::Suggest(w, thereLanguage);
+		if (!s.empty() && Lower(s.front()) == Lower(w)) return { s.front() };
+		return {};
+	};
+	const bool caps = CapsWord(head, headThere);
+	const std::wstring typedAs = caps ? Titled(head) : head, thereAs = caps ? Titled(headThere) : headThere;
+	const char* why = Skip(typedAs, thereAs, 3, exceptions);
+	if (!why)
+		why = DecideWhy(typedAs, thereAs, spellTyped, spellThere, suggestTyped, caseSuggestThere,
+		                ShortWords::TrustDictionary(typedLanguage));
+	if (!why && OwnAbbreviationPart(head, headThere, typedLanguage, thereLanguage))
+		why = "an abbreviation of its own language before a hyphen";
+	if (!why) return !FrequentAsTyped(head, typedLanguage);
+	if (strcmp(why, "not a word in the other layout") == 0 &&
+	    (NotRussian(head, headThere, typedLanguage, thereLanguage, spellTypedEC, suggestTyped) ||
+	     Implausible(head, headThere, typedLanguage, thereLanguage, spellTypedEC, suggestTyped)))
+		return true;
+	if ((strcmp(why, "abbreviation") == 0 || strcmp(why, "no vowels (an abbreviation)") == 0 ||
+	     strcmp(why, "not a word in the other layout") == 0) &&
+	    CapsNotRussian(head, headThere, typedLanguage, thereLanguage, spellTypedEC, suggestTyped))
+		return true;
+	return false;
 }
 
 // Решение посреди слова. typed - набранное с начала слова, there - те же клавиши в другой раскладке; minLetters - с
@@ -1208,7 +1426,10 @@ inline int Weight(const std::wstring& lower, const std::wstring& original, const
 }
 
 // Контекст по слову перед этим (как набрано; lang - язык его раскладки, spell - словарь этого языка).
-inline Context ContextOf(const std::wstring& prev, const std::wstring& lang, auto&& spell) {
+// acronymsNeutral - для ShortWord: ПРОПИСНАЯ аббревиатура (API, USB, VPN, PDF) одинаково встречается в русском и
+// английском тексте ("через API tot b" - "через API еще и", "по USB f&" - "по USB а?"), сама контекст не задаёт;
+// в RetroCount - false, чтобы "USB C длиной" сохраняло латинское обозначение "C", как "type C".
+inline Context ContextOf(const std::wstring& prev, const std::wstring& lang, auto&& spell, bool acronymsNeutral = false) {
 	const Part p = Letters(prev);
 	if (p.core.empty()) {
 		// Число перед словом ("5 шт", "512 kb"): дальше - единица или сокращение того же языка.
@@ -1216,13 +1437,16 @@ inline Context ContextOf(const std::wstring& prev, const std::wstring& lang, aut
 			if (iswdigit(c)) return Context::Same;
 		return Context::Unknown; // знаки
 	}
+	if (acronymsNeutral && p.core.size() >= 2 && p.core.size() <= 5 && AllUpper(p.core)) return Context::Unknown;
 	const std::wstring l = Lower(p.core);
 	if (l.size() == 1) return ShortWords::OneLetter(l, lang) ? Context::Same : Context::Unknown;
 	if (ShortWords::Neutral(l, lang)) return Context::Unknown; // ok, lol латиницей пишут и среди русских слов
 	// Две-три буквы, а словарь берёт любые сокращения (ns, ult): слово своего языка - только из списка частых.
 	if (l.size() <= 3 && !ShortWords::TrustDictionary(lang))
 		return ShortWords::Frequent(l, lang) ? Context::Same : Context::Unknown;
-	return ShortWords::Frequent(l, lang) || spell(p.core) == SpellCheck::Result::Word ? Context::Same : Context::Unknown;
+	return ShortWords::Frequent(l, lang) || (!ShortWords::NotWord(l, lang) && spell(p.core) == SpellCheck::Result::Word)
+		? Context::Same
+		: Context::Unknown;
 }
 
 // Знак после короткого слова, какой в английском за буквой не ставят, а в русской раскладке это вопрос или двоеточие
@@ -1242,7 +1466,8 @@ enum class Short {
 };
 
 // Короткое слово, которое словарь пропускает: две-три буквы там (сокращение: ns - "ты", tot - "еще"; или знак, который
-// там буква: "yb[" - "них", "b[" - "их") или одна буква со знаком ("f&" - "а?").
+// там буква: "yb[" - "них", "b[" - "их") или одна буква со знаком ("f&" - "а?") либо в паре с коротким словом перед
+// ней ("tot b" - "еще и", "ns b" - "ты и", "ыщ Ш" - "so I"; Дмитрий, 11.11.2026).
 inline Short ShortWord(const std::wstring& typed, const std::wstring& there, const std::wstring& typedLang,
                        const std::wstring& otherLang, Context context, auto&& spellTyped) {
 	const Part t = Letters(typed), a = Letters(there);
@@ -1252,12 +1477,19 @@ inline Short ShortWord(const std::wstring& typed, const std::wstring& there, con
 	if (t.core.size() > 1 && AllUpper(t.core)) return Short::No;
 	const std::wstring tl = Lower(t.core), al = Lower(a.core);
 	const bool sign = SignEvidence(typed, t, a);
-	// Одна буква - только строчная, со знаком и не после слова своего языка ("const B& b" - C++).
-	if (al.size() == 1)
-		return sign && context != Context::Same && tl.size() == 1 && !TwoCaps::IsUpper(t.core[0]) &&
-				ShortWords::OneLetter(al, otherLang) && !ShortWords::OneLetter(tl, typedLang)
-			? Short::Now
-			: Short::No;
+	// Одна буква - строчная (или английское "I"), не после слова своего языка ("const B& b", "option b"): со знаком
+	// ("f&" - "а?") - сразу, иначе - в паре с коротким словом из двух-трёх букв перед ней ("tot b" - "еще и"; две
+	// одиночные буквы "b c" в "a b c" ждут дальше - RetroCount).
+	if (al.size() == 1) {
+		const bool pronounI = a.core == L"I" && ShortWords::Is(otherLang, L"en");
+		if (context == Context::Same || tl.size() != 1 || (!pronounI && TwoCaps::IsUpper(t.core[0])) ||
+		    !ShortWords::OneLetter(al, otherLang) || ShortWords::OneLetter(tl, typedLang))
+			return Short::No;
+		if (sign && !pronounI) return Short::Now;
+		const bool plainOrDot = t.begin == 0 && a.begin == 0 &&
+			(typed.size() == 1 || (typed.size() == 2 && there.size() == 2 && (there[1] == L',' || there[1] == L'.')));
+		return plainOrDot ? Short::WithPartner : Short::No;
+	}
 	// Буква там - из клавиши после набранных букв, и это не знак после слова ("to`" - "ещё", но "it." - не "шею"): набрано
 	// не то слово, какое видно ("to").
 	const bool letterAfter = a.end > t.end && typed.find_first_not_of(L".,;:!?'\")", t.end) < a.end;
@@ -1265,13 +1497,6 @@ inline Short ShortWord(const std::wstring& typed, const std::wstring& there, con
 		return Short::No;
 	if (sign) return Short::Now;
 	return context == Context::Same ? Short::No : Short::WithPartner;
-}
-
-// Частое короткое слово своего языка ("шт", "руб", "ул", "gb"): правило конца слова его не трогает, даже если словарь
-// его не знает, а там - слово ("5 шт" - не "5 in").
-inline bool FrequentAsTyped(const std::wstring& typed, const std::wstring& lang) {
-	const Part t = Letters(typed);
-	return !t.inner && t.core.size() >= 2 && t.core.size() <= 3 && ShortWords::Frequent(Lower(t.core), lang);
 }
 
 // Слово перед переключённым, набранное в той же раскладке и оставленное: перевести вместе с ним? Одна буква - если там
@@ -1300,18 +1525,28 @@ inline bool Retro(const std::wstring& typed, const std::wstring& there, const st
 }
 
 // Перед словом, которое переключается, - короткие слова, переводятся вместе с ним (Retro); words - слова перед ним, с
-// ближнего: что о каждом известно. Сколько перевести (подряд, с ближнего).
+// ближнего: что о каждом известно. Сколько перевести (подряд, с ближнего). selfLetters - длина самого переключаемого
+// слова там: для одной буквы ("tot b" - "еще и") ближайший сосед должен быть словом от двух букв, а не второй одиночной
+// буквой ("a b c") или тире ("b - c").
 struct RetroWord {
 	std::wstring typed, there; // как набрано и те же клавиши там
 	bool sameLayout = true;    // набрано в той же раскладке, что и переключаемое слово
 	bool fixedAfter = false;   // ... а это - последнее известное, и перед ним исправленное слово
 };
 inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring& typedLang, const std::wstring& otherLang,
-                         const std::vector<std::wstring>& exceptions, auto&& spellTyped) {
+                         const std::vector<std::wstring>& exceptions, auto&& spellTyped, size_t selfLetters = 4) {
+	if (selfLetters == 1 && (words.empty() || Letters(words[0].there).core.size() < 2)) return 0;
 	auto hasDigit = [](const std::wstring& s) {
 		for (wchar_t c : s)
 			if (iswdigit(c)) return true;
 		return false;
+	};
+	auto betweenWords = [&](const std::wstring& s) {
+		if (s.empty()) return false;
+		const bool num = hasDigit(s);
+		for (wchar_t c : s)
+			if (num ? (!iswdigit(c) && !wcschr(L".,%-–—", c)) : !wcschr(L"-–—", c)) return false;
+		return true;
 	};
 	auto candidate = [&](const RetroWord& w) {
 		return w.sameLayout && !Letters(w.typed).core.empty() && !Excepted(w.typed, w.there, exceptions) &&
@@ -1341,8 +1576,8 @@ inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring
 		const Part p = Letters(w.typed);
 		if (p.core.empty()) {
 			// Без букв - число, тире: там то же самое ("d 10 vbyen" - "в 10 минут") - пропустить; знаки, которые там
-			// другие (":)" - "Ж)", "15^00" - "15:00"), - нет.
-			if (w.typed != w.there) break;
+			// другие (":)" - "Ж)", "15^00" - "15:00"), и операторы кода/формул ("=", "+") - нет.
+			if (w.typed != w.there || !betweenWords(w.typed)) break;
 			continue;
 		}
 		if (hasDigit(w.typed) || !candidate(w)) break;

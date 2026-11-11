@@ -226,4 +226,29 @@ inline bool There(const std::wstring& letters, const std::wstring& language) {
 	return letters.size() >= 4 && SpellCheck::CheckAnyCase(letters, language) == SpellCheck::Result::Word;
 }
 
+// Слово в словаре языка или (от четырёх букв, обычного регистра) в списке частых слов (words_<lang>_common.txt:
+// "яндекс", "вайлдберриз", "ютуб", "бэкап", "github", "ozon", которых может не быть в словаре Windows).
+inline SpellCheck::Result CheckWord(const std::wstring& word, const std::wstring& language) {
+	const auto r = SpellCheck::CheckAnyCase(word, language);
+	if (r != SpellCheck::Result::NotWord || word.size() < 4) return r;
+	for (size_t i = 0; i < word.size(); i++) {
+		if (!IsCharAlphaW(word[i])) return r;
+		if (i > 0 && IsCharUpperW(word[i])) return r;
+	}
+	return IsWord(word, language, true) ? SpellCheck::Result::Word : r;
+}
+
+inline SpellCheck::Result CheckWordEvenCaps(const std::wstring& word, const std::wstring& language) {
+	const auto r = SpellCheck::CheckAnyCaseEvenCaps(word, language);
+	if (r != SpellCheck::Result::NotWord || word.size() < 4) return r;
+	bool lower = false, upperAfter0 = false;
+	for (size_t i = 0; i < word.size(); i++) {
+		if (!IsCharAlphaW(word[i])) return r;
+		if (IsCharLowerW(word[i])) lower = true;
+		else if (i > 0) upperAfter0 = true;
+	}
+	if (lower && upperAfter0) return r;
+	return IsWord(word, language, true) ? SpellCheck::Result::Word : r;
+}
+
 }

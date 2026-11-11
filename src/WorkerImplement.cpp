@@ -334,7 +334,8 @@ AutoSwitch::Context ContextBefore(const CycleRevertList& list, const std::vector
     const std::wstring text = TailText(list, prev.begin, prev.end, lay);
     if (text.empty()) return Context::Unknown;
     const std::wstring lang = Utils::GetNameForHKL_simple(lay);
-    return AutoSwitch::ContextOf(text, lang, [&](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); });
+    return AutoSwitch::ContextOf(
+        text, lang, [&](const std::wstring& w) { return WordStart::CheckWord(w, lang); }, true);
 }
 
 // Клавиша - "\" во всех включённых раскладках (буфер считает её границей слова): после неё - сокращение шаблона
@@ -352,7 +353,7 @@ bool IsBackslashKey(const TKeyBaseInfo& key) {
 // (AutoSwitch::Retro, до трёх слов, подряд); tail[0].begin - только само слово. Слово сразу после "\" - не наше: на
 // нём (и дальше назад) - стоп ("\ns ghbdtn" - не "\ты привет"; ревью 25.10.2026).
 size_t RetroBegin(const CycleRevertList& list, const std::vector<CycleRevertList::TailWord>& tail, bool fixedBefore,
-                  HKL lay, HKL other, const std::vector<std::wstring>& exceptions) {
+                  HKL lay, HKL other, const std::vector<std::wstring>& exceptions, size_t selfLetters = 4) {
     if (tail.empty()) return list.Size();
     const std::wstring lang = Utils::GetNameForHKL_simple(lay), otherLang = Utils::GetNameForHKL_simple(other);
     std::vector<AutoSwitch::RetroWord> words;
@@ -367,8 +368,9 @@ size_t RetroBegin(const CycleRevertList& list, const std::vector<CycleRevertList
         words.push_back(w);
         if (!w.sameLayout) break;
     }
-    const size_t count = AutoSwitch::RetroCount(words, lang, otherLang, exceptions,
-                                                [&](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); });
+    const size_t count = AutoSwitch::RetroCount(
+        words, lang, otherLang, exceptions, [&](const std::wstring& w) { return WordStart::CheckWord(w, lang); },
+        selfLetters);
     if (count) LOG_ANY(L"autoswitch: and {} words before it", count);
     return count ? tail[count].begin : tail[0].begin;
 }
@@ -384,6 +386,7 @@ void WorkerImplement::RetypeTail(size_t begin, size_t middle, HKL first, HKL res
     const int delay = RetypeDelay();
     m_twoCaps = {}; // слово перепечатано заново - отменять прежнее исправление уже нечего
     TextFixed();
+    SettleBeforeErase();
     LiftHeldMods();
     const auto stop = CaretStop();
     InputSender::SendVkKeyPaced(VK_BACK, (int)(a.size() + b.size()), delay, stop);
@@ -515,6 +518,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
     if (m_autoWord.undone) return no("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
+    if (m_cycleList.WordLay(afterSpace) != lay) return no("the layout was switched in this word");
     const std::wstring lang = Utils::GetNameForHKL_simple(lay);
     // С CapsLock - как на экране, ПРОПИСНЫМИ: такое слово - от четырёх букв (AutoSwitch::CapsWord), короче - аббревиатура.
     std::wstring typed;
@@ -553,13 +557,13 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
         return afterBoundary() ? 2 : 4;
     };
     auto dictionary = [](HKL l) {
-        return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::CheckAnyCase(w, lang); };
+        return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return WordStart::CheckWord(w, lang); };
     };
     auto suggestions = [](HKL l) {
         return [lang = Utils::GetNameForHKL_simple(l)](const std::wstring& w) { return SpellCheck::Suggest(w, lang); };
     };
     // Словарь своего языка и для прописных (словарь Windows прописные принимает любые).
-    auto spellEvenCaps = [&lang](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); };
+    auto spellEvenCaps = [&lang](const std::wstring& w) { return WordStart::CheckWordEvenCaps(w, lang); };
     // Слово перед этим - контекст коротких слов (AutoSwitch.h); слова перед ним - их переводят вместе с этим.
     bool fixedBefore = false;
     const auto tail = m_cycleList.TailWords(afterSpace, 6, &fixedBefore);
@@ -674,23 +678,64 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
             }
             if (why) {
                 LOG_ANY(L"autoswitch: {} / {}: no, {}", typed, there, LogPlain(std::wstring(why, why + strlen(why))));
-                // Целиком - нет, но часть до дефиса набрана правильно, а после - не в той раскладке: её одну
-                // ("legacy-yfcnhjqrb" - "legacy-настройки", "PHP-yt" - "PHP-не"; AutoSwitch::HyphenTail).
-                auto tailSwitches = [&](const std::wstring& ty, const std::wstring& th) {
+                // Целиком - нет, но не в той раскладке только часть после дефиса ("legacy-yfcnhjqrb" - "legacy-настройки",
+                // "PHP-yt" - "PHP-не"; AutoSwitch::HyphenTail) или только часть до дефиса ("ШЗ-адрес" - "IP-адрес",
+                // "ПшеРги-репозиторий" - "GitHub-репозиторий"; AutoSwitch::HyphenHead).
+                auto partSwitches = [&](const std::wstring& ty, const std::wstring& th, bool allowShort) {
                     if (AutoSwitch::Excepted(ty, th, exceptions)) return false;
                     if (AutoSwitch::Forced(ty, th, forced) || AutoSwitch::KnownShort(ty, th, lang, otherLang, spellEvenCaps))
                         return true;
-                    const char* w = AutoSwitch::Skip(ty, th, 2, exceptions);
+                    if (!allowShort && AutoSwitch::Letters(th).core.size() < 3) return false;
+                    const bool partCaps = AutoSwitch::CapsWord(ty, th);
+                    const std::wstring tyAs = partCaps ? AutoSwitch::Titled(ty) : ty;
+                    const std::wstring thAs = partCaps ? AutoSwitch::Titled(th) : th;
+                    const char* w = AutoSwitch::Skip(tyAs, thAs, allowShort ? 2 : 3, exceptions);
                     if (!w)
-                        w = AutoSwitch::DecideWhy(ty, th, dictionary(lay), dictionary(other), suggestions(lay),
+                        w = AutoSwitch::DecideWhy(tyAs, thAs, dictionary(lay), dictionary(other), suggestions(lay),
                                                   suggestions(other), ShortWords::TrustDictionary(lang));
                     if (!w) return !AutoSwitch::FrequentAsTyped(ty, lang);
-                    return AutoSwitch::ShortTail(ty, th, lang, otherLang);
+                    if (strcmp(w, "not a word in the other layout") == 0 &&
+                        (AutoSwitch::NotRussian(ty, th, lang, otherLang, spellEvenCaps, suggestions(lay)) ||
+                         AutoSwitch::Implausible(ty, th, lang, otherLang, spellEvenCaps, suggestions(lay))))
+                        return true;
+                    if ((strcmp(w, "abbreviation") == 0 || strcmp(w, "no vowels (an abbreviation)") == 0 ||
+                         strcmp(w, "not a word in the other layout") == 0) &&
+                        AutoSwitch::CapsNotRussian(ty, th, lang, otherLang, spellEvenCaps, suggestions(lay)))
+                        return true;
+                    return allowShort && AutoSwitch::ShortTail(ty, th, lang, otherLang);
                 };
-                const size_t tailAt = AutoSwitch::HyphenTail(typed, there, lang, spellEvenCaps, tailSwitches);
+                const size_t tailAt = AutoSwitch::HyphenTail(
+                    typed, there, lang, spellEvenCaps,
+                    [&](const std::wstring& ty, const std::wstring& th) { return partSwitches(ty, th, true); }, otherLang);
                 if (!tailAt) {
-                    m_autoNo = { typed, why };
-                    continue;
+                    const size_t headEnd = !atSign
+                        ? AutoSwitch::HyphenHead(
+                              typed, there, lang, spellEvenCaps,
+                              [&](const std::wstring& ty, const std::wstring& th) { return partSwitches(ty, th, false); },
+                              otherLang)
+                        : 0;
+                    if (!headEnd) {
+                        m_autoNo = { typed, why };
+                        continue;
+                    }
+                    if (IsPasswordUia()) return no("a password field", false);
+                    if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
+                    KeyHold::Claimed claimed{ m_holdId };
+                    const std::wstring from = TailText(m_cycleList, wordBegin, wordBegin + headEnd, lay);
+                    LOG_ANY(L"autoswitch: {} -> the part before the hyphen, {}", typed, there.substr(0, headEnd));
+                    m_autoNo = {};
+                    RetypeTail(wordBegin, wordBegin + headEnd, other, lay);
+                    if (!CaretStop()()) {
+                        const std::wstring to = TailText(m_cycleList, wordBegin, wordBegin + headEnd, other);
+                        m_autoSwitched = { .word = AutoSwitch::Lower(AutoSwitch::Letters(from).core), .at = GetTickCount64(),
+                                           .size = m_cycleList.Size(), .typed = from, .there = to, .wordTyped = from,
+                                           .wordThere = to, .from = lay, .to = lay, .span = total - wordBegin,
+                                           .retro = headEnd, .pair = true, .total = m_cycleList.Total(),
+                                           .changes = m_cycleList.Changes() };
+                        RememberSwitch(from, to);
+                        Journal("switched", from, to, "the part before a hyphen");
+                    }
+                    return true;
                 }
                 if (IsPasswordUia()) return no("a password field", false);
                 if (!KeyHold::Claim(m_holdId)) return no("too late: the keys went on", false);
@@ -714,7 +759,8 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
             }
         }
         // Короткие слова перед ним, набранные так же ("f" перед "vj;yj"), - вместе с ним.
-        const size_t begin = RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions);
+        const size_t begin = RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions,
+                                        AutoSwitch::Letters(there).core.size());
         const bool retro = !tail.empty() && begin < tail[0].begin;
         // Одно короткое слово без соседа-подтверждения ждёт: его переведёт следующее слово, если переключится.
         if (shortWord == AutoSwitch::Short::WithPartner && !retro) {
@@ -777,6 +823,7 @@ bool WorkerImplement::AutoSwitchAtSign() {
     if (keys.size() < 3) return false;
     CheckCurLay();
     const HKL lay = CurLay();
+    if (m_cycleList.WordLay(false) != lay) return false;
     const auto& last = *keys.back();
     const std::wstring here = InputSender::KeyText(last, lay, false);
     bool sign = false;
@@ -789,9 +836,10 @@ bool WorkerImplement::AutoSwitchAtSign() {
     std::wstring typed;
     for (auto* key : keys) typed += InputSender::KeyText(*key, lay, false);
     // Набранное - слово или начало слова своего языка: оно, скорее, ещё пишется ("шаб" - "шаблон", хотя там "if,").
+    // Для ПРОПИСНЫХ - как с заглавной ("РЕЕЗЖ" - "HTTP:": словарь Windows любые прописные считает словом).
     const std::wstring core = AutoSwitch::Letters(typed).core;
     if (core.size() < 2) return false;
-    if (WordStart::Typed(core, Utils::GetNameForHKL_simple(lay))) {
+    if (WordStart::TypedEvenCaps(core, Utils::GetNameForHKL_simple(lay))) {
         LOG_ANY(L"autoswitch: {} at a sign: a word or the beginning of one as typed", typed);
         return false;
     }
@@ -814,6 +862,7 @@ void WorkerImplement::AutoSwitchEarly() {
     if (m_autoWord.undone) return never("fixed or switched back by hand in this word");
     CheckCurLay();
     const HKL lay = CurLay();
+    if (m_cycleList.WordLay(false) != lay) return never("the layout was switched in this word");
     auto keys = m_cycleList.TrailingWordKeys();
     if (keys.empty()) return;
     std::wstring typed;
@@ -880,11 +929,13 @@ void WorkerImplement::AutoSwitchEarly() {
         const bool forcedWhole = AutoSwitch::Forced(typed, there, forced) &&
             !AutoSwitch::Excepted(typed, there, exceptions) && !AutoSwitch::ExceptionAhead(typed, there, exceptions) &&
             !WordStart::TypedEvenCaps(AutoSwitch::Letters(typed).core, lang);
-        auto spellEvenCaps = [&](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); };
-        // И сокращение из списка, за которым дефис ("ЕСЗ-" - "TCP-"): часть до дефиса кончилась (KnownShortBeforeHyphen).
+        auto spellEvenCaps = [&](const std::wstring& w) { return WordStart::CheckWordEvenCaps(w, lang); };
+        // И сокращение или слово за которым дефис ("ЕСЗ-" - "TCP-", "ШЗ-" - "IP-", "ПшеРги-" - "GitHub-"): часть до
+        // дефиса кончилась (KnownShortBeforeHyphen, WordBeforeHyphen).
         const bool shortWhole = !forcedWhole && cfg->autoswitch_early &&
             (AutoSwitch::KnownShortEarly(typed, there, lang, otherLang, minLetters, exceptions, spellEvenCaps) ||
-             AutoSwitch::KnownShortBeforeHyphen(typed, there, lang, otherLang, minLetters, exceptions, spellEvenCaps));
+             AutoSwitch::KnownShortBeforeHyphen(typed, there, lang, otherLang, minLetters, exceptions, spellEvenCaps) ||
+             AutoSwitch::WordBeforeHyphen(typed, there, lang, otherLang, minLetters, exceptions));
         auto verdict = (forcedWhole || shortWhole) ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Switch, nullptr }
             : !cfg->autoswitch_early ? AutoSwitch::EarlyVerdict{ AutoSwitch::Early::Never, "a word of Always switch only" }
             : AutoSwitch::DecideEarly(typed, there, minLetters, exceptions,
@@ -1033,7 +1084,7 @@ bool WorkerImplement::HyphenTailOnly() {
             AutoSwitch::ShortTail(ty, th, lang, nextLang);
     };
     const size_t at = AutoSwitch::HyphenTail(typed, there, lang,
-        [&lang](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); }, tailSwitches);
+        [&lang](const std::wstring& w) { return SpellCheck::CheckAnyCaseEvenCaps(w, lang); }, tailSwitches, nextLang);
     if (at) LOG_ANY(L"fix the last word: only the part after the hyphen, {}", typed.substr(at));
     return at > 0;
 }
@@ -1183,7 +1234,10 @@ bool WorkerImplement::CountAutoSwitchUndo(AutoUndo* undo) {
         learn += L'\t' + f;
     PostWord(WM_AutoSwitchLearn, learn);
     m_lastUndo = { .word = last.word, .at = GetTickCount64() };
-    if (undo && span) *undo = { .tail = keys, .retro = 0, .all = true, .from = last.from, .to = last.to };
+    if (undo && span) {
+        const bool headOnly = last.from == last.to && last.retro > 0;
+        *undo = { .tail = keys, .retro = headOnly ? last.retro : 0, .all = !headOnly, .from = last.from, .to = last.to };
+    }
     return true;
 }
 

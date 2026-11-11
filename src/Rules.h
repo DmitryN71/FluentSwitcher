@@ -37,21 +37,48 @@ inline constexpr const wchar_t* kShortEn[] = {
 	// Из «Переключать всегда» WinnyS (форум, 29.10.2026; остальное из его списка переключается и так).
 	L"rdp", L"fs", L"ms", L"tnx", L"drweb",
 	L"tbd", L"tba", L"wip", L"fyi", L"eta", L"asap", L"diy", L"afk", L"llc", L"inc", L"ltd", L"qty", L"pcs", L"pkg", L"aka",
-	// Расширения файлов (форум, volodyalipkin и gutasiho, 31.10.2026: "иьз" - bmp).
+	// Расширения файлов и зоны (форум, volodyalipkin и gutasiho, 31.10.2026: "иьз" - bmp; аудит 10.11.2026).
 	L"bmp", L"webp", L"heic", L"avif", L"psd", L"cdr", L"dng", L"ogg", L"wma", L"mkv", L"avi", L"wmv", L"webm", L"mpg",
 	L"vob", L"srt", L"xls", L"ppt", L"rtf", L"odp", L"epub", L"djvu", L"chm", L"tgz", L"zst", L"dmg", L"vhdx", L"vmdk",
 	L"apk", L"apks", L"xapk", L"vbs", L"ini", L"bak", L"tmp", L"ttf", L"woff", L"htm", L"xhtml", L"aspx", L"jsp",
-	L"zsh", L"sln", L"wasm", L"pyc", L"whl", L"ovpn" };
+	L"zsh", L"sln", L"wasm", L"pyc", L"whl", L"ovpn",
+	L"yml", L"toml", L"flac", L"tif", L"tiff", L"odt", L"ods", L"img", L"vhd", L"dat", L"otf", L"gz", L"xz",
+	L"doc", L"log", L"bat", L"tar", L"bin", L"jar", L"raw", L"ico", L"aac", L"lua", L"mov", L"mpeg", L"opus",
+	L"mobi", L"ova", L"ipa", L"deb", L"sys", L"conf", L"com", L"org", L"io", L"app", L"dev", L"pro",
+	L"top", L"biz", L"xyz", L"info",
+	// Повседневные, сетевые, железные и деловые аббревиатуры (аудит 10.11.2026).
+	L"it", L"id", L"qr", L"sim", L"esim", L"pin", L"mac", L"vip", L"nat", L"mtu", L"ttl", L"qos", L"sni",
+	L"vless", L"vmess", L"awg", L"nas", L"ups", L"psu", L"tws", L"anc", L"aux", L"dp", L"vga", L"dvi",
+	L"ddr", L"raid", L"sata", L"pcie", L"dkim", L"dmarc", L"spf", L"imap", L"smtp", L"ldap", L"oidc",
+	L"saml", L"totp", L"hmac", L"sha", L"aes", L"rsa", L"jwt", L"cors", L"grpc", L"crud", L"orm",
+	L"ssr", L"csr", L"pwa", L"spa", L"waf", L"ddos", L"xss", L"csrf", L"cve", L"uuid", L"guid",
+	L"regex", L"cron", L"jsonl", L"tsv", L"eof", L"crlf", L"utf", L"ascii", L"ansi", L"mqtt",
+	L"wms", L"tms", L"pos", L"kyc", L"aml", L"nda", L"sla", L"awb", L"vat", L"cogs", L"ebitda",
+	L"pnl", L"romi", L"cac", L"arpu", L"mrr", L"arr", L"yoy", L"qoq", L"ytd", L"moq", L"rrp",
+	L"msrp", L"upc", L"ean", L"gtin", L"asin", L"tg" };
 inline constexpr const wchar_t* kShortEnKeep[] = {
-	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"it", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
-	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd" };
+	L"ru", L"en", L"ua", L"uk", L"us", L"eu", L"de", L"fr", L"ok", L"cv", L"cif", L"fob", L"exw", L"fca", L"ddp",
+	L"dap", L"cpt", L"cip", L"cfr", L"dpu", L"acc", L"nw", L"dep", L"yr", L"gn", L"dc", L"rd", L"vue", L"gdp",
+	L"jal", L"rca", L"rnc", L"np", L"vnc", L"cnc", L"jvc" };
 inline constexpr const wchar_t* kShortRu[] = {
 	L"инн", L"ооо", L"оао", L"зао", L"пао", L"ип", L"ндс", L"ндфл", L"усн", L"огрн", L"огрнип", L"кпп", L"бик", L"снилс",
 	L"упд", L"ттн", L"эдо", L"дрр", L"фнс", L"пфр", L"сфр", L"фсс", L"мвд", L"гибдд", L"жкх", L"рф", L"ссср", L"сша",
 	L"ес", L"еаэс", L"оон", L"мкад", L"тц", L"цб", L"сбп", L"сдэк", L"ржд", L"вуз", L"сми", L"чп", L"тв", L"пк", L"гост",
 	L"нк", L"тк", L"лк", L"кп", L"см", L"мм", L"км", L"кг", L"мг", L"шт", L"млн", L"млрд", L"тчк", L"зпт", L"спб", L"пн",
-	L"вт", L"чт", L"пт", L"вс", L"кв", L"стр", L"вкл", L"мгц", L"ггц", L"кгц", L"мб", L"гб", L"кб", L"тб" };
-inline constexpr const wchar_t* kShortRuKeep[] = { L"рк" };
+	L"вт", L"чт", L"пт", L"вс", L"кв", L"стр", L"вкл", L"мгц", L"ггц", L"кгц", L"мб", L"гб", L"кб", L"тб",
+	L"днк", L"фио", L"мфц", L"эцп", L"укэп", L"мчд", L"егрюл", L"егрип", L"оквэд", L"окпо", L"кбк", L"коап",
+	L"птс", L"дмс", L"втб", L"сбис", L"рбк", L"мчс", L"цска", L"ркн", L"мрот",
+	L"ккт", L"тнвэд", L"егэ", L"огэ", L"бпла", L"загс", L"снип", L"санпин", L"фсин", L"фсо" };
+inline constexpr const wchar_t* kShortRuKeep[] = { L"рк", L"мтс", L"стс", L"омс" };
+// Сокращения с цифрами и через косую черту (аудит 10.11.2026: "ЬЗ3" - MP3, "И2И" - B2B, "ГЕА-8" - UTF-8, "ГШ.ГЧ" - UI/UX,
+// ",|e" - б/у): закрытые списки, чтобы не трогать пароли, артикулы и "F4" ("А4").
+inline constexpr const wchar_t* kAlnumEn[] = {
+	L"mp3", L"mp4", L"m4a", L"fb2", L"ps1", L"woff2", L"b2b", L"b2c", L"d2c", L"p2p", L"2fa", L"x64", L"x86",
+	L"utf-8", L"utf8", L"ipv4", L"ipv6", L"sha256", L"base64", L"win32", L"win64", L"arm64" };
+inline constexpr const wchar_t* kSlashedEn[] = {
+	L"ui/ux", L"ux/ui", L"tcp/ip", L"ci/cd", L"ar/vr", L"qa/qc" };
+inline constexpr const wchar_t* kSlashedRu[] = {
+	L"б/у", L"р/с", L"к/с", L"ж/д", L"п/п", L"в/ч", L"х/б" };
 // Русские сокращения с точками ("и т.д." в английской раскладке - "b n/l/", "и т.п." - "b n/g/"; Дмитрий, 03.11.2026):
 // точки - клавиша "/", набранное - не слово. Только с точками, как здесь: "lh" без точки - не "др".
 inline constexpr const wchar_t* kDottedRu[] = { L"т.д.", L"т.п.", L"т.е.", L"т.к.", L"т.н.", L"т.ч.", L"т.о.", L"н.э.",
@@ -94,6 +121,8 @@ struct Lists {
 	Words shortEn, shortRu;     // short_en, short_ru
 	Words keepEn, keepRu;       // keep_en, keep_ru
 	Words dottedRu;             // dotted_ru
+	Words alnumEn;              // встроенные с цифрами
+	Words slashedEn, slashedRu; // встроенные через косую черту
 	Words numberEn, numberRu;   // number_en, number_ru
 	Words zones;                // zones
 	Words neutralEn;            // neutral_en
@@ -109,6 +138,9 @@ inline Lists Builtin() {
 	l.keepEn = set(kShortEnKeep);
 	l.keepRu = set(kShortRuKeep);
 	l.dottedRu = set(kDottedRu);
+	l.alnumEn = set(kAlnumEn);
+	l.slashedEn = set(kSlashedEn);
+	l.slashedRu = set(kSlashedRu);
 	l.numberEn = set(kNumberEn);
 	l.numberRu = set(kNumberRu);
 	l.zones = set(kZones);

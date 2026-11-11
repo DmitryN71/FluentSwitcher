@@ -442,9 +442,9 @@ inline int backslash = -1;
 // (VK_OEM_102); а "^" немецкой, "*" французской, "ґ" украинской (расширенной) на месте VK_OEM_5 - нет. Задаёт
 // SetBackslash (HookerKeyboard - вместе с SetForced).
 inline std::vector<UINT> backslashKeys;
-// Слово начинается цифрами ("4звф" - 4pda): проверит движок в конце (переключает такие только из "Переключать всегда"),
-// посреди слова - нет.
-inline bool digitsFirst = false;
+// В слове есть цифры ("4звф" - 4pda, "мшвущюьз4" - video.mp4, "И2И" - B2B): проверит движок в конце (переключает такие
+// только из "Переключать всегда", адресов и закрытого списка), посреди слова - нет.
+inline bool hasDigits = false;
 // Набрано с CapsLock (ПРОПИСНЫМИ): слово проверит автопереключение (от четырёх букв - AutoSwitch::CapsWord, посреди слова -
 // с пятой: kCapsEarlyMin), а ДВе ЗАглавные и i - нет: регистр там от CapsLock, а не от Shift (форум, gutasiho, 11.10.2026:
 // "ЗИМА ВОЗМЕЗДИЯ").
@@ -479,7 +479,7 @@ inline void ResetWord() {
 	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
 	backslash = -1;
-	digitsFirst = false;
+	hasDigits = false;
 	capsLock = false;
 	earlyDone = false;
 	number = 0;
@@ -569,11 +569,13 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 	if (caps) capsLock = true;
 	if (vk == VK_BACK) {
 		// Опечатку в слове стёрли: посреди слова решать снова - "нет" движка было о слове с опечаткой ("facc" - "face").
-		if (!word.empty()) {
+		const bool wasDigit = !keys.empty() && keys.back() >= '0' && keys.back() <= '9';
+		if (!keys.empty()) keys.pop_back();
+		if (!wasDigit && !word.empty()) {
 			word.pop_back();
 			earlyDone = false;
 		}
-		if (!keys.empty()) keys.pop_back();
+		hasDigits = std::ranges::any_of(keys, [](wchar_t k) { return k >= '0' && k <= '9'; });
 		if (backslash >= 0 && (int)word.size() <= backslash) backslash = -1; // черту стёрли
 		if (word.size() < 2) firstKeys[1] = 0;
 		if (word.empty()) firstKeys[0] = 0;
@@ -595,6 +597,7 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		return false;
 	}
 	if (IsLetterKey(vk)) {
+		if (!word.empty() && HyphenKey(vk, shift)) earlyDone = false; // дефис кончил первую часть: проверить её на дефисе
 		word.push_back(shift);
 		keys.push_back((wchar_t)vk);
 		lastLetter = vk;
@@ -603,15 +606,14 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 		return true;
 	}
 	if (vk >= '0' && vk <= '9') {
-		// Цифра; с Shift - знак ( «"!), он по краям слова не мешает. Цифры впереди букв - часть слова ("4звф" - 4pda;
-		// Дмитрий, 18.10.2026: такое слово не проверялось вовсе, и "Переключать всегда" не помогал): само его движок не
-		// переключит (AutoSwitch::Skip - "digits"), из списка - да. Цифра после букв ("тщ5", пароли, коды) - не наш случай.
+		// Цифра; с Shift - знак ( «"!), он по краям слова не мешает. Цифры без букв (word пуст) пробел не держат, а вместе
+		// с буквами ("4звф" - 4pda, "мшвущюьз4" - video.mp4, "И2И" - B2B) проверяются в конце слова: обычные слова с цифрами
+		// движок сам не трогает (AutoSwitch::Skip - "digits"), переключает только адрес, "Переключать всегда" и список.
 		if (!shift) {
-			if (word.empty()) {
-				digitsFirst = true;
-				keys.push_back((wchar_t)vk);
-			}
-			else broken = true;
+			hasDigits = true;
+			keys.push_back((wchar_t)vk);
+			lastLetter = vk;
+			letterAt = now();
 		}
 		return false;
 	}
@@ -648,12 +650,14 @@ inline void SetForced(const std::vector<std::wstring>& words, const std::vector<
 		}
 	}
 }
-// Трёхбуквенные сокращения и расширения файлов из списка (Rules: shortEn, shortRu) - клавишами в
-// раскладках layouts: на третьей букве хук держит нажатия только для них (четыре и больше букв держит EarlyPoint).
+// Трёхбуквенные сокращения и расширения файлов из списка (Rules: shortEn, shortRu), а также двухбуквенные с дефисом
+// ("ШЗ-" - IP-, "ГШ-" - UI-, "BG-" - ИП-) - клавишами в раскладках layouts: на третьей клавише хук держит нажатия только
+// для них (четыре и больше клавиш держит EarlyPoint).
 inline void SetShortKeys(const std::vector<std::wstring>& words, const std::vector<HKL>& layouts) {
 	shortKeys.clear();
-	for (const auto& w : words) {
-		if (w.size() != 3) continue;
+	for (const auto& raw : words) {
+		if (raw.size() != 2 && raw.size() != 3) continue;
+		const std::wstring w = raw.size() == 2 ? raw + L'-' : raw;
 		for (HKL lay : layouts) {
 			std::wstring k;
 			for (wchar_t c : w) {
@@ -686,7 +690,7 @@ inline bool ForcedPoint() {
 // восьмую (AutoSwitch::kEarlyMin, kEarlyMax; ПРОПИСНЫМИ - с пятой, kCapsEarlyMin), а для трёхбуквенных сокращений и
 // расширений из встроенного списка - на третьей, пока он не сказал, что в этом слове больше нечего.
 inline bool EarlyPoint() {
-	return !broken && backslash < 0 && !digitsFirst && !earlyDone &&
+	return !broken && backslash < 0 && !hasDigits && !earlyDone &&
 		((word.size() >= 4 && word.size() <= 8) || (word.size() == 3 && !shortKeys.empty() && shortKeys.contains(keys)));
 }
 
@@ -713,10 +717,10 @@ inline WordEnd EndWord() {
 	end.twoCaps = TwoCapsShape(word.size());
 	end.letters = !broken && backslash < 0 && !word.empty();
 	auto alpha = [](UINT vk) { return vk >= 'A' && vk <= 'Z'; };
-	end.loneI = end.letters && !capsLock && word.size() <= 4 &&
+	end.loneI = end.letters && !hasDigits && !capsLock && word.size() <= 4 &&
 		((firstKeys[0] == 'I' && !word[0] && !alpha(firstKeys[1])) ||
 		 (firstKeys[0] == VK_OEM_7 && firstKeys[1] == 'I' && word.size() >= 2 && !word[1]));
-	end.size = word.size();
+	end.size = keys.size();
 	end.lastLetter = lastLetter;
 	end.number = numberSign && number > 0 && LetterHere(VK_OEM_PERIOD) && LetterHere(VK_OEM_COMMA);
 	if (end.number) end.lastLetter = numberLast;

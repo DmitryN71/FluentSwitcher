@@ -11,7 +11,8 @@ language. Ukrainian has no Windows dictionary on the computer the lists are made
 40 % Russian: letters of the Ukrainian alphabet only, words met at least twice, without the Russian words (those of
 the Russian list that are much rarer in the Ukrainian subtitles than in the Russian ones: что, когда - not так,
 тебе) and without the words without a vowel (broken encodings). `*_common.txt` - the frequent words only (50 times,
-Ukrainian 5). Sorted by bytes (UTF-8), one word a line.
+Ukrainian 5), plus everyday digital and service terms rare in 2018 movie subtitles (`яндекс`, `ватсап`, `госуслуги`,
+`github`, `yandex`, `whatsapp`, etc. in `make_wordlist.cpp`). Sorted by bytes (UTF-8), one word a line.
 
 License: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), as the original lists. Built by
 `tools/corpus/make_wordlist.cmd` in the project folder (outside this repository) from `ru_full.txt`,

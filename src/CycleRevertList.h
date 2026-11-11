@@ -288,6 +288,20 @@ public: std::vector<TKeyBaseInfo*> TrailingWordKeys() {
 	std::reverse(keys.begin(), keys.end());
 	return keys;
 }
+// Раскладка всех клавиш последнего слова (перед пробелом в самом конце, если afterSpace); 0 - клавиш нет или раскладку
+// меняли вручную посреди слова ("Ozon-кабинет", "chat-бот").
+public: HKL WordLay(bool afterSpace) const {
+	int i = (int)m_symbolList.size() - 1;
+	if (afterSpace) {
+		if (i < 0 || m_symbolList[i].key.type != KEYTYPE_SPACE) return 0;
+		i--;
+	}
+	if (i < 0 || m_symbolList[i].key.type == KEYTYPE_SPACE) return 0;
+	const HKL lay = m_symbolList[i].lay;
+	for (; i >= 0 && m_symbolList[i].key.type != KEYTYPE_SPACE; --i)
+		if (m_symbolList[i].lay != lay) return 0;
+	return lay;
+}
 public: void SetSeparateLast() {
 	if (!m_symbolList.empty())
 		m_symbolList.back().is_last_revert = true;

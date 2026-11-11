@@ -479,7 +479,7 @@ LRESULT CALLBACK Hooker::HookerKeyboard::LowLevelKeyboardProc(
 				const bool hyphenCaps = capsShape && !command && g_enabled.IsEnabled() && KeyHold::CanStart() &&
 					KeyHold::HyphenKey(vkCode, curk.HasMod(VK_SHIFT));
 				const bool signCaps = (signKey && capsShape && !KeyHold::LetterHere(vkCode)) || hyphenCaps;
-				const bool signAuto = signKey && cfg->autoswitch && KeyHold::word.size() >= 2;
+				const bool signAuto = signKey && !KeyHold::hasDigits && cfg->autoswitch && KeyHold::word.size() >= 2;
 				sign = (signCaps || signAuto) && canHold() && (autoswitchHere() || (signCaps && !KeyHold::LatinLayout()));
 				hold = early || sign;
 				if (hold) {

@@ -2392,6 +2392,7 @@ airphone
 airplane
 airplanes
 airplay
+airpods
 airport
 airports
 airpower
@@ -8155,6 +8156,7 @@ autosomal
 autosport
 autostrada
 autosuggestion
+autoswitch
 autotomy
 autotrader
 autotransfusion
@@ -8313,6 +8315,7 @@ aviram
 avis
 avital
 avitaminosis
+avito
 aviv
 aviva
 avner
@@ -13580,6 +13583,7 @@ bito
 bitola
 bitou
 bitrate
+bitrix
 bits
 bitsie
 bitstream
@@ -22318,6 +22322,7 @@ changeless
 changelessness
 changeling
 changelings
+changelog
 changeover
 changeovers
 changer
@@ -22677,6 +22682,7 @@ chatelain
 chatelaine
 chatelet
 chatfield
+chatgpt
 chatham
 chatillon
 chatline
@@ -22819,6 +22825,7 @@ chechnyan
 check
 checkbook
 checkbooks
+checkbox
 checkboxes
 checked
 checker
@@ -25386,6 +25393,7 @@ clymer
 clyne
 clyster
 clytemnestra
+cmake
 cmi
 cml
 cmv
@@ -27272,6 +27280,7 @@ confidently
 confides
 confiding
 config
+configs
 configuration
 configurations
 configure
@@ -33291,6 +33300,7 @@ deeply
 deepness
 deeps
 deepsea
+deepseek
 deepthi
 deepti
 deepwater
@@ -35325,6 +35335,7 @@ diack
 diacritical
 diadem
 diadems
+diadoc
 diaghilev
 diagnosable
 diagnose
@@ -52700,6 +52711,8 @@ gitarama
 gitchee
 gite
 giteau
+github
+gitlab
 gitlin
 gitmo
 gits
@@ -60962,6 +60975,8 @@ hotheaded
 hotheads
 hothouse
 hothouses
+hotkey
+hotkeys
 hotlanta
 hotline
 hotlines
@@ -64639,6 +64654,7 @@ inroads
 inrush
 ins
 insalata
+insales
 insalubrious
 insane
 insanely
@@ -65799,12 +65815,14 @@ iowa
 iowan
 iowans
 ioway
+ipad
 ipanema
 ipas
 ipe
 ipecac
 ipecacuanha
 iphigenia
+iphone
 ipoh
 ippolito
 ippon
@@ -66969,6 +66987,7 @@ javad
 javan
 javanese
 javari
+javascript
 javeed
 javelin
 javelina
@@ -71417,6 +71436,7 @@ konstantinidis
 konstantinos
 konstanz
 kontron
+kontur
 konvict
 konya
 koo
@@ -71880,6 +71900,7 @@ kuantan
 kuasa
 kub
 kuban
+kubernetes
 kubi
 kubiak
 kubica
@@ -77533,6 +77554,7 @@ macaw
 macaws
 macbeth
 macbeths
+macbook
 macca
 maccabean
 maccabee
@@ -88626,6 +88648,7 @@ ngan
 ngee
 nghe
 nghi
+nginx
 ngo
 ngoc
 ngong
@@ -89283,6 +89306,7 @@ nodding
 noddle
 noddy
 node
+nodejs
 nodes
 nodi
 nodosa
@@ -91674,6 +91698,7 @@ opechancanough
 opel
 opelousas
 open
+openai
 opened
 opener
 openers
@@ -93690,6 +93715,7 @@ ozer
 ozian
 ozick
 ozil
+ozon
 ozona
 ozone
 ozpin
@@ -100585,6 +100611,7 @@ postglacial
 postgrad
 postgraduate
 postgraduates
+postgres
 posthaste
 posthole
 postholes
@@ -100878,6 +100905,7 @@ powerplant
 powerplants
 powerplay
 powers
+powershell
 powertech
 powertrain
 powhatan
@@ -113778,6 +113806,7 @@ sayyed
 sayyid
 sazerac
 sbarro
+sberbank
 scab
 scabbard
 scabbards
@@ -123005,6 +123034,7 @@ spymasters
 spyridon
 spyros
 spyware
+sqlite
 sqm
 sqn
 squab
@@ -132496,6 +132526,8 @@ toolpath
 tools
 toolset
 toolshed
+tooltip
+tooltips
 toom
 toomas
 toombs
@@ -142647,6 +142679,8 @@ webelos
 weber
 webern
 webfoot
+webhook
+webhooks
 webinar
 webisode
 webisodes
@@ -142655,6 +142689,7 @@ weblog
 webmail
 webmaster
 webmasters
+webpack
 webpage
 webpages
 webs
@@ -143200,6 +143235,7 @@ whatley
 whatman
 whatnot
 whatnots
+whatsapp
 whatshername
 whatshisface
 whatshisname
@@ -143885,6 +143921,7 @@ wilcox
 wilcoxon
 wild
 wilda
+wildberries
 wildcard
 wildcards
 wildcat
@@ -144937,6 +144974,7 @@ workers
 worketh
 workfare
 workflow
+workflows
 workforce
 workforces
 workgroup
@@ -145623,6 +145661,7 @@ yanase
 yancey
 yanceyville
 yancy
+yandex
 yanez
 yang
 yangban

@@ -1138,6 +1138,7 @@ airmen
 airplane
 airplanes
 airplay
+airpods
 airport
 airports
 airs
@@ -2310,6 +2311,7 @@ anthill
 anthology
 anthony
 anthrax
+anthropic
 anthropological
 anthropologically
 anthropologist
@@ -3697,6 +3699,7 @@ autopsied
 autopsies
 autopsy
 autos
+autoswitch
 autotrophs
 autry
 autumn
@@ -3758,6 +3761,7 @@ avila
 avion
 avionics
 avis
+avito
 aviv
 aviva
 avner
@@ -5996,6 +6000,7 @@ biter
 biters
 bites
 biting
+bitrix
 bits
 bitsy
 bitte
@@ -9992,6 +9997,7 @@ changeable
 changed
 changeling
 changelings
+changelog
 changeover
 changer
 changers
@@ -10153,6 +10159,7 @@ chat
 chateau
 chateaubriand
 chatelet
+chatgpt
 chatham
 chatroom
 chats
@@ -10218,6 +10225,7 @@ chechnya
 check
 checkbook
 checkbooks
+checkbox
 checked
 checker
 checkerboard
@@ -11418,6 +11426,7 @@ cluttered
 cluttering
 clyde
 clydesdale
+cmake
 coach
 coached
 coachella
@@ -12383,6 +12392,8 @@ confidentially
 confidently
 confides
 confiding
+config
+configs
 configuration
 configurations
 configure
@@ -15240,6 +15251,7 @@ deepest
 deepika
 deeply
 deepsea
+deepseek
 deepthi
 deepti
 deepwater
@@ -16164,6 +16176,7 @@ diabolical
 diabolically
 diabolo
 diadem
+diadoc
 diaghilev
 diagnose
 diagnosed
@@ -17359,6 +17372,7 @@ donegal
 donegan
 doner
 dong
+dongle
 dongs
 donitz
 donkey
@@ -17866,6 +17880,7 @@ droop
 drooping
 droopy
 drop
+dropdown
 droplet
 droplets
 dropout
@@ -24325,6 +24340,8 @@ gist
 git
 gita
 gitano
+github
+gitlab
 gitmo
 gits
 gitta
@@ -28104,6 +28121,8 @@ hothead
 hotheaded
 hotheads
 hothouse
+hotkey
+hotkeys
 hotline
 hotly
 hotmail
@@ -29868,6 +29887,7 @@ inquisitor
 inquisitors
 inroads
 ins
+insales
 insane
 insanely
 insanity
@@ -30434,9 +30454,11 @@ ions
 iota
 iowa
 ioway
+ipad
 ipanema
 ipecac
 iphigenia
+iphone
 ippolito
 ips
 ipso
@@ -30978,6 +31000,7 @@ jaunt
 jaunty
 java
 javanese
+javascript
 javelin
 javert
 javid
@@ -32855,6 +32878,7 @@ konno
 konoha
 konrad
 konstantin
+kontur
 koo
 kook
 kookaburra
@@ -33027,6 +33051,7 @@ kts
 kuai
 kuala
 kuang
+kubernetes
 kubiak
 kublai
 kubo
@@ -35610,6 +35635,7 @@ macavity
 macaw
 macaws
 macbeth
+macbook
 macca
 maccabee
 maccabees
@@ -36564,6 +36590,7 @@ marjoram
 marjorie
 marjory
 mark
+markdown
 marked
 markedly
 markel
@@ -40548,6 +40575,7 @@ nga
 ngai
 ngaio
 ngan
+nginx
 ngo
 nguyen
 niacin
@@ -40859,6 +40887,7 @@ nodded
 nodding
 noddy
 node
+nodejs
 nodes
 nods
 nodules
@@ -41892,6 +41921,7 @@ opals
 opaque
 opel
 open
+openai
 opened
 opener
 openers
@@ -42684,6 +42714,7 @@ ozan
 ozark
 ozarks
 ozawa
+ozon
 ozone
 ozymandias
 ozzie
@@ -45207,6 +45238,8 @@ plugged
 plugger
 plugging
 plughole
+plugin
+plugins
 plugs
 plum
 plumage
@@ -45738,6 +45771,7 @@ posterity
 postern
 posters
 postgraduate
+postgres
 posthaste
 posthumous
 posthumously
@@ -45861,6 +45895,7 @@ powering
 powerless
 powerlessness
 powers
+powershell
 powhatan
 powwow
 pox
@@ -48244,6 +48279,7 @@ readjust
 readjusted
 readjusting
 readjustment
+readme
 readmitted
 readout
 readouts
@@ -51972,6 +52008,7 @@ says
 sayuri
 sayyaf
 sazerac
+sberbank
 scab
 scabbard
 scabby
@@ -52430,6 +52467,8 @@ screenplay
 screenplays
 screens
 screensaver
+screenshot
+screenshots
 screenwriter
 screenwriters
 screenwriting
@@ -56412,6 +56451,7 @@ spyglass
 spying
 spyros
 spyware
+sqlite
 squab
 squabble
 squabbles
@@ -60852,6 +60892,8 @@ tooling
 toolkit
 tools
 toolshed
+tooltip
+tooltips
 toom
 toomey
 toon
@@ -62238,6 +62280,7 @@ typecast
 typed
 typeface
 types
+typescript
 typesetter
 typesetting
 typewriter
@@ -65152,8 +65195,11 @@ webcam
 webcams
 webcast
 weber
+webhook
+webhooks
 webley
 webmaster
+webpack
 webpage
 webs
 website
@@ -65402,6 +65448,7 @@ whatever
 whatevs
 whatley
 whatnot
+whatsapp
 whatshername
 whatshisname
 whatsit
@@ -65745,6 +65792,7 @@ wilco
 wilcock
 wilcox
 wild
+wildberries
 wildcard
 wildcat
 wildcats
@@ -66230,6 +66278,8 @@ workday
 worked
 worker
 workers
+workflow
+workflows
 workforce
 workhorse
 workhouse
@@ -66573,6 +66623,7 @@ yana
 yanagisawa
 yancey
 yancy
+yandex
 yang
 yangban
 yangtze

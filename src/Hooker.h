@@ -95,7 +95,7 @@ private: inline static HookerKeyboard hookerKeyb;
 	static void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime) {
 		KeyHold::current = 0;   // другое окно: исправлять придержанное нельзя,
 		KeyHold::caretMoves++; // а печатающееся исправление ушло бы туда
-		KeyHold::ResetWord();  // и слово там начинается заново
+		KeyHold::ForegroundIn(); // обычно слово заново, но 1 свежая буква <= 150 мс может быть в Listary (GitHub #3)
 		Worker()->PostMsg(Message_ChangeForeg{ hwnd });
 		RemoteDesktop::inFront = IsRemoteWindow(hwnd);
 		if (RemoteDesktop::inFront)

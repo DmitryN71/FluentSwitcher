@@ -57,10 +57,9 @@ inline bool HasSelection(IUIAutomationElement* el, const std::wstring& typed = {
 	if (SUCCEEDED(el->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&tp))) && tp) {
 		if (SUCCEEDED(tp->GetSelection(&sel)) && sel && SUCCEEDED(sel->get_Length(&n)) && n >= 1 &&
 			SUCCEEDED(sel->GetElement(0, &range)) && range) {
-			int cmp = 0;
-			if (SUCCEEDED(range->CompareEndpoints(TextPatternRangeEndpoint_Start, range, TextPatternRangeEndpoint_End, &cmp)) &&
-				cmp != 0)
-				return true;
+			// В Windows 10 conhost.exe (UiaTextRangeBase::CompareEndpoints) для пустого курсора возвращает cmp = -1,
+			// хотя выделения нет (GitHub #4); GetText(1) там же честно отдаёт пустую строку, а в реальном выделении
+			// всегда есть хотя бы один символ.
 			CComBSTR s;
 			if (SUCCEEDED(range->GetText(1, &s)) && s && s.Length() > 0) return true;
 		}

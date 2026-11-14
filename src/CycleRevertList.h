@@ -33,6 +33,13 @@ public:
 		ClearGenerated();
 	}
 	bool HasAnySymbol() const { return !m_symbolList.empty(); }
+	// Одно только что набранное нажатие-буква без пробелов вокруг: при всплытии окна быстрого поиска (Listary, GitHub #3)
+	// смена активного окна не должна терять эту первую букву.
+	bool SingleFreshLetter(std::chrono::milliseconds maxAge) const {
+		return m_symbolList.size() == 1 &&
+			Utils::is_in(m_symbolList[0].key.type, KEYTYPE_LETTER, KEYTYPE_LETTER_OR_CUSTOM) &&
+			lastadd.DeltToNow() <= maxAge;
+	}
 	void Clear() {
 		if (!m_symbolList.empty()) {
 			LOG_ANY(L"ClearsKeys {}", m_symbolList.size());
@@ -327,19 +334,34 @@ public: struct TailWord {
 };
 // Слова с конца набранного, через пробелы (по одному между словами): [0] - последнее (перед пробелом в самом конце, если
 // afterSpace), дальше - слова перед ним; не больше max. Останавливается на исправленном слове (отметка SetSeparateLast
-// на пробеле после него или в нём): оно уже в нужной раскладке - тогда fixedBefore.
-public: std::vector<TailWord> TailWords(bool afterSpace, size_t max, bool* fixedBefore = nullptr) const {
+// на пробеле после него или в нём): оно уже в нужной раскладке - тогда fixedBefore и его границы в fixedWord.
+public: std::vector<TailWord> TailWords(bool afterSpace, size_t max, bool* fixedBefore = nullptr,
+                                        TailWord* fixedWord = nullptr) const {
 	std::vector<TailWord> words;
 	if (fixedBefore) *fixedBefore = false;
+	if (fixedWord) *fixedWord = {};
 	int i = (int)m_symbolList.size() - 1;
 	if (afterSpace) {
 		if (i < 0 || m_symbolList[i].key.type != KEYTYPE_SPACE) return words;
 		i--;
 	}
+	auto isSep = [&](int k) {
+		const auto& key = m_symbolList[k].key;
+		if (key.type != KEYTYPE_SPACE) return false;
+		// "!" (Shift+1) одинаков в раскладках и помечен KEYTYPE_SPACE, чтобы LastWordKeys не стирал его зря;
+		// в словах перед проверяемым ("Done! И потому", "Oops! Я думал") это конец предложения, а не пробел.
+		return words.empty() || !(key.vk_code == '1' && key.is_shift);
+	};
+	auto makeWord = [&](int begin, int end) {
+		TailWord word{ (size_t)begin, (size_t)end, m_symbolList[begin].lay };
+		for (int k = begin; k < end; k++)
+			if (m_symbolList[k].lay != word.lay) word.lay = 0;
+		return word;
+	};
 	while (i >= 0 && words.size() < max) {
 		const int end = i + 1;
 		bool marked = false;
-		while (i >= 0 && m_symbolList[i].key.type != KEYTYPE_SPACE) {
+		while (i >= 0 && !isSep(i)) {
 			marked = marked || m_symbolList[i].is_last_revert;
 			i--;
 		}
@@ -347,16 +369,19 @@ public: std::vector<TailWord> TailWords(bool afterSpace, size_t max, bool* fixed
 		if (begin == end) break; // два пробела подряд или начало набранного
 		if (!words.empty() && marked) {
 			if (fixedBefore) *fixedBefore = true;
+			if (fixedWord) *fixedWord = makeWord(begin, end);
 			break;
 		}
-		TailWord word{ (size_t)begin, (size_t)end, m_symbolList[begin].lay };
-		for (int k = begin; k < end; k++)
-			if (m_symbolList[k].lay != word.lay) word.lay = 0;
-		words.push_back(word);
+		words.push_back(makeWord(begin, end));
 		if (i < 0) break;
 		if (m_symbolList[i].key.vk_code != VK_SPACE) break; // Tab - другое поле или ячейка
 		if (m_symbolList[i].is_last_revert) { // пробел после слова перед ним: то исправляли
 			if (fixedBefore) *fixedBefore = true;
+			if (fixedWord) {
+				int k = i - 1;
+				while (k >= 0 && !isSep(k)) k--;
+				if (k + 1 < i) *fixedWord = makeWord(k + 1, i);
+			}
 			break;
 		}
 		i--;
@@ -364,6 +389,7 @@ public: std::vector<TailWord> TailWords(bool afterSpace, size_t max, bool* fixed
 	return words;
 }
 public: const TKeyBaseInfo& KeyAt(size_t i) const { return m_symbolList[i].key; }
+public: HKL LayAt(size_t i) const { return m_symbolList[i].lay; }
 // Shift клавиш с begin - как у перепечатанных keys (ДВе ЗАглавные исправлены при переводе раскладки): буфер - как на
 // экране. Набранный Shift (typedShift) остаётся: перевод обратно вернёт слово, как его набрали ("PCs" - "Зсы" - "PCs").
 public: void SetShiftFrom(size_t begin, const TKeyRevert& keys) {

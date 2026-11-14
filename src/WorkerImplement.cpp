@@ -30,6 +30,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         ~Release() { KeyHold::RequestRelease(id); }
     };
     if (keyData.held_end) {
+        m_cleanSingleKey = false;
         // Хук придержал Enter / Tab после слова (и Shift+Enter, Ctrl+Enter): исправить и отпустить. Сама клавиша придёт
         // потом, как обычный набор. Модификатор, отпущенный на время исправления (LiftHeldMods), - нажать снова до того:
         // придержанный Enter уйдёт с ним, а отпускание его пальцем придёт за ним (хук держит и его).
@@ -66,6 +67,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
         keyData.is_caps;  // сохраним последнее известное значение. Нажатие caps по идее должно нам привести сюда.
 
     if (CHotKey::IsKnownMods(vkCode)) {
+        if (CHotKey::Normalize(vkCode) != VK_SHIFT) m_cleanSingleKey = false;
         if (keyData.hold) KeyHold::RequestRelease(keyData.holdId); // не бывает (держат после буквы и пробела), но не держать зря
         return;  // не очищаем текущий буфер нажатых клавиш так как они могут быть частью наших хот-кеев
     }
@@ -108,6 +110,7 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
                 m_autoWord.moved = true;
                 m_autoWord.boundary = -1;
             }
+            m_cleanSingleKey = false;
             m_cycleList.DeleteLastSymbol();
             break;
         }
@@ -119,9 +122,13 @@ void WorkerImplement::ProcessKeyMsg(const Message_KeyType& keyData) {
             // if (keyData.is_caps) is_shift = !is_shift;
 
             m_cycleList.AddKeyToList(key, topWndInfo2.lay);
+            m_cleanSingleKey = m_cycleList.Size() == 1 &&
+                Utils::is_in(key.type, KEYTYPE_LETTER, KEYTYPE_LETTER_OR_CUSTOM) &&
+                !cur_hotkey.HasMod(VK_CONTROL) && !cur_hotkey.HasMod(VK_MENU) && !cur_hotkey.HasMod(VKE_WIN);
             break;
         }
         case KEYTYPE_COMMAND_NO_CLEAR:
+            m_cleanSingleKey = false;
             break;
         case KEYTYPE_NONE:
         case KEYTYPE_COMMAND_CLEAR: {
@@ -267,9 +274,14 @@ int StartedAfterBoundary(const std::wstring& typed) {
     return AutoSwitch::StartedAfterBoundary(before, typed, atStart);
 }
 
+// Консоль (командная строка, Windows Terminal, ConEmu, mintty): там команды и пути, а не слова.
+bool IsConsole() { return KeyHold::IsConsoleWindow(GetForegroundWindow()); }
+
 // В поле в фокусе сейчас выделен текст (подставленное продолжение в адресной строке браузера: "ЦУФЕР[ук]", "GJUJL[f]"):
-// первое нажатие Backspace сотрёт его, и чтобы стереть само набранное слово, нужен ещё один Backspace.
+// первое нажатие Backspace сотрёт его, и чтобы стереть само набранное слово, нужен ещё один Backspace. В консоли
+// встроенного автодополнения выделением нет, не спрашиваем UIA (GitHub #4).
 bool HasSelectionUia(const std::wstring& typed) {
+    if (IsConsole()) return false;
     IUIAutomation* uia = Uia();
     CComPtr<IUIAutomationElement> el;
     return uia && SUCCEEDED(uia->GetFocusedElement(&el)) && el && FieldText::HasSelection(el, typed);
@@ -284,8 +296,6 @@ std::wstring ForegroundProgram() {
     return name;
 }
 
-// Консоль (командная строка, Windows Terminal, ConEmu, mintty): там команды и пути, а не слова.
-bool IsConsole() { return KeyHold::IsConsoleWindow(GetForegroundWindow()); }
 // Консоль, где не переключаем: не из списка autoswitch_console (ConsolePrograms.h).
 bool ConsoleBlocked() {
     const HWND fg = GetForegroundWindow();
@@ -326,16 +336,21 @@ std::wstring TailText(const CycleRevertList& list, size_t begin, size_t end, HKL
 
 // Контекст слова tail[0] (AutoSwitch::ContextOf) - по слову перед ним; lay - раскладка, в которой набрано слово.
 AutoSwitch::Context ContextBefore(const CycleRevertList& list, const std::vector<CycleRevertList::TailWord>& tail,
-                                  bool fixedBefore, HKL lay) {
+                                  bool fixedBefore, const CycleRevertList::TailWord& fixedWord, HKL lay) {
     using AutoSwitch::Context;
-    if (tail.size() < 2) return fixedBefore ? Context::Same : Context::Start;
-    const auto& prev = tail[1];
-    if (prev.lay != lay) return Context::Start; // набрано в другой раскладке (сменили руками) - как с начала
-    const std::wstring text = TailText(list, prev.begin, prev.end, lay);
-    if (text.empty()) return Context::Unknown;
-    const std::wstring lang = Utils::GetNameForHKL_simple(lay);
-    return AutoSwitch::ContextOf(
-        text, lang, [&](const std::wstring& w) { return WordStart::CheckWord(w, lang); }, true);
+    auto fromWord = [&](const CycleRevertList::TailWord& prev, bool fixed) -> Context {
+        if (prev.begin >= prev.end) return fixed ? Context::Same : Context::Start;
+        if ((fixed ? list.LayAt(prev.end - 1) : prev.lay) != lay) return Context::Start; // сменили раскладку руками
+        const std::wstring text = TailText(list, prev.begin, prev.end, lay);
+        if (text.empty()) return fixed ? Context::Same : Context::Unknown;
+        if (AutoSwitch::EndsSentence(text)) return Context::Start;
+        if (prev.lay != lay) return Context::Same; // смешанная раскладка (переведён хвост после дефиса)
+        const std::wstring lang = Utils::GetNameForHKL_simple(lay);
+        return AutoSwitch::ContextOf(
+            text, lang, [&](const std::wstring& w) { return WordStart::CheckWord(w, lang); }, true);
+    };
+    if (tail.size() < 2) return fixedBefore ? fromWord(fixedWord, true) : Context::Start;
+    return fromWord(tail[1], false);
 }
 
 // Клавиша - "\" во всех включённых раскладках (буфер считает её границей слова): после неё - сокращение шаблона
@@ -353,7 +368,8 @@ bool IsBackslashKey(const TKeyBaseInfo& key) {
 // (AutoSwitch::Retro, до трёх слов, подряд); tail[0].begin - только само слово. Слово сразу после "\" - не наше: на
 // нём (и дальше назад) - стоп ("\ns ghbdtn" - не "\ты привет"; ревью 25.10.2026).
 size_t RetroBegin(const CycleRevertList& list, const std::vector<CycleRevertList::TailWord>& tail, bool fixedBefore,
-                  HKL lay, HKL other, const std::vector<std::wstring>& exceptions, size_t selfLetters = 4) {
+                  const CycleRevertList::TailWord& fixedWord, HKL lay, HKL other,
+                  const std::vector<std::wstring>& exceptions, size_t selfLetters = 4) {
     if (tail.empty()) return list.Size();
     const std::wstring lang = Utils::GetNameForHKL_simple(lay), otherLang = Utils::GetNameForHKL_simple(other);
     std::vector<AutoSwitch::RetroWord> words;
@@ -364,6 +380,8 @@ size_t RetroBegin(const CycleRevertList& list, const std::vector<CycleRevertList
         for (size_t k = word.begin; k < word.end; k++) caps = caps || list.KeyAt(k).is_caps;
         w.sameLayout = word.lay == lay && !caps && !w.typed.empty() && !w.there.empty();
         w.fixedAfter = fixedBefore && i + 1 == tail.size();
+        if (w.fixedAfter && fixedWord.begin < fixedWord.end && list.LayAt(fixedWord.end - 1) == lay)
+            w.sentenceBefore = AutoSwitch::BreaksDesignation(TailText(list, fixedWord.begin, fixedWord.end, lay));
         if (word.begin > 0 && IsBackslashKey(list.KeyAt(word.begin - 1))) w.sameLayout = false;
         words.push_back(w);
         if (!w.sameLayout) break;
@@ -566,11 +584,12 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
     auto spellEvenCaps = [&lang](const std::wstring& w) { return WordStart::CheckWordEvenCaps(w, lang); };
     // Слово перед этим - контекст коротких слов (AutoSwitch.h); слова перед ним - их переводят вместе с этим.
     bool fixedBefore = false;
-    const auto tail = m_cycleList.TailWords(afterSpace, 6, &fixedBefore);
+    CycleRevertList::TailWord fixedWord;
+    const auto tail = m_cycleList.TailWords(afterSpace, 6, &fixedBefore, &fixedWord);
     // Контекст нужен только коротким словам - и считается тогда (в нём поход в словарь за словом перед этим).
     std::optional<AutoSwitch::Context> contextCache;
     auto context = [&]() -> const AutoSwitch::Context& {
-        if (!contextCache) contextCache = ContextBefore(m_cycleList, tail, fixedBefore, lay);
+        if (!contextCache) contextCache = ContextBefore(m_cycleList, tail, fixedBefore, fixedWord, lay);
         return *contextCache;
     };
     const size_t total = m_cycleList.Size();
@@ -759,7 +778,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
             }
         }
         // Короткие слова перед ним, набранные так же ("f" перед "vj;yj"), - вместе с ним.
-        const size_t begin = RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions,
+        const size_t begin = RetroBegin(m_cycleList, tail, fixedBefore, fixedWord, lay, other, exceptions,
                                         AutoSwitch::Letters(there).core.size());
         const bool retro = !tail.empty() && begin < tail[0].begin;
         // Одно короткое слово без соседа-подтверждения ждёт: его переведёт следующее слово, если переключится.
@@ -878,7 +897,8 @@ void WorkerImplement::AutoSwitchEarly() {
     const auto exceptions = AutoSwitchExceptions();
     const auto forced = AutoSwitchForced();
     bool fixedBefore = false;
-    const auto tail = m_cycleList.TailWords(false, 6, &fixedBefore);
+    CycleRevertList::TailWord fixedWord;
+    const auto tail = m_cycleList.TailWords(false, 6, &fixedBefore, &fixedWord);
     // После щелчка или стрелок в том же окне могли дописывать середину слова: на букву позже - если только поле не
     // говорит, что перед словом пробел, начало строки или знак (Дмитрий 07.10: вернулся в окно, щёлкнул в пустое поле,
     // "Щщзы" - четыре буквы - не стало "Oops"). Поле спрашиваем, пока оно не ответит, ответ - на всё слово (и что оно не
@@ -970,7 +990,7 @@ void WorkerImplement::AutoSwitchEarly() {
         KeyHold::earlyDone = true;
         // Короткие слова перед ним, набранные так же ("f" перед "vj;y"), - вместе с ним.
         const size_t total = m_cycleList.Size(), wordBegin = tail.empty() ? total - keys.size() : tail[0].begin;
-        const size_t begin = tail.empty() ? wordBegin : RetroBegin(m_cycleList, tail, fixedBefore, lay, other, exceptions);
+        const size_t begin = tail.empty() ? wordBegin : RetroBegin(m_cycleList, tail, fixedBefore, fixedWord, lay, other, exceptions);
         const std::wstring more(1, kUnfinished);
         const std::wstring from = TailText(m_cycleList, begin, total, lay) + more;
         std::wstring retroFrom = TailText(m_cycleList, begin, wordBegin, lay);
@@ -1626,9 +1646,15 @@ void WorkerImplement::ChangeForeground(HWND hwnd) {
     DWORD procId = 0;
     DWORD threadid = GetWindowThreadProcessId(hwnd, &procId);
     if (threadid != m_dwIdThreadForeground && procId != m_dwIdProcoreground) {
-        // IFS_LOG(Utils::GetProcLowerNameByPid(procId, m_sTopProcPath, m_sTopProcName));
-        // LOG_INFO_2(L"threadid=%d, procId=%d, sname=%s", threadid, procId, m_sTopProcName.c_str());
-        ClearAllWords();
+        if (std::exchange(m_cleanSingleKey, false) && m_cycleList.SingleFreshLetter(std::chrono::milliseconds(150))) {
+            CheckCurLay();
+            if (CurLay()) m_cycleList.SetLayFrom(0, CurLay());
+            LOG_ANY(L"keep 1 fresh key across foreground change");
+        } else {
+            // IFS_LOG(Utils::GetProcLowerNameByPid(procId, m_sTopProcPath, m_sTopProcName));
+            // LOG_INFO_2(L"threadid=%d, procId=%d, sname=%s", threadid, procId, m_sTopProcName.c_str());
+            ClearAllWords();
+        }
     } else {
         LOG_ANY(L"skip clear words");
     }
@@ -1721,6 +1747,7 @@ static bool NothingSelectedInScintilla(HWND focus) {
 }
 
 void WorkerImplement::ProcessOurHotKey(Message_Hotkey&& keyData) {
+    m_cleanSingleKey = false;
     // Нажато среди придержанных: отпустить их, когда сочетание сделано (или пропущено).
     struct Release {
         unsigned id;

@@ -144,19 +144,45 @@ inline bool AllUpper(const std::wstring& s) {
 // "Возмездия": так словарь знает и имена). Короче - аббревиатура (USB, ООН), не трогаем. Было от пяти; от четырёх - в 1.5.7
 // ("PBVF" - "ЗИМА", gutasiho, 12.10): аббревиатура в своей раскладке ("NASA", "JSON") там - не слово ("ТФЫФ"), а без
 // гласных (ВДНХ) Skip и так не трогает.
+// После двух латинских букв стоит клавиша ` ~ [ { ] }, дающая третью кириллическую букву ("dc`" - "всё", "DC~" - "ВСЁ",
+// "yb[" - "них", "YB{" - "НИХ"): это третья буква слова, а не знак препинания (. , ; : ' " < >).
+inline bool TwoLettersPlusSign(const std::wstring& typed, const Part& t, const Part& a) {
+	return !t.inner && t.core.size() == 2 && a.begin == t.begin && a.core.size() == 3 && a.end > t.end &&
+		wcschr(L"`~[]{}", typed[t.end]) != nullptr;
+}
+
 inline constexpr size_t kCapsWordMin = 4;
 inline bool CapsWord(const std::wstring& typed, const std::wstring& there) {
 	const Part t = Letters(typed), a = Letters(there);
-	auto caps = [](const std::wstring& core) {
-		size_t letters = 0;
-		for (wchar_t c : core) {
-			if (c == L'-') continue;
-			if (!TwoCaps::IsUpper(c)) return false;
-			letters++;
-		}
-		return letters >= kCapsWordMin;
-	};
-	return caps(t.core) && caps(a.core);
+	size_t aLetters = 0;
+	for (wchar_t c : a.core) {
+		if (c == L'-') continue;
+		if (!TwoCaps::IsUpper(c)) return false;
+		aLetters++;
+	}
+	if (aLetters < 3) return false;
+	size_t tLetters = 0;
+	for (wchar_t c : t.core) {
+		if (!TwoCaps::IsLetter(c)) continue;
+		if (!TwoCaps::IsUpper(c)) return false;
+		tLetters++;
+	}
+	if (tLetters < 2) return false;
+	if (aLetters >= kCapsWordMin && tLetters >= kCapsWordMin && (!t.inner || OnlyHyphens(t.core))) return true;
+	if (TwoLettersPlusSign(typed, t, a)) return true;
+	// ПРОПИСНОЕ слово от 4 букв там со знаками-буквами в набранном ("<>L:TN" - "БЮДЖЕТ", "K><JDM" - "ЛЮБОВЬ",
+	// "N~GKSQ" - "ТЁПЛЫЙ"): не тег и не обёртка в скобках/кавычках ("<EH>" - "БУРЮ").
+	if (aLetters >= kCapsWordMin && typed.size() == there.size() && a.begin < a.end) {
+		const wchar_t open = typed[a.begin], close = typed[a.end - 1];
+		if ((open == L'<' && close == L'>') || (open == L'[' && close == L']') ||
+		    (open == L'{' && close == L'}') || (open == L'"' && close == L'"'))
+			return false;
+		for (size_t i = a.begin; i < a.end; i++)
+			if (there[i] != L'-' && !TwoCaps::IsLetter(typed[i]) && !wcschr(L"`~[]{};:'\",.<>", typed[i]))
+				return false;
+		return true;
+	}
+	return false;
 }
 // Первая буква - заглавная, остальные - строчные; знаки как были.
 inline std::wstring Titled(std::wstring s) {
@@ -522,7 +548,9 @@ inline const char* Skip(const std::wstring& typed, const std::wstring& there, si
 		if (i >= a.end && !wcschr(kTrailSigns, there[i])) return "a letter turns into a sign at the end";
 	}
 	// Буквы там добавились только из знаков на конце набранного: это точка или запятая после слова, а не буква.
-	if (!t.inner && !t.core.empty() && a.begin >= t.begin && a.end > t.end && t.core.size() < 3)
+	// Но ` ~ [ { ] } после двух букв ("dc`" - "всё", "DC~" - "ВСЁ", "yb[" - "них") - третья буква слова.
+	if (!t.inner && !t.core.empty() && a.begin >= t.begin && a.end > t.end && t.core.size() < 3 &&
+	    !TwoLettersPlusSign(typed, t, a))
 		return "a short word with a sign after it";
 	if (Excepted(typed, there, exceptions)) return "exception";
 	return nullptr;
@@ -946,7 +974,12 @@ inline const char* DecideWhy(const std::wstring& typed, const std::wstring& ther
 	// Знак в начале, который там буква (",elm" - "будь", "<jktt" - "Более"): так слова не начинаются - не слово (хотя
 	// "elm" без запятой - слово) и не опечатка.
 	const bool signFirst = a.begin < t.begin;
-	if (!innerSign && !signFirst && !(t.core.size() <= 1 && a.core.size() > t.core.size())) {
+	// Две латинские буквы и ` ~ [ { ] } на конце ("dc`" - "всё", "DC~" - "ВСЁ", "yt`" - "неё", "yb[" - "них"):
+	// английский словарь знает двухбуквенные сокращения (dc, nt, vt), но со знаком-буквой на конце это не слово, кроме
+	// частых ("to`" в `go to`, "TO~", "if[").
+	const bool untrustedTwoBeforeLetter =
+		TwoLettersPlusSign(typed, t, a) && !shortTrusted && !ShortWords::Frequent(Lower(t.core), L"en");
+	if (!innerSign && !signFirst && !(t.core.size() <= 1 && a.core.size() > t.core.size()) && !untrustedTwoBeforeLetter) {
 		const auto asTyped = spellTyped(t.core);
 		if (asTyped == SpellCheck::Result::Unknown) return "no dictionary of the typed language";
 		if (asTyped == SpellCheck::Result::Word && !(OnlyHyphens(t.core) && !shortTrusted && ShortParts(t.core)))
@@ -1492,7 +1525,7 @@ inline Short ShortWord(const std::wstring& typed, const std::wstring& there, con
 	}
 	// Буква там - из клавиши после набранных букв, и это не знак после слова ("to`" - "ещё", но "it." - не "шею"): набрано
 	// не то слово, какое видно ("to").
-	const bool letterAfter = a.end > t.end && typed.find_first_not_of(L".,;:!?'\")", t.end) < a.end;
+	const bool letterAfter = a.end > t.end && typed.find_first_not_of(L".,;:!?'\")<>", t.end) < a.end;
 	if (!ShortWords::Frequent(al, otherLang) || (!letterAfter && Weight(tl, t.core, typedLang, spellTyped) != 0))
 		return Short::No;
 	if (sign) return Short::Now;
@@ -1528,10 +1561,30 @@ inline bool Retro(const std::wstring& typed, const std::wstring& there, const st
 // ближнего: что о каждом известно. Сколько перевести (подряд, с ближнего). selfLetters - длина самого переключаемого
 // слова там: для одной буквы ("tot b" - "еще и") ближайший сосед должен быть словом от двух букв, а не второй одиночной
 // буквой ("a b c") или тире ("b - c").
+// Слово кончает предложение (. ! ? …, в том числе перед закрывающей кавычкой или скобкой: "InSales?").
+inline bool EndsSentence(const std::wstring& s) {
+	const size_t last = s.find_last_not_of(L" \t\"'»”)›]}");
+	return last != std::wstring::npos && wcschr(L".!?…", s[last]) != nullptr;
+}
+
+// Знак в конце предыдущего слова (. ! ? … , ; : /), разрывающий связку "plan B" / "USB C" ("InSales? Я думал.",
+// "InOut, Я думал.", "Oiops/ Я думал", "Note: В итоге"), но не перечисление одиночных литер ("options A, B или C").
+inline bool BreaksDesignation(const std::wstring& s) {
+	const size_t last = s.find_last_not_of(L" \t\"'»”)›]}");
+	if (last == std::wstring::npos) return false;
+	if (wcschr(L".!?…:/", s[last])) return true;
+	if (wcschr(L",;", s[last])) {
+		const Part p = Letters(s);
+		return !(p.core.size() == 1 && TwoCaps::IsUpper(p.core[0]));
+	}
+	return false;
+}
+
 struct RetroWord {
-	std::wstring typed, there; // как набрано и те же клавиши там
-	bool sameLayout = true;    // набрано в той же раскладке, что и переключаемое слово
-	bool fixedAfter = false;   // ... а это - последнее известное, и перед ним исправленное слово
+	std::wstring typed, there;   // как набрано и те же клавиши там
+	bool sameLayout = true;      // набрано в той же раскладке, что и переключаемое слово
+	bool fixedAfter = false;     // ... а это - последнее известное, и перед ним исправленное слово
+	bool sentenceBefore = false; // ... и его знак на конце разрывает связку "plan B" (BreaksDesignation: "InOut, Я думал.")
 };
 inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring& typedLang, const std::wstring& otherLang,
                          const std::vector<std::wstring>& exceptions, auto&& spellTyped, size_t selfLetters = 4) {
@@ -1557,10 +1610,6 @@ inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring
 	// if,kjyf[" - "GitHub в шаблонах": оставалось "d шаблонах", Дмитрий 07.10). Заглавная - обозначение ("plan B",
 	// "type C", "vitamin D"), она остаётся - кроме начала предложения: перед ней . ! ? … ("North west. B gjnjve" - "North
 	// west. И потому", Дмитрий 07.10).
-	auto endsSentence = [](const std::wstring& s) {
-		const size_t last = s.find_last_not_of(L" \t");
-		return last != std::wstring::npos && wcschr(L".!?…", s[last]) != nullptr;
-	};
 	// Английское I - всегда заглавное, это не обозначение: и после слова своего языка ("так Ш цфы" - "так I was":
 	// оставалось "так Ш was"; Дмитрий, 19.10.2026).
 	auto letterThere = [&](const RetroWord& w, bool sentenceStart) {
@@ -1588,11 +1637,11 @@ inline size_t RetroCount(const std::vector<RetroWord>& words, const std::wstring
 			if (!before.sameLayout) break;
 			const Part b = Letters(before.typed);
 			if (b.core.empty() && hasDigit(before.typed)) break;
-			if (p.core.size() == 1 && !b.core.empty() && !candidate(before) && !letterThere(w, endsSentence(before.typed)) &&
+			if (p.core.size() == 1 && !b.core.empty() && !candidate(before) && !letterThere(w, BreaksDesignation(before.typed)) &&
 			    ContextOf(before.typed, typedLang, spellTyped) == Context::Same)
 				break;
 		}
-		else if (w.fixedAfter && p.core.size() == 1 && !letterThere(w, false))
+		else if (w.fixedAfter && p.core.size() == 1 && !letterThere(w, w.sentenceBefore))
 			break;
 		count = i + 1;
 	}

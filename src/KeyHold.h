@@ -433,6 +433,7 @@ inline std::unordered_set<std::wstring> forced;
 inline std::unordered_set<std::wstring> shortKeys;
 inline ULONGLONG letterAt = 0; // когда набрана последняя буква (FocusIn)
 inline bool broken = false;    // в слове цифра, буква с AltGr, автоповтор, другая клавиша - не наш случай
+inline bool freshMod = false;  // после буквы нажимали Ctrl / Alt / Win (смена окна - Alt+Tab / Пуск, не Listary)
 // Где в слове обратная косая черта (-1 - нет): с неё - сокращение шаблона ("\рекв" в FluentClipper), путь, команда.
 // Клавиши такого слова не держим (Дмитрий, 22.10.2026: придержанную букву FluentClipper получал повтором и шаблон не
 // раскрывал); движок его не трогает (WorkerImplement::AfterBackslash). Черта - в слове, как буква: Backspace её сотрёт,
@@ -478,6 +479,7 @@ inline void ResetWord() {
 	lastLetter = 0;
 	firstKeys[0] = firstKeys[1] = 0;
 	broken = false;
+	freshMod = false;
 	backslash = -1;
 	hasDigits = false;
 	capsLock = false;
@@ -493,6 +495,13 @@ inline void ResetWord() {
 // Ctrl+Shift+R), слово и так начинает заново (Track).
 inline void FocusIn() {
 	if (word.empty() || broken || now() - letterAt > 500) ResetWord();
+}
+
+// Другое окно вышло вперёд (EVENT_SYSTEM_FOREGROUND, Hooker::WinEventProc): обычно слово там с начала. Но если только
+// что (<= 150 мс) нажали одну чистую букву без модификаторов и щелчка мыши, это окно быстрого поиска (Listary в
+// Проводнике, GitHub #3: всплывает через 8 мс после первой клавиши и забирает её себе) - первую букву оставить.
+inline void ForegroundIn() {
+	if (word.size() != 1 || broken || freshMod || lastLetter == 0 || hasDigits || now() - letterAt > 150) ResetWord();
 }
 
 // Раскладка поля - английская (i - I, fix_lone_i: решает движок, а хук не держит клавиши зря в других).
@@ -524,7 +533,10 @@ inline bool HyphenKey(UINT vk, bool shift) {
 // с ними и придерживать пробел после них). altGr - сочетание с Ctrl и Alt сразу: так набирают буквы с AltGr.
 // injected - нажатие от другой программы (AutoHotkey #Hotstring R и др.): её набор не придерживать и не переключать.
 inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = false, bool altGr = false, bool injected = false) {
-	if (CHotKey::IsKnownMods(vk)) return false; // сам Shift (Ctrl...) - не буква и не помеха
+	if (CHotKey::IsKnownMods(vk)) {
+		if (CHotKey::Normalize(vk) != VK_SHIFT) freshMod = true;
+		return false; // сам Shift (Ctrl...) - не буква и не помеха
+	}
 	if (injected) {
 		broken = true;
 		number = -1;
@@ -598,6 +610,7 @@ inline bool Track(UINT vk, bool shift, bool caps, bool command, bool repeat = fa
 	}
 	if (IsLetterKey(vk)) {
 		if (!word.empty() && HyphenKey(vk, shift)) earlyDone = false; // дефис кончил первую часть: проверить её на дефисе
+		freshMod = false;
 		word.push_back(shift);
 		keys.push_back((wchar_t)vk);
 		lastLetter = vk;

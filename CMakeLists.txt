@@ -39,7 +39,7 @@ endif()
 
 
 # Версия FluentSwitcher - одна на программу, свойства файла и окно настроек: build/.../generated/fs_version.h.
-set(FLUENTSWITCHER_VERSION 1.6.0)
+set(FLUENTSWITCHER_VERSION 1.6.1)
 # Бета: "-beta1" - в названии версии ("1.5.0-beta1": программа, файлы выпуска, метка v1.5.0-beta1 - выпуск на GitHub
 # станет предварительным), числа свойств файла - без него. Выпуск - пусто.
 set(FLUENTSWITCHER_VERSION_SUFFIX "")

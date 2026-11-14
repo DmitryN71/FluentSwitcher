@@ -39,6 +39,7 @@ class WorkerImplement {
 
     void ClearAllWords() {
         m_cycleList.Clear();
+        m_cleanSingleKey = false;
         m_autoSwitched = {}; // набранного больше нет - и отменять нечего
         m_twoCaps = {};      // (и указатель на клавишу в буфере больше не годен)
         m_autoWord.twoCapsUndone = false;
@@ -257,6 +258,7 @@ class WorkerImplement {
     }
     // Курсор переехал в том же окне (щелчок, стрелки): первое слово дальше может быть дописанной серединой.
     void CaretMoved() {
+        m_cleanSingleKey = false;
         m_autoWord.moved = true;
         m_autoWord.boundary = -1; // новое место - спросить поле заново
         // Стирание и отмены были там, откуда ушли: слово здесь новое (Дмитрий, 16.10.2026: стёр Backspace слово с пробелом в
@@ -439,5 +441,6 @@ class WorkerImplement {
     HotKeyType m_lastRevertRequest = hk_NULL;
     // std::wstring m_sSelfExeName;
     CycleRevertList m_cycleList;
+    bool m_cleanSingleKey = false; // только что набрана одна чистая буква (Listary в Проводнике, GitHub #3)
     bool m_is_last_caps = false;
 };

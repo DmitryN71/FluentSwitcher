@@ -642,12 +642,22 @@ inline bool FingerSlip(const std::wstring& typed, const std::wstring& word) {
 // Похожесть на опечатку - только такая, какую делают пальцы (FingerSlip; Дмитрий, 15.10.2026: частые слова не
 // переключались - "jlby" - один, "levf." - думаю, "afqk" - файл, "jabct" - офисе: словарь предлагал слово на одну
 // правку, но другая буква в нём - далеко от набранной). Первая буква - та же или соседняя клавиша ("dtyle" - style).
-inline bool LooksLikeTypo(const std::wstring& word, const std::vector<std::wstring>& suggestions) {
+// Без разбивки с пробелом ("dsit" -> "ds it"), имён собственных и аббревиатур для строчного ввода ("rjat" -> "Rajat",
+// "pbvs" -> "PBS", "Rjat" -> "Rajat") и редких слов вне списка частых ("gbie" -> "gibe", "djple" -> "duple").
+inline bool LooksLikeTypo(const std::wstring& word, const std::vector<std::wstring>& suggestions,
+                          const std::wstring& typedLanguage = L"en-US") {
 	if (word.size() < 4 || TwoCaps::ScriptOf(word[0]) != TwoCaps::Script::Latin) return false;
+	const bool lowerAfter0 = std::none_of(word.begin() + 1, word.end(), TwoCaps::IsUpper);
+	const bool checkCommon = WordStart::Available(typedLanguage);
 	const std::wstring w = Lower(word);
 	for (const auto& s : suggestions) {
+		if (s.empty() || !std::all_of(s.begin(), s.end(), TwoCaps::IsLetter)) continue;
+		if (!TwoCaps::IsUpper(word[0]) && TwoCaps::IsUpper(s[0])) continue;
+		if (lowerAfter0 && s.size() > 1 && std::any_of(s.begin() + 1, s.end(), TwoCaps::IsUpper)) continue;
 		const std::wstring l = Lower(s);
-		if (l.empty() || l.back() != w.back() || !OneEditApart(w, l) || !FingerSlip(w, l)) continue;
+		if (l.back() != w.back() || !OneEditApart(w, l) || !FingerSlip(w, l)) continue;
+		if (checkCommon && !WordStart::IsWord(l, typedLanguage, true)) continue;
+		if (TwoCaps::IsUpper(s[0]) && SpellCheck::CheckAnyCase(l, typedLanguage) == SpellCheck::Result::NotWord) continue;
 		if (l.front() == w.front() || (l.size() == w.size() && w.compare(1, std::wstring::npos, l, 1, std::wstring::npos) == 0))
 			return true;
 	}
@@ -967,7 +977,8 @@ inline bool KnownInOtherCase(const std::wstring& core, auto&& suggestThere) {
 // shortTrusted - словарю языка набранного можно верить в коротких словах (ShortWords::TrustDictionary): "Bp-pf" ("Из-за")
 // английский словарь принимает по частям (bp, pf - сокращения), и это не в счёт.
 inline const char* DecideWhy(const std::wstring& typed, const std::wstring& there, auto&& spellTyped,
-                             auto&& spellThere, auto&& suggestTyped, auto&& suggestThere, bool shortTrusted = true) {
+                             auto&& spellThere, auto&& suggestTyped, auto&& suggestThere, bool shortTrusted = true,
+                             const std::wstring& typedLanguage = L"en-US") {
 	const Part t = Letters(typed), a = Letters(there);
 	// Знак внутри набранного - не слово; дефис - может быть и словом ("well-known"): спросить словарь.
 	const bool innerSign = t.inner && !OnlyHyphens(t.core);
@@ -991,7 +1002,8 @@ inline const char* DecideWhy(const std::wstring& typed, const std::wstring& ther
 		if (CamelWords(a.core, spellThere)) return nullptr;
 		return TypoThere(t, a, innerSign, spellTyped, suggestTyped, suggestThere) ? nullptr : "not a word in the other layout";
 	}
-	if (!innerSign && !signFirst && LooksLikeTypo(t.core, suggestTyped(t.core))) return "looks like a typo";
+	if (!innerSign && !signFirst && a.end <= t.end && LooksLikeTypo(t.core, suggestTyped(t.core), typedLanguage))
+		return "looks like a typo";
 	return nullptr;
 }
 // Буква набранного там - знак после слова ("Руддщю" - "Hello."), а слово проверяется на этой клавише, посреди набора
@@ -1176,8 +1188,8 @@ inline bool ShortTail(const std::wstring& typed, const std::wstring& there, cons
 }
 
 inline bool Decide(const std::wstring& typed, const std::wstring& there, auto&& spellTyped, auto&& spellThere,
-                   auto&& suggestTyped, auto&& suggestThere) {
-	return DecideWhy(typed, there, spellTyped, spellThere, suggestTyped, suggestThere) == nullptr;
+                   auto&& suggestTyped, auto&& suggestThere, const std::wstring& typedLanguage = L"en-US") {
+	return DecideWhy(typed, there, spellTyped, spellThere, suggestTyped, suggestThere, true, typedLanguage) == nullptr;
 }
 
 // ----- Посреди слова (autoswitch_early) -----
@@ -1363,7 +1375,7 @@ inline bool WordBeforeHyphen(const std::wstring& typed, const std::wstring& ther
 	const char* why = Skip(typedAs, thereAs, 3, exceptions);
 	if (!why)
 		why = DecideWhy(typedAs, thereAs, spellTyped, spellThere, suggestTyped, caseSuggestThere,
-		                ShortWords::TrustDictionary(typedLanguage));
+		                ShortWords::TrustDictionary(typedLanguage), typedLanguage);
 	if (!why && OwnAbbreviationPart(head, headThere, typedLanguage, thereLanguage))
 		why = "an abbreviation of its own language before a hyphen";
 	if (!why) return !FrequentAsTyped(head, typedLanguage);

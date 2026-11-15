@@ -642,7 +642,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
             const char* why = AutoSwitch::Skip(typedAs, thereAs, 2, exceptions);
             if (!why)
                 why = AutoSwitch::DecideWhy(typedAs, thereAs, dictionary(lay), dictionary(other), suggestions(lay),
-                                            suggestions(other), ShortWords::TrustDictionary(lang));
+                                            suggestions(other), ShortWords::TrustDictionary(lang), lang);
             // Аббревиатура своего языка перед дефисом ("PHP-yt"): целиком - нет, разве что часть после дефиса (ниже).
             if (!why && AutoSwitch::OwnAbbreviationPart(typed, there, lang, otherLang))
                 why = "an abbreviation of its own language before a hyphen";
@@ -711,7 +711,7 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
                     const char* w = AutoSwitch::Skip(tyAs, thAs, allowShort ? 2 : 3, exceptions);
                     if (!w)
                         w = AutoSwitch::DecideWhy(tyAs, thAs, dictionary(lay), dictionary(other), suggestions(lay),
-                                                  suggestions(other), ShortWords::TrustDictionary(lang));
+                                                  suggestions(other), ShortWords::TrustDictionary(lang), lang);
                     if (!w) return !AutoSwitch::FrequentAsTyped(ty, lang);
                     if (strcmp(w, "not a word in the other layout") == 0 &&
                         (AutoSwitch::NotRussian(ty, th, lang, otherLang, spellEvenCaps, suggestions(lay)) ||

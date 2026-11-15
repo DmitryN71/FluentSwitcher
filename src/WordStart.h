@@ -53,11 +53,11 @@ inline std::string Key(const std::wstring& prefix) {
 	return s;
 }
 
-// Список языка ("ru-RU", "en-US" - по первым двум буквам; common - только частые слова); нет - nullptr.
-inline const List* For(const std::wstring& language, bool common = false) {
+// Список языка ("ru-RU", "en-US" - по первым двум буквам; suffix - "", "_common", "_often"); нет - nullptr.
+inline const List* ForSuffix(const std::wstring& language, const wchar_t* suffix) {
 	static std::map<std::wstring, List> lists;
 	if (language.size() < 2) return nullptr;
-	const std::wstring code = Lower(language.substr(0, 2)) + (common ? L"_common" : L"");
+	const std::wstring code = Lower(language.substr(0, 2)) + suffix;
 	auto it = lists.find(code);
 	if (it == lists.end()) {
 		List& l = lists[code];
@@ -81,6 +81,10 @@ inline const List* For(const std::wstring& language, bool common = false) {
 		it = lists.find(code);
 	}
 	return it->second.starts.empty() ? nullptr : &it->second;
+}
+
+inline const List* For(const std::wstring& language, bool common = false) {
+	return ForSuffix(language, common ? L"_common" : L"");
 }
 
 inline std::string_view Word(const List& l, uint32_t start) {
@@ -152,6 +156,7 @@ inline const impl::Combos* Combos(const std::wstring& language) {
 
 // Есть ли списки для языка (заодно - загрузить их заранее).
 inline bool Available(const std::wstring& language) {
+	(void)impl::ForSuffix(language, L"_often");
 	return impl::For(language) != nullptr && impl::For(language, true) != nullptr;
 }
 
@@ -183,6 +188,16 @@ inline size_t PrefixCount(const std::wstring& prefix, const std::wstring& langua
 // Слово целиком в списке языка (регистр не важен); common - в списке частых.
 inline bool IsWord(const std::wstring& word, const std::wstring& language, bool common = false) {
 	const impl::List* l = impl::For(language, common);
+	if (!l || word.empty()) return false;
+	const std::string key = impl::Key(word);
+	const auto it = std::lower_bound(l->starts.begin(), l->starts.end(), key,
+	                                 [l](uint32_t start, const std::string& k) { return impl::Word(*l, start) < k; });
+	return it != l->starts.end() && impl::Word(*l, *it) == key;
+}
+
+// Особо частое слово языка от четырёх букв (words_ru_often.txt, words_uk_often.txt: в субтитрах от 900 / 90 раз).
+inline bool IsOften(const std::wstring& word, const std::wstring& language) {
+	const impl::List* l = impl::ForSuffix(language, L"_often");
 	if (!l || word.empty()) return false;
 	const std::string key = impl::Key(word);
 	const auto it = std::lower_bound(l->starts.begin(), l->starts.end(), key,

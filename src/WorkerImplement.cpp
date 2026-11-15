@@ -369,7 +369,7 @@ bool IsBackslashKey(const TKeyBaseInfo& key) {
 // нём (и дальше назад) - стоп ("\ns ghbdtn" - не "\ты привет"; ревью 25.10.2026).
 size_t RetroBegin(const CycleRevertList& list, const std::vector<CycleRevertList::TailWord>& tail, bool fixedBefore,
                   const CycleRevertList::TailWord& fixedWord, HKL lay, HKL other,
-                  const std::vector<std::wstring>& exceptions, size_t selfLetters = 4) {
+                  const std::vector<std::wstring>& exceptions, size_t selfLetters = 4, bool log = true) {
     if (tail.empty()) return list.Size();
     const std::wstring lang = Utils::GetNameForHKL_simple(lay), otherLang = Utils::GetNameForHKL_simple(other);
     std::vector<AutoSwitch::RetroWord> words;
@@ -389,7 +389,7 @@ size_t RetroBegin(const CycleRevertList& list, const std::vector<CycleRevertList
     const size_t count = AutoSwitch::RetroCount(
         words, lang, otherLang, exceptions, [&](const std::wstring& w) { return WordStart::CheckWord(w, lang); },
         selfLetters);
-    if (count) LOG_ANY(L"autoswitch: and {} words before it", count);
+    if (count && log) LOG_ANY(L"autoswitch: and {} words before it", count);
     return count ? tail[count].begin : tail[0].begin;
 }
 }
@@ -643,6 +643,15 @@ bool WorkerImplement::AutoSwitchLastWord(bool afterSpace, bool atSign) {
             if (!why)
                 why = AutoSwitch::DecideWhy(typedAs, thereAs, dictionary(lay), dictionary(other), suggestions(lay),
                                             suggestions(other), ShortWords::TrustDictionary(lang), lang);
+            if (why && strcmp(why, "looks like a typo") == 0 && context() != AutoSwitch::Context::Same &&
+                (afterBoundary() || boundary != 0)) {
+                const bool partner = tail.size() >= 2 &&
+                    AutoSwitch::Letters(TailText(m_cycleList, tail[1].begin, tail[1].end, lay)).core.size() >= 2 &&
+                    RetroBegin(m_cycleList, tail, fixedBefore, fixedWord, lay, other, exceptions,
+                               AutoSwitch::Letters(thereAs).core.size(), false) < tail[0].begin;
+                if (AutoSwitch::FrequentThereNotTypo(thereAs, otherLang, context(), partner))
+                    why = nullptr;
+            }
             // Аббревиатура своего языка перед дефисом ("PHP-yt"): целиком - нет, разве что часть после дефиса (ниже).
             if (!why && AutoSwitch::OwnAbbreviationPart(typed, there, lang, otherLang))
                 why = "an abbreviation of its own language before a hyphen";

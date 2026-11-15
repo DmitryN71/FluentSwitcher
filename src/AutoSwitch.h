@@ -1494,6 +1494,21 @@ inline Context ContextOf(const std::wstring& prev, const std::wstring& lang, aut
 		: Context::Unknown;
 }
 
+// Частое слово другой раскладки ("ищет" - botn, "ищут" - boen, "штук" - iner, "идея" - bltz, "путь" - genm, "игры" -
+// buhs; форум, gutasiho, и Дмитрий, 15.11.2026) случайно оказалось на расстоянии одной опечатки от частого английского
+// слова (born, been, inner, blitz, germ, bugs): в английском тексте (Context::Same: "He was botn in 1990", "That is
+// botn") это опечатка, а в начале строки или предложения, после смены раскладки или после русских коротких слов ("yt
+// botn" - "не ищет") - русское слово. Со связанным коротким словом впереди (hasRetroPartner: 2-3 буквы, "ghj ntoe" -
+// "про тещу") достаточно обычного списка частых (words_ru_common.txt), а без него - особо частого (words_ru_often.txt,
+// от 900 вхождений), чтобы одиночные английские опечатки в редкие русские формы ("ntoe" - "тещу", "nmae" - "тьфу") не
+// трогать.
+inline bool FrequentThereNotTypo(const std::wstring& thereAs, const std::wstring& otherLanguage, Context context,
+                                 bool hasRetroPartner = false) {
+	if (context == Context::Same || otherLanguage.empty()) return false;
+	const std::wstring core = Letters(thereAs).core;
+	return WordStart::IsOften(core, otherLanguage) || (hasRetroPartner && WordStart::IsWord(core, otherLanguage, true));
+}
+
 // Знак после короткого слова, какой в английском за буквой не ставят, а в русской раскладке это вопрос или двоеточие
 // ("f&" - "а?", "x`&" - "чё?", "lf^" - "да:"), и точка "/" после двух-трёх букв там ("lf/" - "да."): сам по себе знак,
 // что набрано не в той раскладке. Один, сразу после букв обоих прочтений ("&&" - уже C++).

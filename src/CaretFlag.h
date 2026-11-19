@@ -165,6 +165,18 @@ private:
 		// Chromium (браузеры, eM Client, Electron) редактор (contenteditable) описывает так же, а всё, где печатать
 		// нельзя, - "только для чтения" (страница, текст): группа без этого - поле; каретка внутри неё проверяется ниже.
 		if (editable == 2) editable = req.system || Chromium(el) ? 1 : 0;
+		// Поиск со списком под ним (aria-activedescendant): страница называет фокусом подсвеченный пункт списка, а
+		// печатают в поле над ним (поиск разговоров в Antigravity - Дмитрий 19.11.2026: флажка не было, появлялся на миг,
+		// пока список перерисовывался). Поле - то, где каретка, и оно управляет списком с этим пунктом (ComboOfItem).
+		bool listBox = false;
+		if (editable == 0 && el && res.type == UIA_ListItemControlTypeId && !req.system && Chromium(el)) {
+			CComPtr<IUIAutomationElement> box;
+			if (ComboOfItem(uia, el, req.focus, box)) {
+				el = box;
+				editable = 1;
+				listBox = true;
+			}
+		}
 		// Firefox без специальных возможностей ("Запретить службам специальных возможностей доступ к браузеру",
 		// accessibility.force_disabled - бывает в "усиленных" настройках): про страницу он ничего не говорит, в фокусе
 		// для UI Automation - само окно. Тогда, как до 1.4.2, - его системная каретка, без проверки поля.
@@ -182,7 +194,7 @@ private:
 			how = "caret";
 		}
 		else if (Msaa(req.focus, rc)) {
-			how = "msaa";
+			how = listBox ? "msaa, the box of the list" : "msaa";
 		}
 		else if (UiaCaret(el, rc, true, uia)) {
 			how = "uia";
@@ -234,6 +246,42 @@ private:
 	static bool Chromium(IUIAutomationElement* el) {
 		CComBSTR fw;
 		return el && SUCCEEDED(el->get_CurrentFrameworkId(&fw)) && fw && wcscmp(fw, L"Chrome") == 0;
+	}
+
+	// Пункт списка в фокусе (item) - а печатают в поле над списком: поле под кареткой MSAA, поле ввода или поле со
+	// списком (ComboBox), не "только для чтения", того же процесса, и управляет (aria-controls) списком, в котором этот
+	// пункт. Без последнего каретка могла бы быть старой - Chromium отдаёт через MSAA и прежнее место.
+	static bool ComboOfItem(IUIAutomation* uia, IUIAutomationElement* item, HWND focus, CComPtr<IUIAutomationElement>& box) {
+		RECT caret{}, itemRc{};
+		int itemPid = 0;
+		if (!uia || !Msaa(focus, caret) || FAILED(item->get_CurrentBoundingRectangle(&itemRc)) ||
+			FAILED(item->get_CurrentProcessId(&itemPid)))
+			return false;
+		CComPtr<IUIAutomationElement> at;
+		if (FAILED(uia->ElementFromPoint({ caret.left, (caret.top + caret.bottom) / 2 }, &at)) || !at) return false;
+		CONTROLTYPEID ct = 0;
+		int pid = 0;
+		if (FAILED(at->get_CurrentControlType(&ct)) || (ct != UIA_EditControlTypeId && ct != UIA_ComboBoxControlTypeId) ||
+			FAILED(at->get_CurrentProcessId(&pid)) || pid != itemPid)
+			return false;
+		CComPtr<IUIAutomationValuePattern> value;
+		BOOL readOnly = TRUE;
+		if (FAILED(at->GetCurrentPatternAs(UIA_ValuePatternId, IID_PPV_ARGS(&value))) || !value ||
+			FAILED(value->get_CurrentIsReadOnly(&readOnly)) || readOnly)
+			return false;
+		CComPtr<IUIAutomationElementArray> controls;
+		int n = 0;
+		if (FAILED(at->get_CurrentControllerFor(&controls)) || !controls || FAILED(controls->get_Length(&n))) return false;
+		for (int i = 0; i < n && i < 8; i++) {
+			CComPtr<IUIAutomationElement> list;
+			RECT r{};
+			if (SUCCEEDED(controls->GetElement(i, &list)) && list && SUCCEEDED(list->get_CurrentBoundingRectangle(&r)) &&
+				itemRc.left >= r.left - 2 && itemRc.right <= r.right + 2 && itemRc.top >= r.top - 2 && itemRc.bottom <= r.bottom + 2) {
+				box = at;
+				return true;
+			}
+		}
+		return false;
 	}
 
 	static bool Msaa(HWND focus, RECT& rc) {

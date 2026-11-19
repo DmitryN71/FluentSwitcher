@@ -1,5 +1,11 @@
 ﻿
 
+CMainWorker::CMainWorker() = default;
+
+CMainWorker::~CMainWorker() {
+	StopAndWait();
+}
+
 void CMainWorker::WorkerInt()
 {
 	IFW_LOG(SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL));

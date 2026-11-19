@@ -61,9 +61,10 @@ public:
 
 	void Init();
 
-	~CMainWorker() {
-		StopAndWait();
-	}
+	// Конструктор и деструктор - в CMainWorker.cpp: там WorkerImplement уже полный тип (unique_ptr удаляет его; MSVC
+	// 14.52 требует полный тип уже в заголовке, если они здесь).
+	CMainWorker();
+	~CMainWorker();
 
 
 	void PostMsg(auto&& msg, int delay = 0) {

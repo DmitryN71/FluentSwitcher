@@ -163,7 +163,7 @@ public:
 	static TKeyCode UnifyBreak(TKeyCode key) { return key == VK_CANCEL ? VK_PAUSE : key; }
 	bool Has_left_right() const { return std::any_of(begin(), end(), [](auto v) {return v != Normalize(v); }); }
 	bool IsDouble() const { return m_double_press; }
-	auto& SetDouble(bool val = true) { m_double_press = val; return *this; }
+	CHotKey& SetDouble(bool val = true) { m_double_press = val; return *this; }
 	bool IsEnabled() const { return !m_disabled; }
 	void SetEnabled(bool val = true) { m_disabled = !val; }
 	static bool IsKnownMods(TKeyCode key) { return Utils::is_in(Normalize(key), VK_SHIFT, VK_CONTROL, VK_MENU, VKE_WIN); }

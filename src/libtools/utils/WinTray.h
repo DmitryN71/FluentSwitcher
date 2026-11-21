@@ -258,6 +258,12 @@ public:
 	void RetryIcon() {
 		if (m_iconPending && nid.hIcon) SetIcon(nid.hIcon);
 	}
+	// Подсказка при наведении на значок (в Windows 10/11 - и в несколько строк, через \n).
+	void SetTip(const std::wstring& tip) {
+		if (tip == nid.szTip) return;
+		wcsncpy_s(nid.szTip, tip.c_str(), _TRUNCATE);
+		if (nid.hIcon && !m_iconPending) Shell_NotifyIcon(NIM_MODIFY, &nid);
+	}
 	// Уведомление у значка (в Windows 10/11 - всплывающее сообщение и Центр уведомлений). Значка нет - нет и его.
 	bool ShowBalloon(const std::wstring& title, const std::wstring& text) {
 		NOTIFYICONDATA balloon = nid;

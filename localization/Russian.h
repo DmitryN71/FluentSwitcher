@@ -1,7 +1,7 @@
 #include <utility>
 #include <array>
 
-constexpr std::array<std::pair<const char*, const char*>, 116> _Localization_Russian = {{
+constexpr std::array<std::pair<const char*, const char*>, 118> _Localization_Russian = {{
     {"More info:", "Подробнее:"},
     {"❤ Support ❤", "❤ Поддержать ❤"},
     {"The program develops only thanks to your support! 🤝", "Приложение развивается только благодаря вашей поддержке! 🤝"},
@@ -111,6 +111,8 @@ constexpr std::array<std::pair<const char*, const char*>, 116> _Localization_Rus
     {"Auto switch is off", "Автопереключение выключено"},
     {"Enable/Disable auto switch", "Вкл./выкл. автопереключение"},
     {"Click to update", "Нажмите, чтобы обновить"},
+    {"Update to {}", "Обновить до {}"},
+    {"Version {} is out", "Вышла версия {}"},
     {"Updating FluentSwitcher to {}", "Обновляю FluentSwitcher до {}"},
     {"Could not update FluentSwitcher", "Не удалось обновить FluentSwitcher"},
     {"FluentSwitcher is updated to {}", "FluentSwitcher обновлён до {}"},

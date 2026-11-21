@@ -3024,8 +3024,13 @@ void SettingsFrame::CheckUpdateNow(FluentButton* button)
     const std::wstring folder = m_folder.ToStdWstring();
     Update::State state = Update::Load(folder);
     Update::Apply(state, result, true);
-    if (Update::NewerKnown(state))
-        state.notified = state.latest; // seen here: the engine does not tell about it by the clock again
+    if (Update::NewerKnown(state)) {
+        // Seen here: the engine does not tell about it by the clock again - only reminds in 3 days (Update::RemindDue);
+        // its note right after this check counts as the first one.
+        if (state.notified != state.latest) state.notifiedTimes = 0;
+        state.notified = state.latest;
+        state.notifiedAt = Update::NowMs();
+    }
     if (!Update::Save(folder, state))
         SetStatus(T("Не удалось записать update.json в папку приложения"), true);
     // The answer also comes as a note by the flag, as in FluentClipper.

@@ -286,9 +286,9 @@ void StartGui() {
 	// Уведомление у флага о том, что нашла проверка. Само по себе - только о новой версии, один раз на версию
 	// (щелчок открывает её страницу); после "Проверить сейчас" в окне настроек - всегда, с любым ответом, чтобы
 	// было видно, что нажатие что-то сделало (как у FluentClipper).
-	auto notifyUpdate = [&](Update::State& state, bool manual) {
+	auto notifyUpdate = [&](Update::State& state, bool manual, bool reminder = false) {
 		if (Update::NewerKnown(state)) {
-			if (!manual && state.notified == state.latest) return;
+			if (!manual && !reminder && state.notified == state.latest) return;
 			const auto title = StrUtils::Convert(std::vformat(LOC("FluentSwitcher {} is out"), std::make_format_args(state.latest)));
 			// Щелчок - обновить (UpdateInstall.h); выпуск без нужного файла или его суммы - страница выпуска, как раньше.
 			const bool installable = !(Update::Installed(folder) ? state.setup.url : state.zip.url).empty();
@@ -296,9 +296,9 @@ void StartGui() {
 			const bool shown = installable
 				? trayIcon.Notify(title, text, [] { PostMessageW(g_guiHandle, WM_UpdateStart, 0, 0); })
 				: trayIcon.Notify(title, text, [page = state.page] { OpenAsUser(page); });
-			LOG_ANY("update: note about {} shown {}", LogPlain(state.latest), shown);
+			LOG_ANY("update: {} about {} shown {}", reminder ? "reminder" : "note", LogPlain(state.latest), shown);
 			if (shown)
-				state.notified = state.latest;
+				Update::Notified(state, Update::NowMs());
 		}
 		else if (manual) {
 			const std::string version = FS_VERSION;
@@ -308,6 +308,33 @@ void StartGui() {
 			LOG_ANY("update: note after the check (failed {}) shown {}", state.failed, shown);
 		}
 	};
+	// Новая версия - строка "Обновить до …" в меню у часов и в подсказке значка, пока не обновились.
+	auto showUpdateHint = [&](const Update::State& state) {
+		if (!Update::NewerKnown(state)) return trayIcon.SetUpdate({}, nullptr);
+		const bool installable = !(Update::Installed(folder) ? state.setup.url : state.zip.url).empty();
+		trayIcon.SetUpdate(state.latest, installable ? std::function<void()>([] { PostMessageW(g_guiHandle, WM_UpdateStart, 0, 0); })
+		                                             : std::function<void()>([page = state.page] { OpenAsUser(page); }));
+	};
+	showUpdateHint(Update::Load(folder));
+	// Напоминание (Update::RemindDue): смотрим раз в 10 минут - и update.json мог обновить "Проверить сейчас" в окне
+	// настроек. Только когда за компьютером: в последние 2 минуты была клавиатура или мышь, - иначе уведомление опять
+	// уйдёт в Центр уведомлений без хозяина.
+	long long nextRemind = 0;
+	timer.CycleTimer([&] {
+		const long long now = Update::NowMs();
+		if (now < nextRemind || updates.installing) return;
+		nextRemind = now + 10LL * 60 * 1000;
+		auto state = Update::Load(folder);
+		showUpdateHint(state);
+		if (!conf_get_unsafe()->check_updates || !Update::RemindDue(state, now)) return;
+		LASTINPUTINFO input{ sizeof(input) };
+		if (GetLastInputInfo(&input) && GetTickCount() - input.dwTime > 2 * 60 * 1000) {
+			nextRemind = now + 60 * 1000; // вернётся - напомним в ту же минуту
+			return;
+		}
+		notifyUpdate(state, false, true);
+		Update::Save(folder, state);
+	}, 60 * 1000);
 
 	timer.CustomHandler(
 		[&](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -346,6 +373,7 @@ void StartGui() {
 				Update::Apply(state, *result, false);
 				notifyUpdate(state, false);
 				Update::Save(folder, state);
+				showUpdateHint(state);
 				return 0;
 			}
 
@@ -531,6 +559,7 @@ void StartGui() {
 				auto state = Update::Load(folder);
 				notifyUpdate(state, true);
 				Update::Save(folder, state);
+				showUpdateHint(state);
 				// "Проверить сейчас" - и правила: свой файл мог появиться или пропасть, скачанные - забрать заново.
 				if (!rules.busy) {
 					loadRules();

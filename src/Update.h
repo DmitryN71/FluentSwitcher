@@ -190,6 +190,8 @@ struct State {
 	std::wstring page;       // её страница
 	bool failed = false;     // "Проверить сейчас" не дозвалась GitHub
 	std::string notified;    // о какой версии уже было уведомление у часов
+	long long notifiedAt = 0; // когда было последнее из них, мс от 1970
+	int notifiedTimes = 0;   // сколько их было об этой версии (с напоминаниями, RemindDue)
 	Asset setup, zip;        // её установщик и архив
 };
 
@@ -210,6 +212,9 @@ inline State Load(const std::wstring& folder) {
 		s.page.assign(page.begin(), page.end()); // адрес - ASCII
 		s.failed = json.value("failed", false);
 		s.notified = json.value("notified", std::string());
+		s.notifiedAt = json.value("notified_at", 0LL);
+		// update.json до 1.6.5 этих полей не знал: уведомление уже было - одно.
+		s.notifiedTimes = json.value("notified_times", s.notified.empty() ? 0 : 1);
 		s.setup = { json.value("setup_url", std::string()), json.value("setup_sha256", std::string()) };
 		s.zip = { json.value("zip_url", std::string()), json.value("zip_sha256", std::string()) };
 	}
@@ -228,6 +233,8 @@ inline bool Save(const std::wstring& folder, const State& s) {
 		{ "page", page },
 		{ "failed", s.failed },
 		{ "notified", s.notified },
+		{ "notified_at", s.notifiedAt },
+		{ "notified_times", s.notifiedTimes },
 		{ "setup_url", s.setup.url },
 		{ "setup_sha256", s.setup.sha256 },
 		{ "zip_url", s.zip.url },
@@ -257,5 +264,20 @@ inline void Apply(State& s, const Result& r, bool manual) {
 }
 
 inline bool NewerKnown(const State& s) { return !s.latest.empty() && IsNewer(s.latest, FS_VERSION); }
+
+// Уведомление о новой версии - одно, а Windows прячет его в Центр уведомлений, и его легко смахнуть вместе с другими
+// (Дмитрий, 21.11.2026: 1.6.4 вышла, дома так и стояла 1.6.3). Не обновились - напомнить: через 3 дня после прошлого,
+// всего не больше 3 уведомлений на версию.
+inline const long long kRemindMs = 3 * kDayMs;
+inline const int kNotifyTimes = 3;
+inline bool RemindDue(const State& s, long long now) {
+	return NewerKnown(s) && s.notified == s.latest && s.notifiedTimes < kNotifyTimes && now - s.notifiedAt >= kRemindMs;
+}
+// Уведомление о версии latest показано (первое или напоминание).
+inline void Notified(State& s, long long now) {
+	s.notifiedTimes = s.notified == s.latest ? s.notifiedTimes + 1 : 1;
+	s.notified = s.latest;
+	s.notifiedAt = now;
+}
 
 }

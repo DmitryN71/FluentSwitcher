@@ -105,6 +105,12 @@ public:
 			// и выбранная раскладка доставалась не тому окну - пункты ничего не делали.
 
 			// menu
+			// Вышла новая версия - первой строкой "Обновить до …", пока не обновились (уведомление о ней легко смахнуть).
+			if (!m_newer.empty() && m_updateAction) {
+				res.push_back({ .name = std::vformat(LOC("Update to {}"), std::make_format_args(m_newer)),
+				                .callback = m_updateAction, .icon = 0xE896 }); // стрелка вниз - загрузка
+				res.push_back({ .is_separator = true });
+			}
 			// Значки - знаки шрифта Segoe Fluent Icons: шестерёнка, клавиатура, выход.
 			res.push_back({ .name = LOC("Settings"), .callback = []() { show_main_wind(); }, .icon = 0xE713 });
 			res.push_back({ .name = LOC("Enabled"), .callback = []() { try_toggle_enable(); }, .is_checkbox = true,
@@ -142,6 +148,21 @@ public:
 	void Retry() {
 		if (!Hidden()) tray.RetryIcon();
 	}
+	// Новая версия, о которой знает update.json (пусто - нет): строка в меню и подсказка у значка; action - что
+	// делает строка меню (обновить или открыть страницу выпуска, gui2/main.cpp).
+	void SetUpdate(const std::string& newer, std::function<void()> action) {
+		m_newer = newer;
+		m_updateAction = std::move(action);
+		std::wstring tip = L"FluentSwitcher ";
+		for (const char* p = details::SW_VERSION; *p; ++p) tip += (wchar_t)*p;
+		if (!newer.empty())
+			tip += L"\n" + StrUtils::Convert(std::vformat(LOC("Version {} is out"), std::make_format_args(m_newer)));
+		tray.SetTip(tip);
+	}
+private:
+	std::string m_newer;
+	std::function<void()> m_updateAction;
+public:
 	void Update(HKL lay = 0) {
 
 		if (lay != 0) {

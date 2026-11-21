@@ -108,6 +108,8 @@
   "Auto switch is off": "Автопереключение выключено",
   "Enable/Disable auto switch": "Вкл./выкл. автопереключение",
   "Click to update": "Нажмите, чтобы обновить",
+  "Update to {}": "Обновить до {}",
+  "Version {} is out": "Вышла версия {}",
   "Updating FluentSwitcher to {}": "Обновляю FluentSwitcher до {}",
   "Could not update FluentSwitcher": "Не удалось обновить FluentSwitcher",
   "FluentSwitcher is updated to {}": "FluentSwitcher обновлён до {}",

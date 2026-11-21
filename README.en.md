@@ -89,7 +89,9 @@ free and open source under GPL-3.0.
   The settings window opens where and as large as it was closed. The search of the settings (Ctrl+F) finds a
   setting by the words of its title, description, list items and the hotkeys set, also typed in the other layout.
 - **One-click update**: once a day the app asks GitHub for the number of the latest version and sends nothing else;
-  it tells about a new version with a notification from the tray. A click on it (or "Update" in "About") downloads
+  it tells about a new version with a notification from the tray, a line in the tray icon's tooltip and an "Update to ..."
+  item at the top of the tray menu (if you miss the notification, it reminds up to twice more 3 days apart while you are at the PC).
+  A click on the notification, the menu item or "Update" in "About" downloads
   the new version from GitHub, checks its SHA-256 checksum and installs it without questions - with the installer
   or, for the version without installation (zip), by replacing the files in its folder; FluentSwitcher restarts by itself, and the
   downloaded file is deleted. The check is turned off in "About", where "Check now" is too. There is also "Update

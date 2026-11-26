@@ -168,15 +168,20 @@ void StartGui() {
 	};
 
 	// Буквы вместо флага - цвета текста панели задач: сменилась её тема (светлая / тёмная) - перерисовать значок.
-	// Окна движка служебные (HWND_MESSAGE), WM_SETTINGCHANGE до них не доходит - смотрим раз в 2 с.
-	timer.CycleTimer([&, dark = FluentMenu::TaskbarDark()]() mutable {
-		mouseFlag.Watch(); // и указатели Windows: сменили схему, размер, цвет
+	// Смену темы, курсоров и DPI ловит скрытое top-level окно WinTray::listener по WM_SETTINGCHANGE / WM_DISPLAYCHANGE
+	// (без 2-секундного опроса реестра в фоне; форум, tehkonst, 24.11.2026).
+	bool taskbarDark = FluentMenu::TaskbarDark();
+	trayIcon.TrayHandler().OnSettingChange([&] {
+		mouseFlag.WatchSettings();
+		const bool now = FluentMenu::TaskbarDark();
+		if (now == taskbarDark) return;
+		taskbarDark = now;
+		if (LetterIcons::Is(conf_get_unsafe()->flagsSet)) trayIcon.Update();
+	});
+	timer.CycleTimer([&] {
+		mouseFlag.WatchCursor(); // если указатель подменён - проверить в памяти, не вернула ли его чужая программа
 		capsChanged(false);
 		trayIcon.Retry(); // и значок, который Windows не приняла (Проводник был занят)
-		const bool now = FluentMenu::TaskbarDark();
-		if (now == dark) return;
-		dark = now;
-		if (LetterIcons::Is(conf_get_unsafe()->flagsSet)) trayIcon.Update();
 	}, 2000);
 
 	// Проверка обновлений: раз в минуту смотрим, не пора ли. Пора - через день после прошлого ответа GitHub

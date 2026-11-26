@@ -26,7 +26,7 @@ public:
 		s_instance = this;
 		RestoreLeftover();
 		CreateSessionWindow();
-		m_signature = Signature();
+		if (conf_get_unsafe()->mouse_flag) m_signature = Signature();
 		OnLayout(0);
 	}
 	~MouseFlag() {
@@ -81,11 +81,12 @@ public:
 		OnLayout(0);
 	}
 
-	// Раз в 2 с (окно движка служебное, WM_SETTINGCHANGE до него не доходит).
-	void Watch() {
-		// В параметрах Windows сменили схему, размер или цвет указателя, масштаб экрана: основа - снять заново. Наш указатель
-		// сначала вернуть (Apply): Windows перечитывает указатели не на всякое значение этих разделов (размер текста - нет), и
-		// иначе основой стал бы наш же указатель с флагом - флаг застревал до перезапуска (ревью 18.10.2026).
+	// По WM_SETTINGCHANGE / WM_DISPLAYCHANGE (WinTray::listener): в параметрах Windows сменили схему, размер или цвет
+	// указателя, масштаб экрана - основу снять заново. При выключенном флаге на указателе реестр не трогаем.
+	void WatchSettings() {
+		if (!conf_get_unsafe()->mouse_flag && !m_applied && !m_baseOk) return;
+		// Наш указатель сначала вернуть (Apply): Windows перечитывает указатели не на всякое значение этих разделов
+		// (размер текста - нет), и иначе основой стал бы наш же указатель с флагом - флаг застревал до перезапуска (ревью 18.10.2026).
 		const std::wstring signature = Signature();
 		if (signature != m_signature) {
 			m_signature = signature;
@@ -94,18 +95,20 @@ public:
 			LOG_ANY("mouse flag: the pointers of Windows changed, again");
 			m_key.clear();
 			OnLayout(0);
-			return;
 		}
-		// Указатели перечитал кто-то другой (свойства мыши, другая программа): наш - уже не наш.
-		if (m_applied && !StillOurs()) {
-			LOG_ANY("mouse flag: the text pointer was put back by someone else");
-			m_applied = false;
-			m_key.clear();
-			StopTimer();
-			std::error_code ec;
-			std::filesystem::remove(MarkPath(), ec);
-			if (conf_get_unsafe()->mouse_flag == 1) OnLayout(0);
-		}
+	}
+
+	// Раз в 2 с (только если указатель сейчас подменён, без чтения реестра): указатели перечитал кто-то другой
+	// (свойства мыши, другая программа без WM_SETTINGCHANGE) - наш уже не наш.
+	void WatchCursor() {
+		if (!m_applied || StillOurs()) return;
+		LOG_ANY("mouse flag: the text pointer was put back by someone else");
+		m_applied = false;
+		m_key.clear();
+		StopTimer();
+		std::error_code ec;
+		std::filesystem::remove(MarkPath(), ec);
+		if (conf_get_unsafe()->mouse_flag == 1) OnLayout(0);
 	}
 
 	// Метка от прошлого запуска (вышел, не вернув указатели) - вернуть их. И при удалении программы (--cleanup).
@@ -307,6 +310,7 @@ private:
 	}
 
 	void Apply(const std::wstring& id, const std::string& look, int opacity, uint32_t fill, bool caps, const std::wstring& key) {
+		if (m_signature.empty()) m_signature = Signature();
 		// Основа - указатель Windows, не наш с прежним флагом: подменённый вернуть, прежде чем снимать.
 		if (!m_baseOk && m_applied) {
 			SystemParametersInfoW(SPI_SETCURSORS, 0, nullptr, 0);

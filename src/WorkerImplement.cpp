@@ -1120,7 +1120,9 @@ bool WorkerImplement::HyphenTailOnly() {
 
 std::optional<WorkerImplement::HandFix> WorkerImplement::TakeHandFix(bool tailOnly) {
     GETCONF;
-    if (!cfg->autoswitch) return std::nullopt;
+    // Где автопереключение отключено (в том числе для окна или консоли), ручные исправления не учат "Переключать всегда"
+    // (форум, Ringil, 23.11.2026: PyCharm в "Без автопереключения" засорял autoswitch_force обычными словами).
+    if (!cfg->autoswitch || IsPasswordFocus() || ConsoleBlocked() || cfg->IsAutoSwitchOffTop()) return std::nullopt;
     auto keys = m_cycleList.LastWordKeys();
     if (keys.empty()) keys = m_cycleList.TrailingWordKeys();
     const HKL lay = CurLay(), next = cfg->layouts_info.NextEnabledLayout(lay);

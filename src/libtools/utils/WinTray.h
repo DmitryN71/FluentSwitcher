@@ -24,9 +24,11 @@ private:
 	std::function<void()> left_click;
 	std::function<void()> r_click;
 	std::function<void()> balloon_click;
+	std::function<void()> setting_change;
 	std::function<void()> timer_func;
 	bool after_double = false; // отпускание после двойного щелчка - не новый одиночный
 	static const UINT_PTR ID_CLICK_TIMER = 1;
+	static const UINT_PTR ID_SETTING_TIMER = 2;
 	std::function<std::vector<TrayItem>()> createMenu;
 	std::vector<TrayItem> last_menu;
 
@@ -36,13 +38,24 @@ private:
 	// Проводник перезапустили (или он упал): панель задач новая, значков у часов на ней нет - их добавляют заново по
 	// рассылке TaskbarCreated. Её получают только окна верхнего уровня, а окно значка - только для сообщений, поэтому для
 	// неё - своё скрытое окно (форум, WinnyS, 12.10.2026: значок пропадал до первой смены раскладки - тогда SetIcon
-	// добавлял его снова).
+	// добавлял его снова). Оно же ловит WM_SETTINGCHANGE и WM_DISPLAYCHANGE (смена темы панели задач, курсоров, DPI),
+	// чтобы не опрашивать реестр по таймеру (форум, tehkonst, 24.11.2026).
 	inline static const UINT WM_TaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 	HWND listener = nullptr;
 	bool m_iconPending = false; // SetIcon: Windows значок не приняла - RetryIcon
 	static LRESULT CALLBACK ListenerProc(HWND wnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		if (msg == WM_TaskbarCreated && Inst) {
 			Inst->AddAgain();
+			return 0;
+		}
+		if ((msg == WM_SETTINGCHANGE || msg == WM_DISPLAYCHANGE) && Inst && Inst->setting_change) {
+			// При смене темы/параметров Windows шлёт пачку WM_SETTINGCHANGE подряд - собираем в один вызов.
+			SetTimer(wnd, ID_SETTING_TIMER, 150, nullptr);
+			return 0;
+		}
+		if (msg == WM_TIMER && wParam == ID_SETTING_TIMER) {
+			KillTimer(wnd, ID_SETTING_TIMER);
+			if (Inst && Inst->setting_change) Inst->setting_change();
 			return 0;
 		}
 		return DefWindowProcW(wnd, msg, wParam, lParam);
@@ -213,6 +226,10 @@ public:
 	void OnBalloonClick(auto&& func) {
 		balloon_click = std::move(func);
 	}
+	// Смена темы, курсоров или масштаба экрана (WM_SETTINGCHANGE / WM_DISPLAYCHANGE, с задержкой на пачку).
+	void OnSettingChange(auto&& func) {
+		setting_change = std::move(func);
+	}
 
 	WinTray() {
 		Inst = this;
@@ -234,7 +251,11 @@ public:
 		listener = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
 		                           wc.hInstance, nullptr);
 		// От имени администратора рассылку Проводника (обычные права) Windows иначе не пропустит.
-		if (listener) ChangeWindowMessageFilterEx(listener, WM_TaskbarCreated, MSGFLT_ALLOW, nullptr);
+		if (listener) {
+			ChangeWindowMessageFilterEx(listener, WM_TaskbarCreated, MSGFLT_ALLOW, nullptr);
+			ChangeWindowMessageFilterEx(listener, WM_SETTINGCHANGE, MSGFLT_ALLOW, nullptr);
+			ChangeWindowMessageFilterEx(listener, WM_DISPLAYCHANGE, MSGFLT_ALLOW, nullptr);
+		}
 	}
 	~WinTray() {
 		DeleteIcon();
